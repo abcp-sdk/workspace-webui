@@ -1,0 +1,42 @@
+# The workspace webui is served by an aggregating Caddy that is SAME-ORIGIN
+# with the RPC: `/` serves the static build, `/agent.v1.*` and
+# `/workspace.v1.*` are reverse-proxied to the WORKSPACE GATEWAY over h2c.
+# The browser needs only a tenant token — the API base is always this page's
+# own origin. The gateway is the single trusted entry point (it proxies the
+# agent and owns session creation), so the webui never talks to the agent
+# directly.
+#
+# Upstream gateway address is overridable with GATEWAY_UPSTREAM (Caddy env).
+:8080 {
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	# agent.v1 (proxied by the gateway) + workspace.v1 -> gateway over h2c.
+	handle /agent.v1.* {
+		reverse_proxy {$GATEWAY_UPSTREAM:workspace-gateway.agent.svc.cluster.local:80} {
+			transport http {
+				versions h2c
+			}
+		}
+	}
+	handle /workspace.v1.* {
+		reverse_proxy {$GATEWAY_UPSTREAM:workspace-gateway.agent.svc.cluster.local:80} {
+			transport http {
+				versions h2c
+			}
+		}
+	}
+
+	# Static SPA with client-side routing fallback.
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}
