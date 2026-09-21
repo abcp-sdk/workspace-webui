@@ -309,6 +309,8 @@ const en = {
   pickBranch: `Pick a branch on the left`,
   split: `Split`,
   unified: `Unified`,
+  deleteBranch: `Delete branch`,
+  deleteBranchBody: `Delete branch '{arg1}' and its session? The session history and its sandboxes are removed.`,
 } as const
 
 const zh = {
@@ -619,6 +621,8 @@ const zh = {
   pickBranch: `请在左侧选择分支`,
   split: `并排`,
   unified: `统一`,
+  deleteBranch: `删除分支`,
+  deleteBranchBody: `删除分支 '{arg1}' 及其会话？会话历史与沙箱都会被移除。`,
 } as const
 
 export type Locale = 'zh' | 'en'

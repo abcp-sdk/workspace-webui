@@ -36,8 +36,8 @@ import type {
   UploadedFileSource,
 } from './models'
 import { modelRefOf } from './models'
-import type { WorkspaceClient } from './workspace'
-import { createWorkspaceClient } from './workspace'
+import type { GatewayClient } from './workspace'
+import { createGatewayClient } from './workspace'
 
 const n = (v: bigint | number | undefined | null): number =>
   v == null ? 0 : typeof v === 'bigint' ? Number(v) : v
@@ -331,12 +331,12 @@ export interface AgentApiEvents {
 export class AgentApi {
   readonly baseUrl: string
   readonly token: string
-  private readonly _c: WorkspaceClient
+  private readonly _c: GatewayClient
 
   private constructor(baseUrl: string, token: string) {
     this.baseUrl = baseUrl
     this.token = token
-    this._c = createWorkspaceClient(baseUrl, token)
+    this._c = createGatewayClient(baseUrl, token)
   }
 
   static async create(baseUrl: string, token: string): Promise<AgentApi> {
@@ -368,7 +368,7 @@ export class AgentApi {
    * derives the role from the branch (main → maintainer, else developer) and
    * binds the immutable preset. `model`/`image` are optional.
    */
-  async createWorkspaceSession(
+  async ensureBranchSession(
     org: string,
     repo: string,
     branch: string,
@@ -376,10 +376,10 @@ export class AgentApi {
     image = '',
   ): Promise<Session> {
     const r = await this._guard(() =>
-      this._c.createWorkspace({ org, repo, branch, model, image }),
+      this._c.ensureBranchSession({ org, repo, branch, model, image }),
     )
-    const w = r.workspace
-    return w ? workspaceSession(w) : emptySession('')
+    const w = r.branchSession
+    return w ? branchSessionToSession(w) : emptySession('')
   }
 
   /** Create a free session with a tenant-scoped role (admin|explorer|planner). */
@@ -591,16 +591,16 @@ export class AgentApi {
    * from the parent and binds the developer preset; branch materialization is
    * driven by the agent's `forked` lifecycle event.
    */
-  async forkWorkspace(
+  async forkBranchSession(
     id: string,
     branch: string,
     messageId = '',
   ): Promise<Session> {
     const r = await this._guard(() =>
-      this._c.forkWorkspace({ session: id, branch, messageId }),
+      this._c.forkBranchSession({ session: id, branch, messageId }),
     )
-    const w = r.workspace
-    return w ? workspaceSession(w) : emptySession('')
+    const w = r.branchSession
+    return w ? branchSessionToSession(w) : emptySession('')
   }
 
   async revert(id: string, messageId?: string | null): Promise<void> {
@@ -883,13 +883,18 @@ export class AgentApi {
 
   // ---- workspace gateway (workspace.v1): git + sandboxes + services ----
 
-  async listWorkspaces(): Promise<Workspace[]> {
-    const r = await this._guard(() => this._c.listWorkspaces({}))
-    return (r.workspaces ?? []).map(workspaceFromPb)
+  async listBranchSessions(): Promise<BranchSession[]> {
+    const r = await this._guard(() => this._c.listBranchSessions({}))
+    return (r.branchSessions ?? []).map(branchSessionFromPb)
   }
 
-  async deleteWorkspace(session: string): Promise<void> {
-    await this._guard(() => this._c.deleteWorkspace({ session }))
+  async deleteBranchSession(session: string): Promise<void> {
+    await this._guard(() => this._c.deleteBranchSession({ session }))
+  }
+
+  /** Delete a repo branch AND its branch session (session + sandboxes cascade). */
+  async deleteBranch(org: string, repo: string, branch: string): Promise<void> {
+    await this._guard(() => this._c.deleteBranch({ org, repo, branch }))
   }
 
   async listRepos(): Promise<RepoInfo[]> {
@@ -1181,7 +1186,7 @@ export class AgentApi {
 
 // ---- workspace-gateway view models ----
 
-export interface Workspace {
+export interface BranchSession {
   session: string
   org: string
   repo: string
@@ -1302,7 +1307,7 @@ export interface ServiceInfo {
   url: string
 }
 
-type PbWorkspace = {
+type PbBranchSession = {
   session: string
   org: string
   repo: string
@@ -1312,7 +1317,7 @@ type PbWorkspace = {
   sandbox: string
   phase: string
 }
-function workspaceFromPb(w: PbWorkspace): Workspace {
+function branchSessionFromPb(w: PbBranchSession): BranchSession {
   return {
     session: w.session,
     org: w.org,
@@ -1363,7 +1368,7 @@ function mrFromPb(m: PbMR): MRInfo {
 }
 
 /** Project a created workspace into the Session shape the UI list uses. */
-function workspaceSession(w: Workspace): Session {
+function branchSessionToSession(w: BranchSession): Session {
   return {
     id: w.session,
     org: w.org,

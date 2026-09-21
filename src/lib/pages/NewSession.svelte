@@ -89,7 +89,7 @@
         s = await store.api.createFreeSession(name.trim(), role as 'admin' | 'explorer' | 'planner', modelRef)
       } else {
         const b = role === 'maintainer' ? 'main' : branch.trim()
-        s = await store.api.createWorkspaceSession(org, repo, b, modelRef)
+        s = await store.api.ensureBranchSession(org, repo, b, modelRef)
       }
       showToast(t('created'))
       await store.refreshSessions()

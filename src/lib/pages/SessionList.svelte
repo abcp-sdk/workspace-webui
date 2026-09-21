@@ -180,7 +180,7 @@
     })
     if (!branch) return
     try {
-      await store.api.forkWorkspace(sid, branch.trim())
+      await store.api.forkBranchSession(sid, branch.trim())
       showToast(t('created'))
       await store.refreshSessions()
     } catch (e) {

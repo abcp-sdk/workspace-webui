@@ -9,7 +9,8 @@
   import type { PageProps } from '$lib/page-props'
   import type { RepoInfo, BranchInfo } from '$lib/api'
   import { t } from '$lib/i18n.svelte'
-  import { showErrorToast } from '$lib/toast.svelte'
+  import { showErrorToast, showToast } from '$lib/toast.svelte'
+  import { confirmDialog } from '$lib/dialogs'
   import { cn } from '$lib/utils'
   import { AppIcons } from '$lib/icons'
   import RepoAvatar from '$lib/components/RepoAvatar.svelte'
@@ -109,6 +110,30 @@
     drawerOpen = false
   }
 
+  /** Delete a branch AND its branch session (session + sandboxes cascade).
+   *  Double-confirmed: the session's history is gone with it. */
+  async function deleteBranchFlow(org: string, repo: string, branch: string) {
+    const ok = await confirmDialog({
+      title: t('deleteBranch'),
+      body: t('deleteBranchBody', { arg1: `${org}/${repo}:${branch}` }),
+      confirmLabel: t('delete'),
+      destructive: true,
+    })
+    if (!ok) return
+    try {
+      await store.api.deleteBranch(org, repo, branch)
+      showToast(t('deleted'))
+      branchesByRepo = { ...branchesByRepo, [`${org}/${repo}`]: await store.api.branches(org, repo) }
+      await store.refreshSessions()
+      if (selOrg === org && selRepo === repo && selRef === branch) {
+        selRef = ''
+        openFile = ''
+      }
+    } catch (e) {
+      showErrorToast(String(e))
+    }
+  }
+
   // Auto-select the first branch of the first repo on first load (desktop).
   $effect(() => {
     if (loading || selRepo || orgs.length === 0) return
@@ -171,20 +196,32 @@
                 </button>
                 {#if expandedRepos.has(`${org}/${r.repo}`)}
                   {#each branchesByRepo[`${org}/${r.repo}`] ?? [] as b (b.name)}
-                    <button
-                      type="button"
+                    <div
                       class={cn(
-                        'flex w-full items-center gap-2 py-1.5 pr-2 pl-10 text-left hover:bg-muted',
+                        'flex w-full items-center gap-2 py-1.5 pr-1 pl-10 hover:bg-muted',
                         selOrg === org && selRepo === r.repo && selRef === b.name && 'bg-primary/10',
                       )}
-                      onclick={() => select(org, r.repo, b.name)}
                     >
-                      <!-- chevron-width spacer: keeps branch avatars/labels one
-                           indent step deeper than the repo row above. -->
-                      <AppIcons.chevron_right class="size-3.5 shrink-0 text-transparent" />
-                      <RepoAvatar {org} repo={r.repo} branch={b.name} level="branch" size={18} />
-                      <span class="min-w-0 flex-1 truncate text-[12px]">{b.name}</span>
-                    </button>
+                      <button
+                        type="button"
+                        class="flex min-w-0 flex-1 items-center gap-2 text-left"
+                        onclick={() => select(org, r.repo, b.name)}
+                      >
+                        <!-- chevron-width spacer: keeps branch avatars/labels one
+                             indent step deeper than the repo row above. -->
+                        <AppIcons.chevron_right class="size-3.5 shrink-0 text-transparent" />
+                        <RepoAvatar {org} repo={r.repo} branch={b.name} level="branch" size={18} />
+                        <span class="min-w-0 flex-1 truncate text-[12px]">{b.name}</span>
+                      </button>
+                      {#if b.name !== (list.find(x => x.repo === r.repo)?.defaultBranch ?? 'main')}
+                        <button
+                          type="button"
+                          class="shrink-0 rounded p-1 text-muted-foreground hover:bg-background hover:text-destructive"
+                          title={t('deleteBranch')}
+                          onclick={() => void deleteBranchFlow(org, r.repo, b.name)}
+                        ><AppIcons.close class="size-3.5" /></button>
+                      {/if}
+                    </div>
                   {/each}
                 {/if}
               {/each}

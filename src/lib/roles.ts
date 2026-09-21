@@ -8,7 +8,7 @@
 //   planner    tenant   read + sandbox, no git writes
 //   maintainer org:repo:main      review/merge MRs, branches, releases, sandbox
 //   developer  org:repo:<branch>  write its branch, open MRs, sandbox
-import type { Workspace } from './api'
+import type { BranchSession } from './api'
 import { AppIcons } from './icons'
 
 export type Role = 'admin' | 'explorer' | 'planner' | 'maintainer' | 'developer'
@@ -37,7 +37,7 @@ export function isBranchRole(r: string): boolean {
 }
 
 /** Role of a workspace row; free sessions carry the role explicitly. */
-export function workspaceRole(w: Workspace): string {
+export function workspaceRole(w: BranchSession): string {
   return w.role
 }
 

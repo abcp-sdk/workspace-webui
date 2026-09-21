@@ -9,9 +9,9 @@ import {
   type Interceptor,
 } from '@connectrpc/connect'
 import { createConnectTransport } from '@connectrpc/connect-web'
-import { WorkspaceService } from '../gen/workspace/v1/workspace_pb.js'
+import { BranchSessionService } from '../gen/workspace/v1/workspace_pb.js'
 
-export type WorkspaceClient = Client<typeof WorkspaceService>
+export type GatewayClient = Client<typeof BranchSessionService>
 
 function bearerInterceptor(token: string): Interceptor {
   return next => async req => {
@@ -25,14 +25,14 @@ export function trimBase(baseUrl: string): string {
 }
 
 /** A fresh Connect-web workspace client bound to one backend (baseUrl + bearer). */
-export function createWorkspaceClient(
+export function createGatewayClient(
   baseUrl: string,
   token: string,
-): WorkspaceClient {
+): GatewayClient {
   const transport = createConnectTransport({
     baseUrl: trimBase(baseUrl),
     useBinaryFormat: true,
     interceptors: [bearerInterceptor(token)],
   })
-  return createClient(WorkspaceService, transport)
+  return createClient(BranchSessionService, transport)
 }

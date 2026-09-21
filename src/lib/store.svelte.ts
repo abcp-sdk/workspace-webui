@@ -68,7 +68,7 @@ export class AppStore {
   /** Refresh the sandbox-phase map (best effort; the workspace gateway owns it). */
   async refreshPhases(): Promise<void> {
     try {
-      const ws = await this.api.listWorkspaces()
+      const ws = await this.api.listBranchSessions()
       const out: Record<string, string> = {}
       for (const w of ws) if (w.session && w.phase) out[w.session] = w.phase
       this.phases = out
@@ -262,7 +262,7 @@ export class AppStore {
     const id = this.sessionById(this.activeSessionId ?? '')?.id
     if (!id) return false
     try {
-      const s = await this.api.forkWorkspace(id, branch)
+      const s = await this.api.forkBranchSession(id, branch)
       this.activeSessionId = s.id
       await this.refreshSessions()
       return true
