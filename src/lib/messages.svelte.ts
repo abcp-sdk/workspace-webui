@@ -779,7 +779,7 @@ export class MessagesController {
       case 'message-added': {
         // The server authored this message's id and chain anchor. This is the
         // ONLY place user bubbles are created (no client-side optimistic
-        // bubble): a user_prompt shows up here once the agent has drained the
+        // bubble): a trigger shows up here once the agent has drained the
         // mailbox and written the chain row. `streaming:true` opens the
         // assistant step's bubble; its deltas then arrive under the same id.
         const addedId =
@@ -812,7 +812,7 @@ export class MessagesController {
         }
         this.notify()
         void this.reconcile()
-        // A drained user_prompt is now CONSUMED, so the pending badge shrinks.
+        // A drained trigger is now CONSUMED, so the pending badge shrinks.
         void this.refreshMailbox()
         break
       }

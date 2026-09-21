@@ -442,7 +442,8 @@ describe('MessagesController (server-driven state machine)', () => {
     const mb = (id: string, status: string): MailboxEntry =>
       ({
         id,
-        msgType: 'user_prompt',
+        msgType: 'trigger',
+        source: 'user',
         payload: {},
         effectiveAt: null,
         status,

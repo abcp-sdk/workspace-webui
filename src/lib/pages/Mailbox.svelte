@@ -101,16 +101,30 @@
     return { text, attachmentCount: attachments.length, attachments }
   }
 
-  /** Type → icon + localized label + accent. */
-  function metaOf(msgType: string): { icon: Component; label: string; cls: string } {
-    switch (msgType) {
-      case 'user_prompt':
-        return { icon: AppIcons.user, label: t('mailboxPrompt'), cls: 'bg-primary/12 text-primary' }
-      case 'interrupt':
-        return { icon: AppIcons.stop, label: t('mailboxInterrupt'), cls: 'bg-destructive/12 text-destructive' }
-      default:
-        return { icon: AppIcons.bolt, label: t('mailboxEvent'), cls: 'bg-warning/12 text-warning' }
+  /**
+   * Type → icon + label + accent, refined by SOURCE so a human prompt is
+   * distinguishable from another session's hand-off / a system event.
+   */
+  function metaOf(
+    msgType: string,
+    source: string,
+  ): { icon: Component; label: string; cls: string; origin: string } {
+    if (msgType === 'interrupt') {
+      return { icon: AppIcons.stop, label: t('mailboxInterrupt'), cls: 'bg-destructive/12 text-destructive', origin: '' }
     }
+    if (msgType !== 'trigger') {
+      return { icon: AppIcons.bolt, label: t('mailboxEvent'), cls: 'bg-warning/12 text-warning', origin: '' }
+    }
+    if (source === 'user') {
+      return { icon: AppIcons.user, label: t('mailboxPrompt'), cls: 'bg-primary/12 text-primary', origin: '' }
+    }
+    if (source.startsWith('session:')) {
+      return { icon: AppIcons.mail, label: t('mailboxFromSession'), cls: 'bg-sky-500/15 text-sky-600 dark:text-sky-400', origin: source.slice('session:'.length) }
+    }
+    if (source.startsWith('system:')) {
+      return { icon: AppIcons.bolt, label: t('mailboxFromSystem'), cls: 'bg-violet-500/15 text-violet-600 dark:text-violet-400', origin: source.slice('system:'.length) }
+    }
+    return { icon: AppIcons.bolt, label: t('mailboxPrompt'), cls: 'bg-primary/12 text-primary', origin: source }
   }
 </script>
 
@@ -141,7 +155,7 @@
       <div class="space-y-2">
         {#each entries as e (e.id)}
           {@const v = viewOf(e)}
-          {@const m = metaOf(e.msgType)}
+          {@const m = metaOf(e.msgType, e.source)}
           {@const TypeIcon = m.icon}
           {@const pending = e.status !== 'consumed'}
           <div class="overflow-hidden rounded-lg border border-border/60 bg-card">
@@ -151,6 +165,9 @@
                 <TypeIcon class="size-3.5" />
               </span>
               <span class="text-meta font-semibold">{m.label}</span>
+              {#if m.origin}
+                <span class="max-w-40 truncate text-micro text-muted-foreground" title={m.origin}>· {m.origin}</span>
+              {/if}
               <span
                 class={cn(
                   'ml-auto rounded-full px-1.5 py-px text-[10px] font-medium',

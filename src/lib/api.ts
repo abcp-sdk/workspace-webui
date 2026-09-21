@@ -640,6 +640,7 @@ export class AgentApi {
       entries: r.mailbox.map(m => ({
         id: m.id,
         msgType: m.msgType,
+        source: m.source,
         payload: m.payload,
         effectiveAt: m.effectiveAt || null,
         status: m.status,
@@ -910,6 +911,49 @@ export class AgentApi {
   async ensureRepo(org: string, repo: string): Promise<boolean> {
     const r = await this._guard(() => this._c.ensureRepo({ org, repo }))
     return r.created
+  }
+
+  /** Import (migrate) an EXTERNAL git repo into `org` (admin). `ref` given =
+   *  single-branch import (that ref becomes the default; others are deleted).
+   *  Refuses to overwrite an existing repo. */
+  async importRepo(params: {
+    org: string
+    url: string
+    repo?: string
+    ref?: string
+    authUser?: string
+    authToken?: string
+    private?: boolean
+    mirror?: boolean
+    description?: string
+  }): Promise<RepoInfo> {
+    const r = await this._guard(() =>
+      this._c.importRepo({
+        org: params.org,
+        url: params.url,
+        repo: params.repo ?? '',
+        ref: params.ref ?? '',
+        authUser: params.authUser ?? '',
+        authToken: params.authToken ?? '',
+        private: params.private ?? true,
+        mirror: params.mirror ?? false,
+        description: params.description ?? '',
+      }),
+    )
+    const x = r.repo
+    return x
+      ? {
+          org: x.org,
+          repo: x.repo,
+          defaultBranch: x.defaultBranch,
+          private: x.private,
+        }
+      : {
+          org: params.org,
+          repo: params.repo ?? '',
+          defaultBranch: params.ref ?? 'main',
+          private: true,
+        }
   }
 
   async tree(

@@ -224,6 +224,8 @@ export interface ChatMessage {
 export interface MailboxEntry {
   id: string
   msgType: string
+  /** ORIGIN: `user`, `session:{name}`, `system:{name}`, or extension-defined. */
+  source: string
   payload: string
   effectiveAt?: string | null
   status: string

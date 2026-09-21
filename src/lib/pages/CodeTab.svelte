@@ -11,6 +11,7 @@
   import { t } from '$lib/i18n.svelte'
   import { showErrorToast, showToast } from '$lib/toast.svelte'
   import { confirmDialog } from '$lib/dialogs'
+  import { Dialog } from '$lib/components/ui/dialog'
   import { cn } from '$lib/utils'
   import { AppIcons } from '$lib/icons'
   import RepoAvatar from '$lib/components/RepoAvatar.svelte'
@@ -155,6 +156,47 @@
     })()
   })
 
+  // ---- import an external repository (admin) ----
+  let importOpen = $state(false)
+  let impOrg = $state('')
+  let impUrl = $state('')
+  let impRepo = $state('')
+  let impRef = $state('')
+  let impToken = $state('')
+  let impBusy = $state(false)
+
+  const importOrgs = $derived([...new Set([...repos.map(r => r.org), impOrg].filter(Boolean))].sort())
+
+  function openImport() {
+    importOpen = true
+    impOrg = orgs[0]?.[0] ?? ''
+    impUrl = ''
+    impRepo = ''
+    impRef = ''
+    impToken = ''
+  }
+
+  async function doImport() {
+    if (!impOrg.trim() || !impUrl.trim() || impBusy) return
+    impBusy = true
+    try {
+      await store.api.importRepo({
+        org: impOrg.trim(),
+        url: impUrl.trim(),
+        repo: impRepo.trim(),
+        ref: impRef.trim(),
+        authToken: impToken.trim(),
+      })
+      showToast(t('imported'))
+      importOpen = false
+      await load()
+      expandedOrgs = new Set([...expandedOrgs, impOrg.trim()])
+    } catch (e) {
+      showErrorToast(String(e))
+    }
+    impBusy = false
+  }
+
   const active = $derived(selOrg && selRepo && selRef)
 </script>
 
@@ -169,6 +211,7 @@
     >
       <PageHeader title={t('tabCode')}>
         {#snippet right()}
+          <IconButton icon={AppIcons.download} label={t('importRepo')} variant="primary" onclick={openImport} />
           <IconButton icon={AppIcons.refresh} label={t('refresh')} onclick={() => void load()} />
           {#if isCompact}
             <IconButton icon={AppIcons.close} onclick={() => (drawerOpen = false)} />
@@ -234,6 +277,40 @@
   {#if isCompact && drawerOpen}
     <div class="fixed inset-0 z-40 bg-black/40" role="presentation" onclick={() => (drawerOpen = false)}></div>
   {/if}
+
+  <Dialog bind:open={importOpen} title={t('importRepo')}>
+    {#snippet children()}
+      <div class="space-y-3">
+        <label class="block">
+          <span class="mb-1 block text-meta text-muted-foreground">{t('importUrl')}</span>
+          <input bind:value={impUrl} class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring" placeholder="https://github.com/owner/repo.git" />
+        </label>
+        <label class="block">
+          <span class="mb-1 block text-meta text-muted-foreground">{t('org')}</span>
+          <input bind:value={impOrg} list="import-orgs" class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring" />
+          <datalist id="import-orgs">
+            {#each importOrgs as o (o)}<option value={o}></option>{/each}
+          </datalist>
+        </label>
+        <label class="block">
+          <span class="mb-1 block text-meta text-muted-foreground">{t('importRepoName')}</span>
+          <input bind:value={impRepo} class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring" placeholder={t('importRepoNameHint')} />
+        </label>
+        <label class="block">
+          <span class="mb-1 block text-meta text-muted-foreground">{t('importRef')}</span>
+          <input bind:value={impRef} class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring" placeholder={t('importRefHint')} />
+        </label>
+        <label class="block">
+          <span class="mb-1 block text-meta text-muted-foreground">{t('importToken')}</span>
+          <input bind:value={impToken} type="password" class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring" />
+        </label>
+      </div>
+    {/snippet}
+    {#snippet footer()}
+      <button type="button" class="rounded-md px-3 py-1.5 text-sm hover:bg-muted" onclick={() => (importOpen = false)}>{t('cancel')}</button>
+      <button type="button" class="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/80 disabled:opacity-40" disabled={!impOrg.trim() || !impUrl.trim() || impBusy} onclick={() => void doImport()}>{impBusy ? t('loading') : t('import')}</button>
+    {/snippet}
+  </Dialog>
 
   <!-- right pane -->
   <div class="flex min-h-0 min-w-0 flex-1 flex-col">

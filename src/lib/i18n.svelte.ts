@@ -121,6 +121,8 @@ const en = {
   mailboxAttachments: `{arg1} attachment(s)`,
   mailboxConsumedAt: `Consumed {arg1}`,
   mailboxEvent: `Event`,
+  mailboxFromSession: `From session`,
+  mailboxFromSystem: `From system`,
   mailboxInterrupt: `Interrupt`,
   mailboxNoContent: `No content`,
   mailboxPending: `Pending`,
@@ -311,6 +313,15 @@ const en = {
   unified: `Unified`,
   deleteBranch: `Delete branch`,
   deleteBranchBody: `Delete branch '{arg1}' and its session? The session history and its sandboxes are removed.`,
+  importRepo: `Import repository`,
+  importUrl: `Source git URL`,
+  importRepoName: `Repo name (optional)`,
+  importRepoNameHint: `Default: from the URL`,
+  importRef: `Only this branch (optional)`,
+  importRefHint: `Default: all branches`,
+  importToken: `Access token (optional, private source)`,
+  import: `Import`,
+  imported: `Imported`,
 } as const
 
 const zh = {
@@ -433,6 +444,8 @@ const zh = {
   mailboxAttachments: `{arg1} 个附件`,
   mailboxConsumedAt: `已消费 {arg1}`,
   mailboxEvent: `事件`,
+  mailboxFromSession: `来自会话`,
+  mailboxFromSystem: `来自系统`,
   mailboxInterrupt: `中断`,
   mailboxNoContent: `无内容`,
   mailboxPending: `待处理`,
@@ -623,6 +636,15 @@ const zh = {
   unified: `统一`,
   deleteBranch: `删除分支`,
   deleteBranchBody: `删除分支 '{arg1}' 及其会话？会话历史与沙箱都会被移除。`,
+  importRepo: `导入仓库`,
+  importUrl: `源 git 地址`,
+  importRepoName: `仓库名（可选）`,
+  importRepoNameHint: `默认：从 URL 推断`,
+  importRef: `仅导入该分支（可选）`,
+  importRefHint: `默认：全部分支`,
+  importToken: `访问令牌（可选，私有源）`,
+  import: `导入`,
+  imported: `已导入`,
 } as const
 
 export type Locale = 'zh' | 'en'
