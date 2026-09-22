@@ -103,6 +103,10 @@ export interface MessagePart {
   toolCallId?: string | null
   state?: ToolState | null
   metadata?: Record<string, unknown> | null
+  // Compaction (`type='compaction'`) display metadata.
+  compactionReason?: 'manual' | 'overflow' | null
+  foldedCount?: number | null
+  foldedTokens?: number | null
   code?: string | null
   name?: string | null
   mime?: string | null
@@ -183,6 +187,10 @@ export interface ChatPart {
   durationMs?: number | null
   thumbCode?: string | null
   thumbhash?: string | null
+  // Compaction (`type='compaction'`) display metadata.
+  compactionReason?: 'manual' | 'overflow' | null
+  foldedCount?: number | null
+  foldedTokens?: number | null
 }
 
 /** A single produced-file descriptor, as emitted by tools in

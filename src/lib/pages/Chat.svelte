@@ -556,8 +556,11 @@
         const ok = await confirmDialog({ title: t('compactHistory'), body: t('compactConfirm'), confirmLabel: t('apply') })
         if (ok && sid) {
           try {
+            // The server QUEUES the compaction on the mailbox and returns
+            // "accepted"; the outcome arrives as a `compacted` event, which
+            // pulls the chain (the persisted divider) or, when there was
+            // nothing to fold, surfaces "nothing to compact".
             await store.api.compact(sid)
-            showToast(t('compactedLabel'))
           } catch (e) {
             showErrorToast(String(e))
           }

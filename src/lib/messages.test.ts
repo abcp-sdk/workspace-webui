@@ -611,4 +611,68 @@ describe('MessagesController (server-driven state machine)', () => {
     expect(ctrl.messages.map(m => m.id)).toEqual(['u1'])
     expect(ctrl.messages[0]!.parts[0]!.text).toBe('old')
   })
+
+  it('compacted{ok:true} pulls the chain so the persisted divider renders', async () => {
+    const { ctrl, server } = boot()
+    await flush()
+    // The server has already persisted the checkpoint as a chain row.
+    server.persist(
+      serverMsg('cm1', 'compaction', '', [
+        { id: 'p0', type: 'compaction', text: 'folded Q&A' },
+      ]),
+    )
+    server.chan.push(ev('compacted', { reason: 'manual', ok: true }, ''))
+    await flush()
+    expect(ctrl.messages.map(m => m.id)).toEqual(['cm1'])
+    expect(ctrl.messages[0]!.role).toBe('compaction')
+  })
+
+  it('compacted{ok:false} pulls nothing (nothing was folded)', async () => {
+    const { ctrl, server } = boot()
+    await flush()
+    server.chan.push(ev('compacted', { reason: 'manual', ok: false }, ''))
+    await flush()
+    expect(ctrl.messages).toHaveLength(0)
+  })
+
+  it('overflow re-anchor: same message id re-announced with the new prevId moves the bubble', async () => {
+    const { ctrl, server } = boot()
+    await flush()
+    // A step starts anchored on the old tip.
+    server.chan.push(
+      ev('message-added', {
+        message_id: 'a1',
+        prev_id: 'tip0',
+        role: 'assistant',
+        streaming: true,
+      }),
+    )
+    server.chan.push(
+      ev('text-delta', { id: 't0', text: 'partial', message_id: 'a1' }),
+    )
+    await flush(3)
+    expect(ctrl.messages.find(m => m.id === 'a1')?.prevId).toBe('tip0')
+    expect(
+      ctrl.messages
+        .find(m => m.id === 'a1')
+        ?.parts.map(p => p.text)
+        .join(''),
+    ).toBe('partial')
+
+    // Overflow compaction inserted `cm1` and the step is re-anchored onto it:
+    // the SAME message id is re-announced with prevId=cm1.
+    server.chan.push(
+      ev('message-added', {
+        message_id: 'a1',
+        prev_id: 'cm1',
+        role: 'assistant',
+        streaming: true,
+      }),
+    )
+    await flush(3)
+    const a1 = ctrl.messages.find(m => m.id === 'a1')
+    expect(a1?.prevId).toBe('cm1')
+    // Stale deltas from before the retry are dropped.
+    expect(a1?.parts).toHaveLength(0)
+  })
 })

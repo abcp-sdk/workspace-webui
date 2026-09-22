@@ -29,6 +29,9 @@ export function mapMessagesToChat(msgs: Message[]): ChatMessage[] {
       durationMs: p.durationMs ?? null,
       thumbCode: p.thumbCode ?? null,
       thumbhash: p.thumbhash ?? null,
+      compactionReason: p.compactionReason ?? null,
+      foldedCount: p.foldedCount ?? null,
+      foldedTokens: p.foldedTokens ?? null,
     })),
   }))
 }

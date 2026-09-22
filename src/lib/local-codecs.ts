@@ -47,11 +47,14 @@ export function partToJson(p: ChatPart): Record<string, unknown> {
   if (p.name != null) j['name'] = p.name
   if (p.mime != null) j['mime'] = p.mime
   if (p.size != null) j['size'] = p.size
+  if (p.compactionReason != null) j['compaction_reason'] = p.compactionReason
+  if (p.foldedCount != null) j['folded_count'] = p.foldedCount
+  if (p.foldedTokens != null) j['folded_tokens'] = p.foldedTokens
   return j
 }
 
 export function chatPartFromJson(j: Record<string, unknown>): ChatPart {
-  return {
+  const p: ChatPart = {
     id: (j['id'] as string) || '',
     type: (j['type'] as string) || '',
     text: (j['text'] as string) || '',
@@ -62,6 +65,17 @@ export function chatPartFromJson(j: Record<string, unknown>): ChatPart {
     mime: (j['mime'] as string) ?? null,
     size: j['size'] != null ? Number(j['size']) : null,
   }
+  // Only set compaction metadata when present, so a plain part round-trips to
+  // exactly its input shape.
+  if (
+    j['compaction_reason'] === 'manual' ||
+    j['compaction_reason'] === 'overflow'
+  ) {
+    p.compactionReason = j['compaction_reason']
+  }
+  if (j['folded_count'] != null) p.foldedCount = Number(j['folded_count'])
+  if (j['folded_tokens'] != null) p.foldedTokens = Number(j['folded_tokens'])
+  return p
 }
 
 export function messagePartToJson(p: MessagePart): Record<string, unknown> {

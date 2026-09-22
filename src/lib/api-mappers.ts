@@ -7,6 +7,7 @@ import {
   IngestFileRequestSchema,
   IngestFileResponseSchema,
 } from '../gen/agent/v1/agent_pb.js'
+import { t } from './i18n.svelte'
 import type { Message, MessagePart, Session } from './models'
 
 /** bigint | number | null → number (codegenv2 encodes int64 as bigint). */
@@ -93,6 +94,17 @@ export function sessionFromPb(
   }
 }
 
+/**
+ * Sentinel the agent stores as `last_message_preview` when a session's tip is
+ * a compaction checkpoint. Must match `COMPACTION_PREVIEW` in the agent.
+ */
+export const COMPACTION_PREVIEW = '__compacted__'
+
+/** Localized list label for a preview value (compaction sentinel → label). */
+export function previewLabel(preview: string): string {
+  return preview === COMPACTION_PREVIEW ? t('historyCompacted') : preview
+}
+
 type PbPart = {
   id: string
   messageId: string
@@ -143,6 +155,14 @@ export function messageFromPb(m: PbMessage): Message {
           id: p.id,
           type: 'compaction',
           text: (d['summary'] as string) || '',
+          compactionReason:
+            d['reason'] === 'manual' || d['reason'] === 'overflow'
+              ? d['reason']
+              : null,
+          foldedCount:
+            typeof d['folded_count'] === 'number' ? d['folded_count'] : null,
+          foldedTokens:
+            typeof d['folded_tokens'] === 'number' ? d['folded_tokens'] : null,
         })
         break
       case 'file':

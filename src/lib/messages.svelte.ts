@@ -16,12 +16,14 @@ import type { AgentApi } from './api'
 import { connection } from './connection.svelte'
 import type { LocalStore } from './db'
 import type { StreamEvent } from './events'
+import { t } from './i18n.svelte'
 import { applyStreamEvent } from './message-events'
 import { compareMessages, orderMessages } from './message-order'
 import { MessageStore } from './message-store.svelte'
 import { MessageSync } from './message-sync'
 import type { ChatMessage, UploadedFile } from './models'
 import { SessionStream } from './session-stream'
+import { showToast } from './toast.svelte'
 
 export { mapMessagesToChat } from './message-mapping'
 export { compareMessages, orderMessages }
@@ -226,7 +228,21 @@ export class MessagesController {
       reconcile: () => void this.sync.reconcile(),
       clearStreaming: () => this.clearStreaming(),
       fetchMessages: () => void this.sync.fetch(),
+      compacted: (ok, reason) => this.onCompacted(ok, reason),
     })
+  }
+
+  /** A compaction checkpoint landed. When a checkpoint was created (`ok`),
+   *  pull the authoritative chain so the persisted system message renders as a
+   *  divider. A no-op compaction (`ok:false`) has nothing to fetch — surface a
+   *  "nothing to compact" toast for a MANUAL request (an overflow retry that
+   *  found nothing to fold stays silent). */
+  private onCompacted(ok: boolean, reason: string) {
+    if (ok) {
+      void this.sync.reconcile()
+    } else if (reason === 'manual') {
+      showToast(t('nothingToCompact'))
+    }
   }
 
   /** Mark every streaming bubble complete, leave the busy state, and pull the

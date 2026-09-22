@@ -19,6 +19,8 @@ export interface EventHooks {
   clearStreaming(): void
   /** AUTHORITATIVE refetch (chain rewritten). */
   fetchMessages(): void
+  /** A compaction checkpoint landed (`ok`) with its `reason`. */
+  compacted(ok: boolean, reason: string): void
 }
 
 /**
@@ -194,6 +196,14 @@ export function applyStreamEvent(
       if (!existing) {
         store.setMsg(sid, m => ({ ...m, parts: [...m.parts, part] }))
       }
+      break
+    }
+    case 'compacted': {
+      // A compaction checkpoint was created (or there was nothing to fold).
+      // The checkpoint is a PERSISTED chain message, so pull the chain to
+      // render its divider; `ok:false` has nothing to show (a manual request
+      // surfaces its own "nothing to compact" feedback in the caller).
+      hooks.compacted(params['ok'] !== false, String(params['reason'] ?? ''))
       break
     }
     case 'turn-complete':

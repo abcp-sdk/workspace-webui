@@ -16,6 +16,7 @@
   import ToolPartView from './ToolPartView.svelte'
   import MediaAttachment from './MediaAttachment.svelte'
   import FileRefText from './FileRefText.svelte'
+  import CompactionDivider from './CompactionDivider.svelte'
 
   let {
     msg,
@@ -43,6 +44,9 @@
   const isUser = $derived(msg.role === 'user')
   const isError = $derived(msg.role === 'error')
   const isRoleSystem = $derived(msg.role === 'system' || msg.role === 'event')
+  // A compaction checkpoint is a persisted SYSTEM message: render it as a
+  // centered divider, NOT a bubble (and never with an assistant avatar).
+  const isCompaction = $derived(msg.role === 'compaction')
   const isStreaming = $derived(msg.status === 'streaming')
   // Optimistic user bubble awaiting the backend `message-added` confirmation:
   // a spinner sits to its LEFT and every action is hidden until it lands.
@@ -133,7 +137,6 @@
   )
 
   let reasoningOpen = $state(false)
-  let compactionOpen = $state(false)
   let editOpen = $state(false)
   let editText = $state('')
   let undoOpen = $state(false)
@@ -186,7 +189,12 @@
   {#if sourceName}<span class="opacity-80">· {sourceName}</span>{/if}
 {/snippet}
 
-{#if isStreaming && ordered.length === 0}
+{#if isCompaction}
+  <!-- A compaction checkpoint: centered divider, no bubble / avatar / actions. -->
+  {#each msg.parts.filter(p => p.type === 'compaction') as part (part.id)}
+    <CompactionDivider {part} />
+  {/each}
+{:else if isStreaming && ordered.length === 0}
   <div class="mb-3 flex items-center gap-2 text-micro text-muted-foreground">
     <span class="size-3 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground"></span>
     {t('thinking')}
@@ -289,20 +297,6 @@
           {:else if part.type === 'tool' && part.state}
             <div class="w-full">
               <ToolPartView {part} {isStreaming} {api} />
-            </div>
-          {:else if part.type === 'compaction'}
-            <div class="w-full rounded-sm border border-border/50 bg-muted/40 px-3 py-2">
-              <button
-                type="button"
-                class="flex w-full items-center gap-1.5 text-left text-micro text-muted-foreground"
-                onclick={() => (compactionOpen = !compactionOpen)}
-              >
-                {#if compactionOpen}<AppIcons.chevron_down class="size-3.5" />{:else}<AppIcons.chevron_right class="size-3.5" />{/if}
-                <span>{t('compactedLabel')}</span>
-              </button>
-              {#if compactionOpen}
-                <div class="pt-1 text-meta text-muted-foreground">{part.text}</div>
-              {/if}
             </div>
           {/if}
         {/each}

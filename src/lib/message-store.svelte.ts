@@ -135,16 +135,39 @@ export class MessageStore {
    *  start). Reuses the existing bubble if present (a delta may arrive before
    *  the formal `message-added{streaming:true}` on replay).
    *
+   *  RE-ANCHOR: an overflow compaction re-announces the SAME id with a NEW
+   *  `prev_id` (the checkpoint moved the tip). A changed, non-empty `prevId`
+   *  means the step restarted: update the bubble's position and CLEAR its
+   *  parts (any deltas from before the retry are superseded).
+   *
    *  Returns the id, or null when the target is a PERSISTED (non-local) step —
    *  i.e. a replay of a finished step; callers must skip the mutation. */
   ensureStreamingMsg(id: string, prevId?: string): string | null {
     const existing = this.messages.find(m => m.id === id)
     if (existing) {
       if (!existing.isLocal) return null // persisted step: replay duplicate
-      if (existing.status === 'streaming') return id
+      const reanchor =
+        prevId != null && prevId !== '' && prevId !== existing.prevId
+      if (existing.status === 'streaming') {
+        if (reanchor) {
+          this.messages = this.messages.map(m =>
+            m.id === id
+              ? { ...m, prevId, parts: [], status: 'streaming' as const }
+              : m,
+          )
+          this.notify()
+        }
+        return id
+      }
       // Was finalized by a previous step's boundary; reopen it.
       this.messages = this.messages.map(m =>
-        m.id === id ? { ...m, status: 'streaming' as const } : m,
+        m.id === id
+          ? {
+              ...m,
+              prevId: reanchor ? prevId : m.prevId,
+              status: 'streaming' as const,
+            }
+          : m,
       )
       return id
     }
