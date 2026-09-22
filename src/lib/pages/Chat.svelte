@@ -87,9 +87,7 @@
       return
     }
     const prev = untrack(() => ctrl)
-    const c = new MessagesController(store.api, () => id, store.local, {
-      sendFailed: e => t('sendFailed', { e: String(e) }),
-    })
+    const c = new MessagesController(store.api, () => id, store.local)
     ctrl = c
     prev?.dispose()
     c.init()
