@@ -13,6 +13,7 @@
   import { t } from '$lib/i18n.svelte'
   import { showErrorToast, showToast } from '$lib/toast.svelte'
   import { promptDialog, confirmDialog } from '$lib/dialogs'
+  import { Prefs } from '$lib/prefs'
   import { sessionName } from '$lib/models'
   import { roleOfSession, isBranchRole } from '$lib/roles'
   import { previewLabel } from '$lib/api-mappers'
@@ -197,6 +198,8 @@
   let dBrName = $state('')
   let dFreeName = $state('')
   let dFreeRole = $state<'admin' | 'explorer'>('explorer')
+  // Agent language pinned at creation (zh/en), seeded from the tenant default.
+  let dLocale = $state<'zh' | 'en'>('en')
 
   async function openCreate(kind: Exclude<CreateKind, null>) {
     createKind = kind
@@ -207,6 +210,7 @@
     dBrParent = ''
     dFreeName = ''
     dFreeRole = 'explorer'
+    dLocale = Prefs.loadAgentLocale()
     try {
       orgs = await store.api.listOrgs()
     } catch {
@@ -262,7 +266,7 @@
       } else if (createKind === 'branch') {
         await store.api.forkBranchSession(dBrParent, dBrName.trim())
       } else if (createKind === 'free') {
-        await store.api.createFreeSession(dFreeName.trim(), dFreeRole)
+        await store.api.createFreeSession(dFreeName.trim(), dFreeRole, '', dLocale)
       }
       showToast(t('created'))
       createKind = null
@@ -417,6 +421,7 @@
   {#if rowMenu}
     <ContextMenu anchor={rowMenu.anchor} items={rowMenuItems} onPick={v => void onRowMenuPick(v)} onClose={() => (rowMenu = null)} />
   {/if}
+
 </div>
 
 <!-- creation dialogs -->
@@ -518,6 +523,16 @@
           {/each}
         </div>
       </div>
+      <label class="block">
+        <span class="mb-1 block text-meta text-muted-foreground">{t('agentLocale')}</span>
+        <Select
+          bind:value={dLocale}
+          items={[
+            { value: 'zh', label: '中文' },
+            { value: 'en', label: 'English' },
+          ]}
+        />
+      </label>
     </div>
   {/snippet}
   {#snippet footer()}

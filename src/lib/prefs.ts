@@ -1,6 +1,7 @@
 // Prefs — the web port of flutter/lib/prefs.dart over localStorage.
 // (Drafts + read watermarks ALSO mirror into sqlite; this file holds the
 // connection, appearance, locale and backend-list state.)
+import { systemLocale } from './i18n.svelte'
 import { type BackendCfg, backendNameFor } from './models'
 import { scopeOf } from './scope'
 
@@ -51,19 +52,27 @@ export const Prefs = {
     localStorage.setItem(K_TOKEN, token)
   },
 
-  loadAgentLocale(): string {
-    return localStorage.getItem(K_AGENT_LOCALE) || 'follow'
+  /**
+   * The AGENT language (what the model answers in) — an explicit `zh` | `en`
+   * with NO "follow UI language" mode: the choice is pinned, never silently
+   * re-derived from the device UI language (which would let one device's UI
+   * setting rewrite the whole tenant's agent language). Absent a saved value
+   * it initialises once from the system language, then stays put until the
+   * user changes it.
+   */
+  loadAgentLocale(): 'zh' | 'en' {
+    const v = localStorage.getItem(K_AGENT_LOCALE)
+    if (v === 'zh' || v === 'en') return v
+    return systemLocale()
   },
 
-  saveAgentLocale(v: string) {
+  saveAgentLocale(v: 'zh' | 'en') {
     localStorage.setItem(K_AGENT_LOCALE, v)
   },
 
   /** The effective agent locale pushed to the backend config KV. */
-  effectiveAgentLocale(uiZh: boolean): string {
-    const v = Prefs.loadAgentLocale()
-    if (v === 'follow') return uiZh ? 'zh' : 'en'
-    return v
+  effectiveAgentLocale(): string {
+    return Prefs.loadAgentLocale()
   },
 
   // ---- read watermarks (localStorage mirror; sqlite is authoritative) ----

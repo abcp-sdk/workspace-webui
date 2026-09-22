@@ -40,6 +40,12 @@
     ['dark', t('themeDark')],
   ] as const)
 
+  // Agent language is an explicit zh/en (no "follow UI language" mode).
+  const agentLocaleOptions = [
+    ['zh', '中文'],
+    ['en', 'English'],
+  ] as const satisfies ReadonlyArray<readonly ['zh' | 'en', string]>
+
   function themeLabel(m: string): string {
     return themeOptions.find(([v]) => v === m)?.[1] ?? t('followSystem')
   }
@@ -71,14 +77,13 @@
     localStorage.setItem('agent.uiLocale', code)
   }
 
-  async function pickAgentLocale(code: string) {
+  async function pickAgentLocale(code: 'zh' | 'en') {
     pickAgentLocaleOpen = false
-    if (code === Prefs.loadAgentLocale()) return
     Prefs.saveAgentLocale(code)
-    const value = Prefs.effectiveAgentLocale(getLocale() === 'zh')
+    // The tenant DEFAULT agent language (new sessions pin their own copy).
     try {
-      await store.api.setConfigKey('locale', value)
-      showToast(t('agentLocaleApplied', { l: value }))
+      await store.api.setConfigKey('locale', code)
+      showToast(t('agentLocaleApplied', { l: code }))
     } catch (e) {
       showErrorToast(String(e))
     }
@@ -232,7 +237,7 @@
   <Dialog bind:open={pickAgentLocaleOpen} title={t('agentLocale')}>
     {#snippet children()}
       <div class="flex flex-col">
-        {#each [['follow', t('agentLocaleFollow')], ['zh', '中文'], ['en', 'English']] as [code, label] (code)}
+        {#each agentLocaleOptions as [code, label] (code)}
           <button
             type="button"
             class="flex w-full items-center gap-3 rounded-sm px-3 py-2.5 text-left text-body hover:bg-muted"

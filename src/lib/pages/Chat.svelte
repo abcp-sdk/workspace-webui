@@ -11,6 +11,7 @@
   import { t } from '$lib/i18n.svelte'
   import { confirmDialog, promptDialog } from '$lib/dialogs'
   import { showErrorToast, showToast } from '$lib/toast.svelte'
+  import { Prefs } from '$lib/prefs'
   import { guessMime, mimeToKind } from '$lib/media'
   import type { ModelInfo, Preset, ProviderInfo, Session, UploadedFile } from '$lib/models'
   import { modelRefOf, sessionName } from '$lib/models'
@@ -502,7 +503,9 @@
     selectedRef = session.model
     variant = session.variant
     preset = session.preset
-    locale = session.locale ?? ''
+    // Legacy sessions may carry an empty locale (pre-pinning); show the
+    // effective default rather than a blank selector.
+    locale = session.locale || Prefs.loadAgentLocale()
     settingsOpen = true
     if (!modelsLoaded) {
       loadingModels = true

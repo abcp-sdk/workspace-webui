@@ -2,6 +2,7 @@
   // ChatInfoDialog — the read-only session-info sheet (model/variant/preset/
   // locale) with an edit affordance that hands off to the settings dialog.
   import { t } from '$lib/i18n.svelte'
+  import { Prefs } from '$lib/prefs'
   import { AppIcons } from '$lib/icons'
   import { Dialog } from '$lib/components/ui/dialog'
   import type { Session } from '$lib/models'
@@ -37,7 +38,7 @@
         [t('presetLabel'), session?.preset || t('none')],
         [t('role'), role || t('none')],
         [t('sandboxPhase'), phase || t('none')],
-        [t('agentLocale'), session?.locale || t('agentLocaleFollow')],
+        [t('agentLocale'), session?.locale || Prefs.loadAgentLocale()],
       ] as [label, value] (label)}
         <div class="flex items-start gap-3 border-t border-border/40 pt-2 first:border-t-0 first:pt-0">
           <span class="w-24 shrink-0 text-micro text-muted-foreground">{label}</span>

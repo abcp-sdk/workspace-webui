@@ -61,7 +61,6 @@
         <Select
           bind:value={locale}
           items={[
-            { value: '', label: t('agentLocaleFollow') },
             { value: 'zh', label: '中文' },
             { value: 'en', label: 'English' },
           ]}

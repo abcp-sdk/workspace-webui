@@ -62,23 +62,22 @@
   }
 
   function setUiLocale(l: 'system' | 'zh' | 'en') {
+    // UI language is DEVICE-LOCAL and never touches the agent language: the
+    // agent language is an explicit zh/en (tenant default + per-session pin),
+    // not a "follow the UI" derivation.
     localStorage.setItem('agent.uiLocale', l)
     setLocale(l === 'system' ? systemLocale() : l)
-    // A session whose locale is "follow" inherits the tenant config locale, so
-    // keep that in sync with the effective agent locale whenever the UI
-    // language changes (otherwise the agent keeps answering in the stale one).
-    void syncAgentLocale()
   }
 
-  /** Push the effective agent locale (UI language when the pref is "follow")
-   *  to the tenant config KV, so a session's "follow" actually follows it. */
-  async function syncAgentLocale() {
+  /** Seed the tenant's default agent language ONCE, when it is unset. This is
+   *  a default, not a follow: it is written only if the tenant config has no
+   *  `locale` yet, and the user's later explicit choice always wins. */
+  async function seedAgentLocaleIfUnset() {
     if (!store) return
     try {
-      await store.api.setConfigKey(
-        'locale',
-        Prefs.effectiveAgentLocale(getLocale() === 'zh'),
-      )
+      const cur = await store.api.config('locale')
+      if (cur && cur.trim() !== '') return
+      await store.api.setConfigKey('locale', Prefs.loadAgentLocale())
     } catch {
       /* best-effort */
     }
@@ -190,10 +189,8 @@
       // Backfill the username for entries saved before GetIdentity existed
       // (best-effort, after the app is usable).
       void refreshIdentity()
-      // Keep the tenant config locale aligned with the effective agent locale
-      // (UI language when the pref is "follow") so a session that follows it
-      // resolves correctly.
-      void syncAgentLocale()
+      // Seed the tenant's default agent language once, if unset.
+      void seedAgentLocaleIfUnset()
     } catch (e) {
       showErrorToast(String(e))
       phase = 'setup'

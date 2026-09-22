@@ -86,7 +86,8 @@ export class AgentApi {
   /**
    * Create a repo-bound workspace session (`org:repo:branch`). The gateway
    * derives the role from the branch (main → maintainer, else developer) and
-   * binds the immutable preset. `model`/`image` are optional.
+   * binds the immutable preset. `model`/`image`/`locale` are optional; the
+   * locale pins the session's agent language at creation.
    */
   async ensureBranchSession(
     org: string,
@@ -94,9 +95,10 @@ export class AgentApi {
     branch: string,
     model = '',
     image = '',
+    locale = '',
   ): Promise<Session> {
     const r = await this._guard(() =>
-      this._c.ensureBranchSession({ org, repo, branch, model, image }),
+      this._c.ensureBranchSession({ org, repo, branch, model, image, locale }),
     )
     const w = r.branchSession
     return w ? branchSessionToSession(w) : emptySession('')
@@ -107,9 +109,10 @@ export class AgentApi {
     name: string,
     role: 'admin' | 'explorer',
     model = '',
+    locale = '',
   ): Promise<Session> {
     const r = await this._guard(() =>
-      this._c.createFreeSession({ name, role, model }),
+      this._c.createFreeSession({ name, role, model, locale }),
     )
     return emptySession(r.session)
   }
@@ -969,6 +972,7 @@ export function emptySession(id: string): Session {
     model: '',
     variant: '',
     preset: '',
+    locale: '',
     createdAt: '',
     updatedAt: '',
     lastMessageAt: '',

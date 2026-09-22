@@ -27,7 +27,7 @@
     loading = true
     try {
       presets = await store.api.presets(
-        Prefs.effectiveAgentLocale(getLocale() === 'zh'),
+        Prefs.loadAgentLocale(),
       )
     } catch (e) {
       showErrorToast(String(e))

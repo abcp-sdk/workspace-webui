@@ -24,7 +24,7 @@
   $effect(() => {
     void (async () => {
       try {
-        tools = await store.api.tools(Prefs.effectiveAgentLocale(getLocale() === 'zh'))
+        tools = await store.api.tools(Prefs.loadAgentLocale())
       } catch (e) {
         showErrorToast(t('loadError', { e: String(e) }))
       }
