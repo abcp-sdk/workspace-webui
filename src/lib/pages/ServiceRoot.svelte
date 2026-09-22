@@ -55,6 +55,13 @@
     return 'bg-muted text-muted-foreground'
   }
 
+  /** Open the session bound to a sandbox (its name IS the session id). */
+  function openSession(id: string) {
+    if (!store.sessionById(id)) return
+    store.switchTab('chat')
+    store.pickSession(id)
+  }
+
   const tabDefs = [
     { id: 'sandboxes' as const, key: 'sandboxes', icon: AppIcons.box },
     { id: 'services' as const, key: 'services', icon: AppIcons.server },
@@ -91,7 +98,22 @@
             <span class="min-w-0 flex-1">
               <span class="flex items-center gap-2"><span class="truncate text-meta font-semibold">{s.name}</span></span>
               <span class="block truncate text-[10px] text-muted-foreground">{s.image}</span>
-              <span class="block truncate text-[10px] text-muted-foreground">{s.creator} · {relTime(s.createdAt)}</span>
+              {#if s.session}
+                <span class="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground">
+                  <AppIcons.chat_round class="size-3 shrink-0" />
+                  {#if store.sessionById(s.session)}
+                    <button
+                      type="button"
+                      class="min-w-0 truncate text-left text-primary hover:underline"
+                      onclick={e => { e.stopPropagation(); openSession(s.session) }}
+                    >{s.session}</button>
+                  {:else}
+                    <span class="min-w-0 truncate">{s.session}</span>
+                  {/if}
+                </span>
+              {:else}
+                <span class="block truncate text-[10px] text-muted-foreground">{s.creator} · {relTime(s.createdAt)}</span>
+              {/if}
             </span>
             <span class={cn('shrink-0 rounded-full px-2 py-px text-[10px]', phaseTone(s.phase))}>{s.phase}</span>
           </ListRow>
@@ -107,7 +129,23 @@
             <span class="min-w-0 flex-1">
               <span class="block truncate text-meta font-semibold">{sv.name}</span>
               <span class="block truncate text-[10px] text-muted-foreground">{sv.image}</span>
-              <span class="block truncate text-[10px] text-muted-foreground">{sv.replicas}× · {sv.url}</span>
+              <span class="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground">
+                <AppIcons.chat_round class="size-3 shrink-0" />
+                {#if sv.session}
+                  {#if store.sessionById(sv.session)}
+                    <button
+                      type="button"
+                      class="min-w-0 truncate text-left text-primary hover:underline"
+                      onclick={() => openSession(sv.session)}
+                    >{sv.session}</button>
+                  {:else}
+                    <span class="min-w-0 truncate">{sv.session}</span>
+                  {/if}
+                {:else}
+                  <span class="min-w-0 truncate">{t('roleAdmin')}</span>
+                {/if}
+                <span class="shrink-0">· {sv.replicas}× · {sv.url}</span>
+              </span>
             </span>
             <span class={cn('shrink-0 rounded-full px-2 py-px text-[10px]', phaseTone(sv.phase))}>{sv.ready ? 'Ready' : sv.phase}</span>
           </ListRow>

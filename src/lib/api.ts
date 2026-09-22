@@ -868,6 +868,7 @@ export class AgentApi {
       ready: s.ready,
       url: s.url,
       creator: s.creator,
+      session: s.session,
       createdAt: Number(s.createdAt),
     }))
   }
@@ -884,6 +885,7 @@ export class AgentApi {
             ready: s.ready,
             url: s.url,
             creator: s.creator,
+            session: s.session,
             createdAt: Number(s.createdAt),
           }
         : null
@@ -892,8 +894,8 @@ export class AgentApi {
     }
   }
 
-  async createSandbox(name: string, image = ''): Promise<void> {
-    await this._guard(() => this._c.createSandbox({ name, image }))
+  async createSandbox(name: string, image = '', session = ''): Promise<void> {
+    await this._guard(() => this._c.createSandbox({ name, image, session }))
   }
 
   async deleteSandbox(name: string): Promise<void> {
@@ -952,6 +954,8 @@ export class AgentApi {
       ready: s.ready,
       replicas: s.replicas,
       url: s.url,
+      creator: s.creator,
+      session: s.session,
     }))
   }
 }
@@ -1073,6 +1077,7 @@ export interface SandboxInfo {
   ready: boolean
   url: string
   creator: string
+  session: string
   createdAt: number
 }
 export interface SandboxJob {
@@ -1097,6 +1102,8 @@ export interface ServiceInfo {
   ready: boolean
   replicas: number
   url: string
+  creator: string
+  session: string
 }
 
 type PbBranchSession = {

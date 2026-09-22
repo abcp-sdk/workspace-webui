@@ -118,6 +118,21 @@
   {#if sandbox}
     <div class="shrink-0 border-b border-border/50 px-4 py-2 text-[10px] text-muted-foreground">
       <span class="font-mono">{sandbox.image}</span>
+      {#if sandbox.session}
+        {@const session = sandbox.session}
+        <span class="ml-2 inline-flex items-center gap-1">
+          <AppIcons.chat_round class="size-3" />
+          {#if store.sessionById(session)}
+            <button
+              type="button"
+              class="text-primary hover:underline"
+              onclick={() => { store.switchTab('chat'); store.pickSession(session) }}
+            >{session}</button>
+          {:else}
+            <span>{session}</span>
+          {/if}
+        </span>
+      {/if}
     </div>
   {/if}
 
