@@ -23,7 +23,6 @@
   import { Input } from '$lib/components/ui/input'
   import { Dialog } from '$lib/components/ui/dialog'
   import { AppIcons } from '$lib/icons'
-  import { cn } from '$lib/utils'
   import PageHeader from '$lib/components/layout/PageHeader.svelte'
   import IconButton from '$lib/components/layout/IconButton.svelte'
   import EmptyState from '$lib/components/layout/EmptyState.svelte'
@@ -36,7 +35,6 @@
   let selected = $state<Set<string>>(new Set())
   // Repos whose feature-branch children are EXPANDED (default: collapsed).
   let expandedRepos = $state<Set<string>>(new Set())
-  let unreadOnly = $state(false)
 
   let refreshStartY: number | null = null
   let refreshing = $state(false)
@@ -70,7 +68,6 @@
   const filtered = $derived.by(() => {
     const needle = q.trim().toLowerCase()
     let list = store.sessions
-    if (unreadOnly) list = list.filter(s => store.isUnread(s))
     if (needle) {
       list = list.filter(
         s =>
@@ -384,19 +381,6 @@
   {#if store.sessionError}
     <div class="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-meta text-destructive">
       {t('connectionError')} · {store.sessionError}
-    </div>
-  {/if}
-
-  {#if !selectMode && !searching}
-    <div class="flex shrink-0 items-center gap-2 border-b border-border/60 px-3 py-2">
-      <button
-        type="button"
-        class={cn(
-          'shrink-0 rounded-full border px-3 py-1.5 text-micro',
-          unreadOnly ? 'border-primary/50 bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted',
-        )}
-        onclick={() => (unreadOnly = !unreadOnly)}
-      >{t('unreadOnly')}</button>
     </div>
   {/if}
 
