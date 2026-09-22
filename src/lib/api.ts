@@ -382,10 +382,10 @@ export class AgentApi {
     return w ? branchSessionToSession(w) : emptySession('')
   }
 
-  /** Create a free session with a tenant-scoped role (admin|explorer|planner). */
+  /** Create a free session with a tenant-scoped role (admin|explorer). */
   async createFreeSession(
     name: string,
-    role: 'admin' | 'explorer' | 'planner',
+    role: 'admin' | 'explorer',
     model = '',
   ): Promise<Session> {
     const r = await this._guard(() =>
@@ -911,6 +911,18 @@ export class AgentApi {
   async ensureRepo(org: string, repo: string): Promise<boolean> {
     const r = await this._guard(() => this._c.ensureRepo({ org, repo }))
     return r.created
+  }
+
+  /** Create an org owned by the tenant (admin; idempotent). */
+  async createOrg(org: string): Promise<string> {
+    const r = await this._guard(() => this._c.createOrg({ org }))
+    return r.org
+  }
+
+  /** List the tenant-owned orgs (including empty ones). */
+  async listOrgs(): Promise<string[]> {
+    const r = await this._guard(() => this._c.listOrgs({}))
+    return r.orgs ?? []
   }
 
   /** Import (migrate) an EXTERNAL git repo into `org` (admin). `ref` given =

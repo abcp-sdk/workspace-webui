@@ -26,7 +26,6 @@ export type AppPage =
   | { kind: 'providers_list'; key: 'providers_list' }
   | { kind: 'provider_form'; key: 'provider_form' }
   | { kind: 'provider_models'; key: string; modelId: string | null }
-  | { kind: 'new_session'; key: 'new_session' }
   // code tab (read-only git browse; the page owns its own master-detail tree)
   | { kind: 'code_root'; key: 'code_root' }
   // service tab (read-only sandboxes + services)

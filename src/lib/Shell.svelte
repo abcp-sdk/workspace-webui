@@ -16,7 +16,6 @@
   import ProvidersList from './pages/providers/ProvidersList.svelte'
   import ProviderForm from './pages/providers/ProviderForm.svelte'
   import ProviderModelForm from './pages/providers/ProviderModelForm.svelte'
-  import NewSession from './pages/NewSession.svelte'
   import CodeTab from './pages/CodeTab.svelte'
   import ServiceRoot from './pages/ServiceRoot.svelte'
   import SandboxDetail from './pages/SandboxDetail.svelte'
@@ -65,8 +64,6 @@
         return ProviderForm as Component<PageProps>
       case 'provider_models':
         return ProviderModelForm as Component<PageProps>
-      case 'new_session':
-        return NewSession as Component<PageProps>
       case 'code_root':
         return CodeTab as Component<PageProps>
       case 'service_root':

@@ -1,35 +1,28 @@
-// Role model — the five immutable session roles (presets) of the workspace
+// Role model — the four immutable session roles (presets) of the workspace
 // gateway. A session's role decides ONLY what it may do (tools); visibility is
-// always the whole tenant. Free roles (admin/planner/explorer) are not bound to
-// a repo/branch; maintainer/developer ARE (branch = identity).
+// always the whole tenant. Free roles (admin/explorer) are not bound to a
+// repo/branch; maintainer/developer ARE (branch = identity).
 //
 //   admin      tenant   create org/repo, read everything, no sandbox
 //   explorer   tenant   read every repo (no sandbox, no writes)
-//   planner    tenant   read + sandbox, no git writes
 //   maintainer org:repo:main      review/merge MRs, branches, releases, sandbox
 //   developer  org:repo:<branch>  write its branch, open MRs, sandbox
 import type { BranchSession } from './api'
 import { AppIcons } from './icons'
 
-export type Role = 'admin' | 'explorer' | 'planner' | 'maintainer' | 'developer'
+export type Role = 'admin' | 'explorer' | 'maintainer' | 'developer'
 
-/** The five roles in display order (free roles first). */
-export const ROLES: Role[] = [
-  'admin',
-  'explorer',
-  'planner',
-  'maintainer',
-  'developer',
-]
+/** The four roles in display order (free roles first). */
+export const ROLES: Role[] = ['admin', 'explorer', 'maintainer', 'developer']
 
 /** Free roles: not bound to a repo/branch, any number may exist. */
-export const FREE_ROLES: Role[] = ['admin', 'explorer', 'planner']
+export const FREE_ROLES: Role[] = ['admin', 'explorer']
 
 /** Branch-bound roles: exactly one session per (repo, branch). */
 export const BRANCH_ROLES: Role[] = ['maintainer', 'developer']
 
 export function isFreeRole(r: string): boolean {
-  return r === 'admin' || r === 'explorer' || r === 'planner'
+  return r === 'admin' || r === 'explorer'
 }
 
 export function isBranchRole(r: string): boolean {
@@ -64,8 +57,6 @@ export function roleIcon(r: string): IconComponent {
       return AppIcons.shield
     case 'explorer':
       return AppIcons.compass
-    case 'planner':
-      return AppIcons.flask
     case 'maintainer':
       return AppIcons.merge
     case 'developer':
@@ -83,8 +74,6 @@ export function roleLabelKey(r: string): string {
       return 'roleAdmin'
     case 'explorer':
       return 'roleExplorer'
-    case 'planner':
-      return 'rolePlanner'
     case 'maintainer':
       return 'roleMaintainer'
     case 'developer':
@@ -101,8 +90,6 @@ export function roleTone(r: string): string {
       return 'bg-destructive/12 text-destructive'
     case 'explorer':
       return 'bg-sky-500/15 text-sky-600 dark:text-sky-400'
-    case 'planner':
-      return 'bg-violet-500/15 text-violet-600 dark:text-violet-400'
     case 'maintainer':
       return 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
     case 'developer':

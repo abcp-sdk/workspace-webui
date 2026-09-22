@@ -30,7 +30,7 @@
     onToggleExpand,
   }: {
     session: Session
-    /** Workspace role (admin/explorer/planner/maintainer/developer). */
+    /** Workspace role (admin/explorer/maintainer/developer). */
     role?: string
     isActive?: boolean
     subtitle?: string
@@ -141,6 +141,33 @@
       <span class="h-[34px] w-0.5 bg-muted-foreground/35"></span>
     </span>
     <span class="w-1 shrink-0"></span>
+  {:else if childCount > 0}
+    <!-- Expand affordance (branches of this repo's main session): a LEFT
+         triangle, so the tree read is "main ▸ its branches", not a right-side
+         count chip. A span (not a button): the row itself is a button, so a
+         nested button would be invalid HTML. -->
+    <span
+      role="button"
+      tabindex="0"
+      class="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted"
+      aria-label={t('branch')}
+      aria-expanded={expanded}
+      onclick={e => {
+        e.stopPropagation()
+        onToggleExpand?.()
+      }}
+      onkeydown={e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          e.stopPropagation()
+          onToggleExpand?.()
+        }
+      }}
+    >
+      {#if expanded}<AppIcons.chevron_down class="size-4" />{:else}<AppIcons.chevron_right class="size-4" />{/if}
+    </span>
+  {:else}
+    <span class="w-6 shrink-0"></span>
   {/if}
   {#if selectable}
     <span
@@ -168,27 +195,6 @@
         <span class={cn('ml-1 flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-px text-[9px] leading-none', roleTone(role))}>
           {#if RoleIcon}<RoleIcon class="size-[11px]" />{/if}
           {t(roleLabelKey(role))}
-        </span>
-      {/if}
-      {#if childCount > 0}
-        <span
-          role="button"
-          tabindex="0"
-          class="ml-1 flex shrink-0 cursor-pointer items-center rounded-full bg-muted-foreground/14 px-1.5 py-px text-[9px] leading-none text-muted-foreground"
-          onclick={e => {
-            e.stopPropagation()
-            onToggleExpand?.()
-          }}
-          onkeydown={e => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault()
-              e.stopPropagation()
-              onToggleExpand?.()
-            }
-          }}
-        >
-          {t('subsessionCount', { arg1: childCount })}
-          {#if expanded}<AppIcons.chevron_up class="size-[13px]" />{:else}<AppIcons.chevron_down class="size-[13px]" />{/if}
         </span>
       {/if}
       <!-- Fixed-width right-aligned slot: every trailing chip ends at the same

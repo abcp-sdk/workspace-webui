@@ -1,24 +1,29 @@
 <script lang="ts">
-  // SessionList — the primary tab. Every session (all five roles) is listed,
-  // FLAT and sorted by most-recent reply. Branch sessions of one repo collapse
-  // under a repo row (the fork/subsession tree ability, repurposed as
-  // repo -> branches). Free sessions (admin/explorer/planner) appear as rows.
+  // SessionList — the primary tab. Every session is listed FLAT and sorted by
+  // most-recent reply. A repo's `main` session is a normal row; when that repo
+  // also has feature-branch sessions, main gets a LEFT triangle that expands
+  // them as indented children (branch sessions only — no repo/role grouping).
   //
-  // Filters: role / repo / unread. Search matches name, org:repo and preview.
+  // Free sessions (admin/explorer) appear as rows. The `+` action offers only
+  // the four creation flows: org / repo / branch(fork) / free session.
+  //
+  // Search matches name, org:repo and preview.
   import type { PageProps } from '$lib/page-props'
   import type { Session } from '$lib/models'
   import { t } from '$lib/i18n.svelte'
   import { showErrorToast, showToast } from '$lib/toast.svelte'
   import { promptDialog, confirmDialog } from '$lib/dialogs'
   import { sessionName } from '$lib/models'
-  import { roleOfSession, roleLabelKey, isBranchRole, ROLES } from '$lib/roles'
+  import { roleOfSession, isBranchRole } from '$lib/roles'
   import SessionRow from '$lib/components/SessionRow.svelte'
   import ContextMenu, { type ContextMenuItem } from '$lib/components/ContextMenu.svelte'
   import type { MenuAnchor } from '$lib/context-menu-position'
-  import SessionRepoRow from '$lib/components/SessionRepoRow.svelte'
+  import { DropdownMenu, DropdownMenuItem } from '$lib/components/ui/dropdown-menu'
   import { Select } from '$lib/components/ui/select'
-  import { cn } from '$lib/utils'
+  import { Input } from '$lib/components/ui/input'
+  import { Dialog } from '$lib/components/ui/dialog'
   import { AppIcons } from '$lib/icons'
+  import { cn } from '$lib/utils'
   import PageHeader from '$lib/components/layout/PageHeader.svelte'
   import IconButton from '$lib/components/layout/IconButton.svelte'
   import EmptyState from '$lib/components/layout/EmptyState.svelte'
@@ -29,11 +34,8 @@
   let q = $state('')
   let selectMode = $state(false)
   let selected = $state<Set<string>>(new Set())
-  // Repo rows the user collapsed (default: expanded).
-  let collapsed = $state<Set<string>>(new Set())
-  // Filters.
-  let roleFilter = $state('')
-  let repoFilter = $state('')
+  // Repos whose feature-branch children are EXPANDED (default: collapsed).
+  let expandedRepos = $state<Set<string>>(new Set())
   let unreadOnly = $state(false)
 
   let refreshStartY: number | null = null
@@ -68,8 +70,6 @@
   const filtered = $derived.by(() => {
     const needle = q.trim().toLowerCase()
     let list = store.sessions
-    if (roleFilter) list = list.filter(s => roleOfSession(s) === roleFilter)
-    if (repoFilter) list = list.filter(s => repoKey(s) === repoFilter)
     if (unreadOnly) list = list.filter(s => store.isUnread(s))
     if (needle) {
       list = list.filter(
@@ -79,14 +79,18 @@
           `${s.org}/${s.repo}/${s.branch}`.toLowerCase().includes(needle),
       )
     }
-    return [...list].sort((a, b) => recency(b) - recency(a))
+    return list
   })
 
-  // A flat display list: free rows in recency order, and for each repo a header
-  // row (unless filtered to one role) followed by its branch sessions.
-  type Display =
-    | { kind: 'row'; session: Session }
-    | { kind: 'repo'; key: string; count: number; expanded: boolean }
+  // A flat display list: free rows + each repo's main row (with its branch
+  // sessions as optional indented children), all ordered by recency.
+  type Display = {
+    key: string
+    session: Session
+    isChild: boolean
+    childCount: number
+    expanded: boolean
+  }
 
   const display = $derived.by<Display[]>(() => {
     const free: Session[] = []
@@ -102,35 +106,48 @@
       list.push(s)
       byRepo.set(key, list)
     }
-    const out: Display[] = free.map(s => ({ kind: 'row', session: s }))
-    // Repos ordered by their newest session.
-    const repos = [...byRepo.keys()].sort((a, b) => {
-      const ra = Math.max(...byRepo.get(a)!.map(recency))
-      const rb = Math.max(...byRepo.get(b)!.map(recency))
-      return rb - ra
-    })
-    for (const key of repos) {
-      const kids = byRepo.get(key)!.sort((a, b) => recency(b) - recency(a))
-      out.push({ kind: 'repo', key, count: kids.length, expanded: !collapsed.has(key) })
-      if (!collapsed.has(key)) for (const s of kids) out.push({ kind: 'row', session: s })
+
+    type Anchor = { key: string; main: Session; children: Session[]; rec: number }
+    const anchors: Anchor[] = []
+    for (const [key, list] of byRepo) {
+      const sorted = [...list].sort((a, b) => recency(b) - recency(a))
+      const main = sorted.find(s => s.branch === 'main')
+      const anchor = main ?? sorted[0]!
+      const children = sorted.filter(s => s.id !== anchor.id)
+      anchors.push({ key, main: anchor, children, rec: recency(anchor) })
+    }
+
+    // Merge free sessions and repo anchors by recency (newest first).
+    type Item = { rec: number; free?: Session; anchor?: Anchor }
+    const items: Item[] = [
+      ...free.map(s => ({ rec: recency(s), free: s })),
+      ...anchors.map(a => ({ rec: a.rec, anchor: a })),
+    ]
+    items.sort((a, b) => b.rec - a.rec)
+
+    const out: Display[] = []
+    for (const it of items) {
+      if (it.free) {
+        out.push({ key: `s:${it.free.id}`, session: it.free, isChild: false, childCount: 0, expanded: false })
+        continue
+      }
+      const a = it.anchor!
+      const expanded = expandedRepos.has(a.key)
+      out.push({ key: `m:${a.key}`, session: a.main, isChild: false, childCount: a.children.length, expanded })
+      if (expanded) {
+        for (const c of a.children) {
+          out.push({ key: `c:${c.id}`, session: c, isChild: true, childCount: 0, expanded: false })
+        }
+      }
     }
     return out
   })
 
-  const repoFilterOptions = $derived([
-    { value: '', label: t('filterAll') },
-    ...[...new Set(store.sessions.map(repoKey).filter(Boolean))].sort().map(k => ({ value: k, label: k })),
-  ])
-  const roleFilterOptions = $derived([
-    { value: '', label: t('filterAll') },
-    ...ROLES.map(r => ({ value: r, label: t(roleLabelKey(r)) })),
-  ])
-
-  function toggleCollapse(key: string) {
-    const next = new Set(collapsed)
+  function toggleExpand(key: string) {
+    const next = new Set(expandedRepos)
     if (next.has(key)) next.delete(key)
     else next.add(key)
-    collapsed = next
+    expandedRepos = next
   }
 
   function exitSelect() {
@@ -165,16 +182,133 @@
     exitSelect()
   }
 
-  function openNewSession() {
-    store.pushPage({ kind: 'new_session', key: 'new_session' })
+  // ---- creation flows (`+` menu) ----
+  type CreateKind = 'org' | 'repo' | 'branch' | 'free' | null
+  let createKind = $state<CreateKind>(null)
+  let busy = $state(false)
+  let orgs = $state<string[]>([])
+  let repoOptions = $state<{ org: string; repo: string }[]>([])
+
+  // dialog fields
+  let dOrg = $state('')
+  let dRepoOrg = $state('')
+  let dRepo = $state('')
+  let dBrRepo = $state('') // "org/repo"
+  let dBrParent = $state('') // parent session id
+  let dBrName = $state('')
+  let dFreeName = $state('')
+  let dFreeRole = $state<'admin' | 'explorer'>('explorer')
+
+  async function openCreate(kind: Exclude<CreateKind, null>) {
+    createKind = kind
+    busy = false
+    dOrg = ''
+    dRepo = ''
+    dBrName = ''
+    dBrParent = ''
+    dFreeName = ''
+    dFreeRole = 'explorer'
+    try {
+      orgs = await store.api.listOrgs()
+    } catch {
+      orgs = []
+    }
+    try {
+      repoOptions = (await store.api.listRepos()).map(r => ({ org: r.org, repo: r.repo }))
+    } catch {
+      repoOptions = []
+    }
+    dRepoOrg = orgs[0] ?? repoOptions[0]?.org ?? ''
+    dBrRepo = repoOptions[0] ? `${repoOptions[0].org}/${repoOptions[0].repo}` : ''
+    dBrParent = parentChoices(dBrRepo)[0]?.value ?? ''
   }
 
-  async function forkBranch(sid: string) {
+  /** The repo's sessions usable as fork parents (all branches incl. main). */
+  function parentChoices(repoRef: string): { value: string; label: string }[] {
+    if (!repoRef) return []
+    const [org, repo] = repoRef.split('/')
+    return store.sessions
+      .filter(s => s.org === org && s.repo === repo && s.branch)
+      .sort((a, b) => (a.branch === 'main' ? -1 : b.branch === 'main' ? 1 : recency(b) - recency(a)))
+      .map(s => ({ value: s.id, label: s.branch }))
+  }
+
+  const repoRefOptions = $derived(repoOptions.map(r => ({ value: `${r.org}/${r.repo}`, label: `${r.org}/${r.repo}` })))
+  const orgOptions = $derived(orgs.map(o => ({ value: o, label: o })))
+  const parentOptions = $derived(parentChoices(dBrRepo))
+
+  const canSubmit = $derived.by(() => {
+    switch (createKind) {
+      case 'org':
+        return dOrg.trim() !== ''
+      case 'repo':
+        return dRepoOrg.trim() !== '' && dRepo.trim() !== ''
+      case 'branch':
+        return dBrRepo !== '' && dBrParent !== '' && dBrName.trim() !== ''
+      case 'free':
+        return dFreeName.trim() !== ''
+      default:
+        return false
+    }
+  })
+
+  async function submitCreate() {
+    if (!canSubmit || busy) return
+    busy = true
+    try {
+      if (createKind === 'org') {
+        await store.api.createOrg(dOrg.trim())
+      } else if (createKind === 'repo') {
+        await store.api.ensureRepo(dRepoOrg.trim(), dRepo.trim())
+      } else if (createKind === 'branch') {
+        await store.api.forkBranchSession(dBrParent, dBrName.trim())
+      } else if (createKind === 'free') {
+        await store.api.createFreeSession(dFreeName.trim(), dFreeRole)
+      }
+      showToast(t('created'))
+      createKind = null
+      await store.refreshSessions()
+    } catch (e) {
+      showErrorToast(String(e))
+    }
+    busy = false
+  }
+
+  // Row context menu (desktop right-click / mobile long-press), anchored to
+  // the source ROW and highlighting it.
+  let rowMenu = $state<{ sid: string; anchor: MenuAnchor } | null>(null)
+
+  function openRowMenu(sid: string, anchor: MenuAnchor) {
+    rowMenu = { sid, anchor }
+  }
+
+  const rowMenuItems = $derived.by(() => {
+    if (!rowMenu) return []
+    const s = store.sessionById(rowMenu.sid)
+    const items: ContextMenuItem[] = []
+    // A branch session can fork a new branch (with its chat context).
+    if (s && isBranchRole(roleOfSession(s))) items.push({ value: 'fork', label: t('createBranchTitle') })
+    if (s && store.isUnread(s)) items.push({ value: 'read', label: t('markRead') })
+    items.push({ value: 'delete', label: t('deleteSession'), destructive: true })
+    return items
+  })
+
+  async function onRowMenuPick(value: string) {
+    const sid = rowMenu?.sid
+    rowMenu = null
+    if (!sid) return
+    if (value === 'read') store.markSessionRead(sid)
+    else if (value === 'fork') await forkFrom(sid)
+    else if (value === 'delete') await deleteFlow(sid)
+  }
+
+  /** Fork a new branch from an existing branch session (parent required). */
+  async function forkFrom(sid: string) {
     const s = store.sessionById(sid)
     if (!s) return
     const branch = await promptDialog({
-      title: t('fork'),
-      body: `${s.org}/${s.repo}`,
+      title: t('createBranchTitle'),
+      body: `${t('parentBranch')}: ${s.branch}`,
       placeholder: t('branchHint'),
       confirmLabel: t('create'),
     })
@@ -186,34 +320,6 @@
     } catch (e) {
       showErrorToast(String(e))
     }
-  }
-
-  // Row context menu (desktop right-click / mobile long-press), anchored to
-  // the source ROW and highlighting it — with many near-identical rows a
-  // cursor-anchored menu gives no clue which session it acts on.
-  let rowMenu = $state<{ sid: string; anchor: MenuAnchor } | null>(null)
-
-  function openRowMenu(sid: string, anchor: MenuAnchor) {
-    rowMenu = { sid, anchor }
-  }
-
-  const rowMenuItems = $derived.by(() => {
-    if (!rowMenu) return []
-    const s = store.sessionById(rowMenu.sid)
-    const items: ContextMenuItem[] = []
-    if (s && isBranchRole(roleOfSession(s))) items.push({ value: 'fork', label: t('fork') })
-    if (s && store.isUnread(s)) items.push({ value: 'read', label: t('markRead') })
-    items.push({ value: 'delete', label: t('deleteSession'), destructive: true })
-    return items
-  })
-
-  async function onRowMenuPick(value: string) {
-    const sid = rowMenu?.sid
-    rowMenu = null
-    if (!sid) return
-    if (value === 'read') store.markSessionRead(sid)
-    else if (value === 'fork') await forkBranch(sid)
-    else if (value === 'delete') await deleteFlow(sid)
   }
 
   async function deleteFlow(sid: string | null) {
@@ -263,18 +369,26 @@
       <span class="min-w-0 flex-1 truncate text-base font-semibold">{t('tabChat')}</span>
       <IconButton icon={AppIcons.search} label={t('search')} variant="primary" onclick={() => (searching = true)} />
       <IconButton icon={AppIcons.list} label={t('selectSessions')} variant="primary" onclick={() => (selectMode = true)} />
-      <IconButton icon={AppIcons.add} label={t('newSessionTitle')} variant="primary" onclick={openNewSession} />
+      <DropdownMenu label={t('newSessionTitle')}>
+        {#snippet trigger()}
+          <AppIcons.add class="size-[18px]" />
+        {/snippet}
+        <DropdownMenuItem onSelect={() => void openCreate('org')}>{t('createOrgTitle')}</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => void openCreate('repo')}>{t('createRepoTitle')}</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => void openCreate('branch')} disabled={repoOptions.length === 0}>{t('createBranchTitle')}</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => void openCreate('free')}>{t('createFreeTitle')}</DropdownMenuItem>
+      </DropdownMenu>
     {/if}
   </PageHeader>
 
+  {#if store.sessionError}
+    <div class="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-meta text-destructive">
+      {t('connectionError')} · {store.sessionError}
+    </div>
+  {/if}
+
   {#if !selectMode && !searching}
     <div class="flex shrink-0 items-center gap-2 border-b border-border/60 px-3 py-2">
-      <div class="min-w-0 flex-1">
-        <Select bind:value={roleFilter} items={roleFilterOptions} />
-      </div>
-      <div class="min-w-0 flex-1">
-        <Select bind:value={repoFilter} items={repoFilterOptions} />
-      </div>
       <button
         type="button"
         class={cn(
@@ -283,12 +397,6 @@
         )}
         onclick={() => (unreadOnly = !unreadOnly)}
       >{t('unreadOnly')}</button>
-    </div>
-  {/if}
-
-  {#if store.sessionError}
-    <div class="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-meta text-destructive">
-      {t('connectionError')} · {store.sessionError}
     </div>
   {/if}
 
@@ -301,34 +409,25 @@
     {#if display.length === 0}
       <EmptyState>{t('noSessions')}</EmptyState>
     {:else}
-      {#each display as item (item.kind === 'repo' ? `repo:${item.key}` : `s:${item.session.id}`)}
-        {#if item.kind === 'repo'}
-          <SessionRepoRow
-            repoKey={item.key}
-            count={item.count}
-            expanded={item.expanded}
-            onToggle={() => toggleCollapse(item.key)}
-          />
-        {:else}
-          {@const s = item.session}
-          <SessionRow
-            session={s}
-            role={roleOfSession(s)}
-            isActive={s.id === store.activeSessionId}
-            subtitle={s.lastMessagePreview || s.id}
-            unread={store.isUnread(s)}
-            unreadCount={store.unreadCountFor(s)}
-            selectable={selectMode}
-            selected={selected.has(s.id)}
-            childCount={0}
-            expanded={true}
-            isChild={!!s.org && isBranchRole(roleOfSession(s))}
-            onTap={() => (selectMode ? toggle(s.id) : store.pickSession(s.id))}
-            menuOpen={rowMenu?.sid === s.id}
-            onMenuRequest={selectMode ? null : anchor => openRowMenu(s.id, anchor)}
-            onToggleExpand={undefined}
-          />
-        {/if}
+      {#each display as item (item.key)}
+        {@const s = item.session}
+        <SessionRow
+          session={s}
+          role={roleOfSession(s)}
+          isActive={s.id === store.activeSessionId}
+          subtitle={s.lastMessagePreview || s.id}
+          unread={store.isUnread(s)}
+          unreadCount={store.unreadCountFor(s)}
+          selectable={selectMode}
+          selected={selected.has(s.id)}
+          childCount={item.childCount}
+          expanded={item.expanded}
+          isChild={item.isChild}
+          onTap={() => (selectMode ? toggle(s.id) : store.pickSession(s.id))}
+          menuOpen={rowMenu?.sid === s.id}
+          onMenuRequest={selectMode ? null : anchor => openRowMenu(s.id, anchor)}
+          onToggleExpand={item.childCount > 0 ? () => toggleExpand(repoKey(s)) : undefined}
+        />
       {/each}
     {/if}
   </div>
@@ -337,3 +436,110 @@
     <ContextMenu anchor={rowMenu.anchor} items={rowMenuItems} onPick={v => void onRowMenuPick(v)} onClose={() => (rowMenu = null)} />
   {/if}
 </div>
+
+<!-- creation dialogs -->
+<Dialog
+  open={createKind === 'org'}
+  title={t('createOrgTitle')}
+  onClose={() => (createKind = null)}
+>
+  {#snippet children()}
+    <label class="block">
+      <span class="mb-1 block text-meta text-muted-foreground">{t('orgNameLabel')}</span>
+      <Input bind:value={dOrg} placeholder="acme" />
+    </label>
+  {/snippet}
+  {#snippet footer()}
+    <button type="button" class="rounded-md px-3 py-1.5 text-sm hover:bg-muted" onclick={() => (createKind = null)}>{t('cancel')}</button>
+    <button type="button" class="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/80 disabled:opacity-40" disabled={!canSubmit || busy} onclick={() => void submitCreate()}>{t('create')}</button>
+  {/snippet}
+</Dialog>
+
+<Dialog
+  open={createKind === 'repo'}
+  title={t('createRepoTitle')}
+  onClose={() => (createKind = null)}
+>
+  {#snippet children()}
+    <div class="space-y-3">
+      <label class="block">
+        <span class="mb-1 block text-meta text-muted-foreground">{t('org')}</span>
+        <Select bind:value={dRepoOrg} items={orgOptions} placeholder={t('org')} />
+      </label>
+      <label class="block">
+        <span class="mb-1 block text-meta text-muted-foreground">{t('repoNameLabel')}</span>
+        <Input bind:value={dRepo} placeholder="my-repo" />
+      </label>
+    </div>
+  {/snippet}
+  {#snippet footer()}
+    <button type="button" class="rounded-md px-3 py-1.5 text-sm hover:bg-muted" onclick={() => (createKind = null)}>{t('cancel')}</button>
+    <button type="button" class="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/80 disabled:opacity-40" disabled={!canSubmit || busy} onclick={() => void submitCreate()}>{t('create')}</button>
+  {/snippet}
+</Dialog>
+
+<Dialog
+  open={createKind === 'branch'}
+  title={t('createBranchTitle')}
+  onClose={() => (createKind = null)}
+>
+  {#snippet children()}
+    <div class="space-y-3">
+      <label class="block">
+        <span class="mb-1 block text-meta text-muted-foreground">{t('repo')}</span>
+        <Select
+          bind:value={dBrRepo}
+          items={repoRefOptions}
+          placeholder={t('repo')}
+          onchange={v => {
+            dBrRepo = v
+            dBrParent = parentChoices(v)[0]?.value ?? ''
+          }}
+        />
+      </label>
+      <label class="block">
+        <span class="mb-1 block text-meta text-muted-foreground">{t('pickParent')}</span>
+        <Select bind:value={dBrParent} items={parentOptions} placeholder={t('parentBranch')} />
+      </label>
+      <label class="block">
+        <span class="mb-1 block text-meta text-muted-foreground">{t('branchHint')}</span>
+        <Input bind:value={dBrName} placeholder="feature/x" />
+      </label>
+    </div>
+  {/snippet}
+  {#snippet footer()}
+    <button type="button" class="rounded-md px-3 py-1.5 text-sm hover:bg-muted" onclick={() => (createKind = null)}>{t('cancel')}</button>
+    <button type="button" class="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/80 disabled:opacity-40" disabled={!canSubmit || busy} onclick={() => void submitCreate()}>{t('create')}</button>
+  {/snippet}
+</Dialog>
+
+<Dialog
+  open={createKind === 'free'}
+  title={t('createFreeTitle')}
+  onClose={() => (createKind = null)}
+>
+  {#snippet children()}
+    <div class="space-y-3">
+      <label class="block">
+        <span class="mb-1 block text-meta text-muted-foreground">{t('sessionNameLabel')}</span>
+        <Input bind:value={dFreeName} placeholder={t('sessionNameHint')} />
+      </label>
+      <div>
+        <span class="mb-1 block text-meta text-muted-foreground">{t('pickRole')}</span>
+        <div class="flex gap-2">
+          {#each ['explorer', 'admin'] as r (r)}
+            <button
+              type="button"
+              class="flex-1 rounded-md border px-3 py-2 text-sm {dFreeRole === r ? 'border-primary/50 bg-primary/8' : 'border-border hover:bg-muted/50'}"
+              onclick={() => (dFreeRole = r as 'admin' | 'explorer')}
+            >{t(r === 'admin' ? 'roleAdmin' : 'roleExplorer')}</button>
+          {/each}
+        </div>
+      </div>
+    </div>
+  {/snippet}
+  {#snippet footer()}
+    <button type="button" class="rounded-md px-3 py-1.5 text-sm hover:bg-muted" onclick={() => (createKind = null)}>{t('cancel')}</button>
+    <button type="button" class="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/80 disabled:opacity-40" disabled={!canSubmit || busy} onclick={() => void submitCreate()}>{t('create')}</button>
+  {/snippet}
+</Dialog>
