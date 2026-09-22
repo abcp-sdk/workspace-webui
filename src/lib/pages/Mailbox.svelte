@@ -5,6 +5,7 @@
   import type { Component } from 'svelte'
   import type { PageProps } from '$lib/page-props'
   import { t } from '$lib/i18n.svelte'
+  import { showErrorToast } from '$lib/toast.svelte'
   import type { MailboxEntry } from '$lib/models'
   import { cn } from '$lib/utils'
   import PageHeader from '$lib/components/layout/PageHeader.svelte'
@@ -36,6 +37,9 @@
         error = ''
       } catch (e) {
         error = String(e)
+        // The inline error state replaces the list; also toast so the failure
+        // is visible even if the page is scrolled.
+        showErrorToast(t('loadError', { e: String(e) }))
       }
       loading = false
       // New content replaced the list: start at the top (newest).
@@ -55,8 +59,9 @@
       const seen = new Set(entries.map(e => e.id))
       entries = [...entries, ...r.entries.filter(e => !seen.has(e.id))]
       hasMore = r.hasMore
-    } catch {
-      /* keep what we have */
+    } catch (e) {
+      // Keep what we have, but surface the failed page load.
+      showErrorToast(t('loadError', { e: String(e) }))
     }
     loadingMore = false
   }

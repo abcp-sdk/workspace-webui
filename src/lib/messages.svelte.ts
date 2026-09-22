@@ -13,6 +13,7 @@
 // `messages`/`sorted`/`sending`/… are re-exposed as getters so call sites are
 // unchanged.
 import type { AgentApi } from './api'
+import { connection } from './connection.svelte'
 import type { LocalStore } from './db'
 import type { StreamEvent } from './events'
 import { applyStreamEvent } from './message-events'
@@ -64,6 +65,12 @@ export class MessagesController {
           this.store.sending = true
           this.store.notify()
         }
+      },
+      onDisconnected: () => {
+        connection.chat = true
+      },
+      onConnected: () => {
+        connection.chat = false
       },
     })
     if (opts?.sendFailed) this.sendFailedMsg = opts.sendFailed

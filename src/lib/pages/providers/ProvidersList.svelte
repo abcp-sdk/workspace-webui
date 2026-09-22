@@ -39,8 +39,8 @@
       Object.keys(providers).forEach(k => delete providers[k])
       const p = await store.api.providers()
       for (const [k, v] of Object.entries(p)) providers[k] = v
-    } catch {
-      /* offline */
+    } catch (e) {
+      showErrorToast(t('loadError', { e: String(e) }))
     }
   }
 

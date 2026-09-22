@@ -27,10 +27,13 @@ export interface StreamHandlers {
   onStreamClosed(): void
   /** The server answered busy: make sure the store reflects it. */
   onBusy(): void
+  /** A long-lived connection was lost (drives the reconnect banner). */
+  onDisconnected(): void
+  /** The connection is confirmed alive again (event, probe, or dispose). */
+  onConnected(): void
 }
 
 export class SessionStream {
-  private static MAX_RECONNECT = 10
   private static INITIAL_RECONNECT = 1000
   private static MAX_RECONNECT_MS = 30_000
   private static IDLE_PROBE_EVERY = 20_000
@@ -118,6 +121,9 @@ export class SessionStream {
     this.watchdogTimer = null
     this.streamAbort?.abort()
     this.streamAbort = null
+    // Closing the chat (or switching sessions) is not a connection problem:
+    // clear the banner so a disposed stream does not leave it stuck on.
+    this.h.onConnected()
   }
 
   /** Forget the active run (a run ended or the stream state was reset). */
@@ -127,6 +133,8 @@ export class SessionStream {
 
   private handleEvent(ev: StreamEvent) {
     this.lastActivity = Date.now()
+    // A live event proves the connection is healthy again.
+    this.h.onConnected()
     // Dedup across the subscribe/replay overlap.
     if (ev.eid) {
       if (this.seenEids.has(ev.eid)) return
@@ -148,10 +156,13 @@ export class SessionStream {
 
   private onStreamClosed(sid: string) {
     if (this.subSid != null && this.subSid !== sid) return
+    // The connection is down: surface the reconnect banner until it recovers.
+    this.h.onDisconnected()
     // Converge to idle if the stream ended without a terminal event.
     this.h.onStreamClosed()
     if (sid !== this.h.getSessionId()) return
-    if (this.reconnectAttempt >= SessionStream.MAX_RECONNECT) return
+    // Retry FOREVER (WeChat-style): the banner stays until the server is back.
+    // The backoff is capped, so this is a bounded-rate poll, not a storm.
     const delay = Math.min(
       SessionStream.MAX_RECONNECT_MS,
       SessionStream.INITIAL_RECONNECT * 2 ** this.reconnectAttempt,
@@ -249,6 +260,9 @@ export class SessionStream {
       this.api
         .state(this.h.getSessionId())
         .then(([st]) => {
+          // A successful unary over the same connection proves it is healthy,
+          // so an idle session (no stream events) still clears the banner.
+          this.h.onConnected()
           if (st === 'busy' || st === 'running') {
             this.h.onBusy()
           } else {

@@ -9,6 +9,7 @@
 // events in the same order the agent produces them.
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentApi } from './api'
+import { connection } from './connection.svelte'
 import { makeStreamEvent, type StreamEvent } from './events'
 import { MessagesController } from './messages.svelte'
 import type { MailboxEntry, Message } from './models'
@@ -27,6 +28,11 @@ class Chan {
   close(): void {
     this.closed = true
     this.wake?.()
+  }
+
+  /** Simulate the socket coming back (used by reconnect tests). */
+  reopen(): void {
+    this.closed = false
   }
 
   async *run(signal?: AbortSignal): AsyncGenerator<StreamEvent> {
@@ -158,6 +164,39 @@ function boot(): { ctrl: MessagesController; server: FakeServer } {
 afterEach(() => {
   for (const r of rigs) r.ctrl.dispose()
   rigs.length = 0
+  connection.chat = false
+})
+
+describe('MessagesController connection banner', () => {
+  it('raises the banner when the stream drops and clears it on a live event', async () => {
+    const { ctrl, server } = boot()
+    await flush()
+    expect(connection.chat).toBe(false)
+
+    // Drop the stream: the controller must flag reconnecting.
+    server.chan.close()
+    await flush(3)
+    expect(connection.chat).toBe(true)
+
+    // The socket comes back; wait out the first backoff (~1s), then a live
+    // event proves the connection is healthy again.
+    server.chan.reopen()
+    await new Promise(r => setTimeout(r, 1200))
+    server.chan.push(ev('status', { type: 'idle' }))
+    await flush(3)
+    expect(connection.chat).toBe(false)
+    ctrl.dispose()
+  })
+
+  it('clears the banner when the controller is disposed', async () => {
+    const { ctrl, server } = boot()
+    await flush()
+    server.chan.close()
+    await flush(3)
+    expect(connection.chat).toBe(true)
+    ctrl.dispose()
+    expect(connection.chat).toBe(false)
+  })
 })
 
 describe('MessagesController (server-driven state machine)', () => {

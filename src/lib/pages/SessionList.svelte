@@ -26,6 +26,7 @@
   import PageHeader from '$lib/components/layout/PageHeader.svelte'
   import IconButton from '$lib/components/layout/IconButton.svelte'
   import EmptyState from '$lib/components/layout/EmptyState.svelte'
+  import ReconnectBanner from '$lib/components/ReconnectBanner.svelte'
 
   let { store }: PageProps = $props()
 
@@ -378,11 +379,7 @@
     {/if}
   </PageHeader>
 
-  {#if store.sessionError}
-    <div class="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-meta text-destructive">
-      {t('connectionError')} · {store.sessionError}
-    </div>
-  {/if}
+  <ReconnectBanner />
 
   <div
     class="min-h-0 flex-1 overflow-y-auto"

@@ -25,6 +25,7 @@
   import MediaAttachment from '$lib/components/MediaAttachment.svelte'
   import ChatInfoDialog from './ChatInfoDialog.svelte'
   import ChatSettingsDialog from './ChatSettingsDialog.svelte'
+  import ReconnectBanner from '$lib/components/ReconnectBanner.svelte'
 
   let { store }: PageProps = $props()
 
@@ -123,13 +124,13 @@
   async function loadMeta() {
     try {
       providers = await store.api.providers()
-    } catch {
-      /* providers optional for chat */
+    } catch (e) {
+      showErrorToast(t('loadError', { e: String(e) }))
     }
     try {
       presets = await store.api.presets()
-    } catch {
-      /* presets optional */
+    } catch (e) {
+      showErrorToast(t('loadError', { e: String(e) }))
     }
   }
 
@@ -666,6 +667,9 @@
         </DropdownMenu>
       </div>
     </header>
+
+    <!-- reconnecting strip (below the header, in-page, not app-wide) -->
+    <ReconnectBanner />
 
     <!-- messages -->
     <div bind:this={listEl} class="min-h-0 flex-1 overflow-y-auto px-3 py-3" onscroll={onScroll}>

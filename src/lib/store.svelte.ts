@@ -3,7 +3,9 @@
 // unread read-watermarks, per-session chat drafts, provider draft, and the
 // per-tab navigation stacks.
 import type { AgentApi } from './api'
+import { connection } from './connection.svelte'
 import type { LocalStore } from './db'
+import { t } from './i18n.svelte'
 import type { ChatDraft, ProviderDraft, Session } from './models'
 import {
   draftFromProvider,
@@ -20,6 +22,7 @@ import {
   type SiderTab,
 } from './nav'
 import { Prefs } from './prefs'
+import { showErrorToast } from './toast.svelte'
 
 export type { AppPage, SessionOverlay, SiderTab } from './nav'
 export { rootPageFor } from './nav'
@@ -34,8 +37,6 @@ export class AppStore {
   sessionOverlay = $state<SessionOverlay | null>(null)
 
   sessionRevision = $state(0)
-  /** Last sessions-list load error ('' when healthy) — surfaced as a banner. */
-  sessionError = $state('')
 
   /** session → last read message_seq (client-local). */
   readSeqs: Record<string, number> = $state({})
@@ -96,7 +97,6 @@ export class AppStore {
   private sessionTimer: ReturnType<typeof setTimeout> | null = null
   private sessionAttempt = 0
   private firstSnapshot = true
-  private static MAX_SESSION_ATTEMPTS = 20
 
   constructor(api: AgentApi, local: LocalStore | null) {
     this.api = api
@@ -139,8 +139,20 @@ export class AppStore {
     })()
   }
 
+  /** Tear down the live list stream (backend switch / logout). Not a
+   *  connection problem, so clear the banner too. */
+  dispose() {
+    this.sessionTimer && clearTimeout(this.sessionTimer)
+    this.sessionTimer = null
+    this.sessionAbort?.abort()
+    this.sessionAbort = null
+    connection.sessions = false
+  }
+
   private onSessionStreamClosed() {
-    if (this.sessionAttempt >= AppStore.MAX_SESSION_ATTEMPTS) return
+    // The list stream is down: surface the in-page reconnect banner.
+    connection.sessions = true
+    // Retry FOREVER (WeChat-style) with a capped backoff.
     const delay = Math.min(30, 1 << Math.min(this.sessionAttempt, 5))
     this.sessionAttempt++
     this.sessionTimer = setTimeout(() => this.startSessionWatch(), delay * 1000)
@@ -152,6 +164,8 @@ export class AppStore {
     removed: string[],
   ) {
     this.sessionAttempt = 0
+    // A frame arrived: the list stream is healthy again.
+    connection.sessions = false
     if (snapshot) {
       this.sessions = [...upserts]
       // First ever snapshot on this device: seed read watermarks so historical
@@ -186,7 +200,6 @@ export class AppStore {
       this.readSeqs[active.id] = active.messageSeq
       Prefs.saveReadSeqs(this.readSeqs)
     }
-    this.sessionError = ''
   }
 
   get activeSession(): Session | null {
@@ -197,13 +210,14 @@ export class AppStore {
     return this.sessions.find(s => s.id === id) ?? null
   }
 
-  /** Manual refresh (pull-to-refresh / fallback reconciliation). */
+  /** Manual refresh (pull-to-refresh / fallback reconciliation). Failures
+   *  surface as a toast (the long-lived stream banner already covers a dropped
+   *  connection; a manual refresh that fails is a one-shot action). */
   async refreshSessions() {
     try {
       this.sessions = await this.api.listSessions()
-      this.sessionError = ''
     } catch (e) {
-      this.sessionError = String(e)
+      showErrorToast(`${t('connectionError', { arg1: String(e) })}`)
     }
     void this.refreshPhases()
   }

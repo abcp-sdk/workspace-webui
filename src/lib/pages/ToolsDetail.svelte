@@ -25,8 +25,8 @@
     void (async () => {
       try {
         tools = await store.api.tools(Prefs.effectiveAgentLocale(getLocale() === 'zh'))
-      } catch {
-        /* offline */
+      } catch (e) {
+        showErrorToast(t('loadError', { e: String(e) }))
       }
       try {
         config = await store.api.toolConfig()
