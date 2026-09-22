@@ -40,8 +40,6 @@ function bitAt(seed: string, i: number): boolean {
 export function hueOf(source: string): number {
   return fnv(source) % 360
 }
-
-/** Mirror-symmetric, branch-seeded honeycomb (only hexes fully inside the disc). */
 /** The hierarchy level an avatar is rendered at (matches easylab's Flutter
  *  ChatAvatar): org = solid tint, repo = fixed wreath, branch = unique
  *  honeycomb seeded by the branch name. */
@@ -69,6 +67,7 @@ export function honeycombWreath(): HexCell[] {
   return out
 }
 
+/** Mirror-symmetric, branch-seeded honeycomb (only hexes fully inside the disc). */
 export function honeycombCells(seed: string, mirror: boolean): HexCell[] {
   const r = HEX_SIZE
   const stepX = Math.sqrt(3) * r

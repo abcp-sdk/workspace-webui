@@ -10,40 +10,19 @@ import {
   FALLBACK_API_TYPE_CAPABILITIES,
   type ProviderInfo,
 } from './models'
+import {
+  type AppPage,
+  popPage,
+  pushPage,
+  pushSibling,
+  rootPageFor,
+  type SessionOverlay,
+  type SiderTab,
+} from './nav'
 import { Prefs } from './prefs'
 
-export type SiderTab = 'chat' | 'code' | 'service' | 'config'
-export type SessionOverlay = 'mailbox'
-
-// ---- navigation model (navigation.dart) ----
-
-export type AppPage =
-  | { kind: 'chat_list'; key: 'chat_list' }
-  | { kind: 'chat_session'; key: 'chat_session' }
-  | { kind: 'chat_overlay'; key: 'chat_overlay'; overlay: SessionOverlay }
-  | { kind: 'config_root'; key: 'config_root' }
-  | { kind: 'config_sub'; key: string; id: string }
-  | { kind: 'providers_list'; key: 'providers_list' }
-  | { kind: 'provider_form'; key: 'provider_form' }
-  | { kind: 'provider_models'; key: string; modelId: string | null }
-  // code tab (read-only git browse; the page owns its own master-detail tree)
-  | { kind: 'code_root'; key: 'code_root' }
-  // service tab (read-only sandboxes + services)
-  | { kind: 'service_root'; key: 'service_root' }
-  | { kind: 'sandbox_detail'; key: string; name: string }
-
-export function rootPageFor(tab: SiderTab): AppPage {
-  switch (tab) {
-    case 'chat':
-      return { kind: 'chat_list', key: 'chat_list' }
-    case 'code':
-      return { kind: 'code_root', key: 'code_root' }
-    case 'service':
-      return { kind: 'service_root', key: 'service_root' }
-    case 'config':
-      return { kind: 'config_root', key: 'config_root' }
-  }
-}
+export type { AppPage, SessionOverlay, SiderTab } from './nav'
+export { rootPageFor } from './nav'
 
 export class AppStore {
   api: AgentApi
@@ -411,29 +390,24 @@ export class AppStore {
 
   /** Push a page; same-key pages replace at their existing depth. */
   pushPage(page: AppPage) {
-    const list = this.currentStack
-    const idx = list.findIndex(p => p.key === page.key)
-    if (idx !== -1) list.splice(idx, list.length - idx)
-    list.push(page)
+    this.stacks[this.siderTab] = pushPage(this.currentStack, page)
   }
 
   /** Push a SIBLING drill-in (replaces the current drill-in, keeps stack at
    * [root, current] so the tablet split never shows two parallels). */
   pushSibling(page: AppPage) {
-    const list = this.currentStack
-    if (list.length > 1) list.splice(1, list.length - 1)
-    this.pushPage(page)
+    this.stacks[this.siderTab] = pushSibling(this.currentStack, page)
   }
 
   /** Pop the top page; never pops below the root. */
   popPage() {
-    const list = this.currentStack
-    if (list.length > 1) {
-      list.pop()
-      if (this.siderTab === 'chat' && list.length === 1) {
-        this.activeSessionId = null
-        this.sessionOverlay = null
-      }
+    const cur = this.currentStack
+    if (cur.length <= 1) return
+    const next = popPage(cur)
+    this.stacks[this.siderTab] = next
+    if (this.siderTab === 'chat' && next.length === 1) {
+      this.activeSessionId = null
+      this.sessionOverlay = null
     }
   }
 

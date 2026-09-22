@@ -11,6 +11,7 @@ function msg(over: Partial<ChatMessage> & { id: string }): ChatMessage {
     createdAt: '2026-01-01T00:00:00.000Z',
     prevId: '',
     isLocal: false,
+    source: '',
     seq: 0,
     ...over,
   }

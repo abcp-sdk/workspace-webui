@@ -8,7 +8,6 @@
   import { Prefs } from '$lib/prefs'
   import { showToast, showErrorToast } from '$lib/toast.svelte'
   import type { Preset, ToolInfo } from '$lib/models'
-  import { parseToolParams } from '$lib/models'
   import { Select } from '$lib/components/ui/select'
   import { Dialog } from '$lib/components/ui/dialog'
   import { actionSheet } from '$lib/dialogs'

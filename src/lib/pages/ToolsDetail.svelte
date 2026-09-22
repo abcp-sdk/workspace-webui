@@ -10,7 +10,7 @@
   import { showErrorToast, showToast } from '$lib/toast.svelte'
   import { AppIcons } from '$lib/icons'
   import { Select } from '$lib/components/ui/select'
-  import { parseToolParams } from '$lib/models'
+  import { parseToolParams } from '$lib/tool-params'
 
   let { store }: { store: AppStore } = $props()
 

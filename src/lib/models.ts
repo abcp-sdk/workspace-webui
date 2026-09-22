@@ -122,6 +122,9 @@ export interface Message {
   parts: MessagePart[]
   createdAt?: string | null
   prevId: string
+  /** ORIGIN of the message ('' for agent-authored rows): `user`,
+   *  `session:{name}`, `system:{name}`, or extension-defined. */
+  source: string
 }
 
 // ---- attachments ----
@@ -212,6 +215,9 @@ export interface ChatMessage {
   prevId: string
   /** Client-only bubble (optimistic user msg / streaming assistant). */
   isLocal: boolean
+  /** ORIGIN of the message: `user`, `session:{name}`, `system:{name}`, or
+   *  extension-defined. '' for agent-authored rows. */
+  source: string
   /** Server-assigned id for an optimistic bubble, learned from the Prompt
    *  `accepted` response. Kept separate from `id` (the stable local key) so
    *  the optimistic bubble and its persisted copy can coexist until the
@@ -224,7 +230,8 @@ export interface ChatMessage {
 export interface MailboxEntry {
   id: string
   msgType: string
-  /** ORIGIN: `user`, `session:{name}`, `system:{name}`, or extension-defined. */
+  /** ORIGIN of the message: `user`, `session:{name}`, `system:{name}`, or an
+   *  extension-defined value. */
   source: string
   payload: string
   effectiveAt?: string | null
@@ -263,61 +270,6 @@ export interface ToolConfig {
   defaultValue?: unknown
   description: string
   scope: string // global | session
-}
-
-export interface ToolParam {
-  name: string
-  type: string
-  description: string
-  required: boolean
-  enumValues?: string[] | null
-  children: ToolParam[]
-  defaultValue?: string | null
-}
-
-export function parseToolParams(
-  schema?: Record<string, unknown> | null,
-): ToolParam[] {
-  if (!schema) return []
-  const properties = schema['properties']
-  if (!properties || typeof properties !== 'object') return []
-  const requiredList = new Set(
-    Array.isArray(schema['required']) ? schema['required'].map(String) : [],
-  )
-  const out: ToolParam[] = []
-  for (const [key, value] of Object.entries(
-    properties as Record<string, unknown>,
-  )) {
-    if (!value || typeof value !== 'object') continue
-    const v = value as Record<string, unknown>
-    const type = (v['type'] as string) || 'object'
-    const children: ToolParam[] = []
-    const items = v['items']
-    if (items && typeof items === 'object') {
-      const im = items as Record<string, unknown>
-      if (im['type'] === 'array' || (im['properties'] as object | undefined)) {
-        children.push(
-          ...parseToolParams({
-            type: 'object',
-            properties: im['properties'],
-            required: im['required'],
-          }),
-        )
-      }
-    } else if (type === 'object' && v['properties']) {
-      children.push(...parseToolParams(v))
-    }
-    out.push({
-      name: key,
-      type,
-      description: (v['description'] as string) || '',
-      required: requiredList.has(key),
-      enumValues: Array.isArray(v['enum']) ? v['enum'].map(String) : null,
-      defaultValue: v['default'] == null ? null : String(v['default']),
-      children,
-    })
-  }
-  return out
 }
 
 export interface ToolInfo {

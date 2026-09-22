@@ -135,7 +135,14 @@ function serverMsg(
   prevId: string,
   parts: Message['parts'],
 ): Message {
-  return { id, role, parts, prevId, createdAt: new Date().toISOString() }
+  return {
+    id,
+    role,
+    parts,
+    prevId,
+    source: '',
+    createdAt: new Date().toISOString(),
+  }
 }
 
 const rigs: Array<{ ctrl: MessagesController }> = []

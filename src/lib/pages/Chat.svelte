@@ -12,18 +12,19 @@
   import { confirmDialog, promptDialog } from '$lib/dialogs'
   import { showErrorToast, showToast } from '$lib/toast.svelte'
   import { guessMime, mimeToKind } from '$lib/media'
-  import type { ModelInfo, ModelVariantInfo, Preset, ProviderInfo, Session, UploadedFile } from '$lib/models'
+  import type { ModelInfo, Preset, ProviderInfo, Session, UploadedFile } from '$lib/models'
   import { modelRefOf, sessionName } from '$lib/models'
+  import { buildModelOptions, fmtContext, fmtElapsed, variantsFor } from '$lib/chat-helpers'
+  import { composerAction } from '$lib/composer-action'
   import { VoiceRecorder } from '$lib/voice'
   import { cn } from '$lib/utils'
   import IconButton from '$lib/components/layout/IconButton.svelte'
   import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '$lib/components/ui/dropdown-menu'
-  import { Popover } from '$lib/components/ui/popover'
-  import { Select } from '$lib/components/ui/select'
-  import { Dialog } from '$lib/components/ui/dialog'
   import { AppIcons } from '$lib/icons'
   import MessageBubble from '$lib/components/MessageBubble.svelte'
   import MediaAttachment from '$lib/components/MediaAttachment.svelte'
+  import ChatInfoDialog from './ChatInfoDialog.svelte'
+  import ChatSettingsDialog from './ChatSettingsDialog.svelte'
 
   let { store }: PageProps = $props()
 
@@ -211,14 +212,22 @@
   // running on the server. A running turn is exactly when the envelope
   // (deliver-to-mailbox) is shown and expected to WORK; gating on
   // `ctrl.sending` made the mailbox button a no-op while a turn ran.
-  function canSend(): boolean {
-    return (
-      (!!text.trim() || attachments.some(a => a.code)) &&
-      !!ctrl &&
-      !ctrl.sending &&
-      !ctrl.awaitingSend
-    )
-  }
+  const hasContent = $derived(!!text.trim() || attachments.some(a => a.code))
+
+  // The one action circle's state, resolved from the flags (composer-action.ts
+  // owns the precedence). `deliver` outranks `stop` while a turn runs.
+  const action = $derived(
+    composerAction({
+      awaitingSend: ctrl?.awaitingSend ?? false,
+      sending: ctrl?.sending ?? false,
+      canDeliver: !!(
+        ctrl?.sending &&
+        (text.trim() || attachments.length)
+      ),
+      submitting,
+      canSend: hasContent && !!ctrl && !ctrl.sending && !ctrl.awaitingSend,
+    }),
+  )
 
   // ---- deliver-to-mailbox animation ----
   let envelopeBtnEl: HTMLElement | null = $state(null)
@@ -471,11 +480,6 @@
     else showToast(t('voiceTooShort'))
   }
 
-  function fmtDuration(ms: number): string {
-    const total = Math.floor(ms / 1000)
-    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
-  }
-
   /** AppIcons.camera capture (flutter `_pickImage(ImageSource.camera)`). */
   function takePhoto() {
     const input = document.createElement('input')
@@ -520,18 +524,9 @@
     }
   }
 
-  const modelOptions = $derived.by(() => {
-    const opts = allModels.map(m => ({ value: modelRefOf(m), label: modelRefOf(m) }))
-    if (selectedRef && !allModels.some(m => modelRefOf(m) === selectedRef)) {
-      opts.unshift({ value: selectedRef, label: selectedRef })
-    }
-    return opts
-  })
+  const modelOptions = $derived(buildModelOptions(allModels, selectedRef))
 
-  const variantsForModel = $derived.by(() => {
-    const sel = allModels.filter(m => modelRefOf(m) === selectedRef)
-    return sel.length ? sel[0]!.variants : ([] as ModelVariantInfo[])
-  })
+  const variantsForModel = $derived(variantsFor(allModels, selectedRef))
 
   $effect(() => {
     if (variantsForModel.length && !variantsForModel.some(v => v.id === variant)) variant = ''
@@ -593,13 +588,6 @@
         break
       }
     }
-  }
-
-  function fmtContext(tokens: number): string {
-    if (tokens <= 0) return ''
-    if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`
-    if (tokens >= 10_000) return `${Math.round(tokens / 1000)}k`
-    return `${(tokens / 1000).toFixed(1)}k`
   }
 
   const ctxLabel = $derived(fmtContext((session?.lastInputTokens ?? 0) + (session?.lastOutputTokens ?? 0)))
@@ -699,10 +687,13 @@
         {#each ctrl.sorted as msg (msg.id)}
           <MessageBubble
             {msg}
+            sessionId={sid}
             api={store.api}
             onUndo={id => void ctrl!.revert(id)}
             onResend={txt => void ctrl!.resendFrom(ctrl!.messages.find(m => m.id === msg.id)!, txt)}
             onEdit={txt => void ctrl!.resendFrom(ctrl!.messages.find(m => m.id === msg.id)!, txt)}
+            onOpenSession={name => store.pickSession(name)}
+            sessionExists={name => store.sessionById(name) !== null}
           />
         {/each}
       {/if}
@@ -835,7 +826,7 @@
               onpointerup={() => void stopRecording()}
               onpointercancel={() => void stopRecording()}
             >
-              {recording ? `${t('releaseToSend')} · ${fmtDuration(voiceElapsed)}` : t('holdToTalk')}
+              {recording ? `${t('releaseToSend')} · ${fmtElapsed(voiceElapsed)}` : t('holdToTalk')}
             </button>
           {/if}
         </div>
@@ -845,12 +836,12 @@
              STOP form; the moment the user types/records, it morphs into the
              ENVELOPE (deliver to mailbox). Otherwise: blue send / muted
              attach, never a solid colored fill. -->
-        {#if ctrl.awaitingSend}
+        {#if action === 'awaiting-send'}
           <!-- A prompt is en route to the mailbox (RPC then server confirm):
                the composer is locked and shows a spinner until the user
                bubble appears from the server's message-added event. -->
           <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-primary bg-card text-primary" title={t('connecting')} aria-label={t('connecting')} disabled><span class="block size-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary"></span></button>
-        {:else if ctrl.sending && canDeliver()}
+        {:else if action === 'deliver'}
           <button
             type="button"
             bind:this={envelopeBtnEl}
@@ -859,11 +850,11 @@
             aria-label={t('deliver')}
             onclick={() => void submit()}
           ><AppIcons.mail class="size-5" /></button>
-        {:else if ctrl.sending}
+        {:else if action === 'stop'}
           <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-destructive bg-card text-destructive" title={t('abort')} aria-label={t('abort')} onclick={() => ctrl!.stop()}><AppIcons.stop class="size-5" /></button>
-        {:else if submitting}
+        {:else if action === 'submitting'}
           <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-primary bg-card text-primary" title={t('connecting')} aria-label={t('connecting')} disabled><span class="block size-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary"></span></button>
-        {:else if canSend()}
+        {:else if action === 'send'}
           <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-primary bg-card text-primary disabled:opacity-40" title={t('send')} aria-label={t('send')} onclick={() => void submit()}><AppIcons.send class="size-5" /></button>
         {:else}
           <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted-foreground" title={t('attach')} aria-label={t('attach')} onclick={() => (attachOpen = true)}><AppIcons.add class="size-5" /></button>
@@ -920,85 +911,25 @@
   </div>
 
   <!-- session info dialog -->
-  <Dialog bind:open={infoOpen} title={t('sessionInfo')}>
-    {#snippet children()}
-      <div class="space-y-2">
-        <div class="flex items-center gap-2">
-          <AppIcons.chat class="size-4 text-primary" />
-          <span class="truncate text-meta font-bold">{session?.id}</span>
-        </div>
-        {#each [
-          [t('modelLabel'), session?.model || t('none')],
-          [t('variantLabel'), session?.variant || t('variantNone')],
-          [t('presetLabel'), session?.preset || t('none')],
-          [t('role'), role ? t(roleLabelKey(role)) : t('none')],
-          [t('sandboxPhase'), store.phaseFor(sid) || t('none')],
-          [t('agentLocale'), session?.locale || t('agentLocaleFollow')],
-        ] as [label, value] (label)}
-          <div class="flex items-start gap-3 border-t border-border/40 pt-2 first:border-t-0 first:pt-0">
-            <span class="w-24 shrink-0 text-micro text-muted-foreground">{label}</span>
-            <span class="min-w-0 flex-1 text-meta font-semibold">{value}</span>
-          </div>
-        {/each}
-      </div>
-    {/snippet}
-    {#snippet footer()}
-      <button type="button" class="rounded-md px-3 py-1.5 text-sm hover:bg-muted" onclick={() => (infoOpen = false)}>{t('close')}</button>
-      <button
-        type="button"
-        class="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/80"
-        onclick={() => {
-          infoOpen = false
-          void showSettings()
-        }}
-      >{t('edit')}</button>
-    {/snippet}
-  </Dialog>
+  <ChatInfoDialog
+    bind:open={infoOpen}
+    {session}
+    role={role ? t(roleLabelKey(role)) : ''}
+    phase={store.phaseFor(sid)}
+    onEdit={() => void showSettings()}
+  />
 
   <!-- settings dialog -->
-  <Dialog bind:open={settingsOpen} title={t('settingsTitle')}>
-    {#snippet children()}
-      <div class="space-y-3">
-        <label class="block">
-          <span class="mb-1 block text-meta text-muted-foreground">{t('modelLabel')}</span>
-          <Select
-            bind:value={selectedRef}
-            placeholder={loadingModels ? t('loading') : t('none')}
-            items={modelOptions}
-          />
-        </label>
-        {#if variantsForModel.length}
-          <label class="block">
-            <span class="mb-1 block text-meta text-muted-foreground">{t('variantLabel')}</span>
-            <Select
-              bind:value={variant}
-              items={[{ value: '', label: t('variantNone') }, ...variantsForModel.map(v => ({ value: v.id, label: v.name || v.id }))]}
-            />
-          </label>
-        {/if}
-        <div class="block">
-          <span class="mb-1 block text-meta text-muted-foreground">{t('presetLabel')}</span>
-          <!-- The preset is chosen at session creation and is IMMUTABLE. -->
-          <div class="rounded border border-border px-3 py-2 text-body text-muted-foreground">{session?.preset || t('none')}</div>
-        </div>
-        <label class="block">
-          <span class="mb-1 block text-meta text-muted-foreground">{t('agentLocale')}</span>
-          <Select
-            bind:value={locale}
-            items={[
-              { value: '', label: t('agentLocaleFollow') },
-              { value: 'zh', label: '中文' },
-              { value: 'en', label: 'English' },
-            ]}
-          />
-        </label>
-        <p class="text-micro text-muted-foreground">{t('turnsByPreset')}</p>
-        <p class="text-micro text-muted-foreground">{t('sysPromptByPreset')}</p>
-      </div>
-    {/snippet}
-    {#snippet footer()}
-      <button type="button" class="rounded-md px-3 py-1.5 text-sm hover:bg-muted" onclick={() => (settingsOpen = false)}>{t('cancel')}</button>
-      <button type="button" class="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/80" onclick={() => void applySettings()}>{t('save')}</button>
-    {/snippet}
-  </Dialog>
+  <ChatSettingsDialog
+    bind:open={settingsOpen}
+    bind:selectedRef
+    bind:variant
+    bind:preset
+    bind:locale
+    {loadingModels}
+    {modelOptions}
+    variants={variantsForModel}
+    {presetOptions}
+    onSave={() => void applySettings()}
+  />
 {/if}

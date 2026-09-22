@@ -195,6 +195,7 @@ const en = {
   showMore: `Show`,
   signInAgain: `Sign in again`,
   subsessionBadge: `Subsession`,
+  subsessionCount: `{arg1} subsessions`,
   switchBackend: `Switch user`,
   sysPromptByPreset: `System prompt is determined by the selected preset.`,
   systemPresetBadge: `System`,
@@ -234,7 +235,6 @@ const en = {
   voicePermission: `Microphone permission denied`,
   voiceTooShort: `Recording too short`,
   workspace: `Workspace`,
-  // ---- workspace: roles / code / service ----
   roleAdmin: `Admin`,
   roleExplorer: `Explorer`,
   roleMaintainer: `Maintainer`,
@@ -519,6 +519,7 @@ const zh = {
   showMore: `展开`,
   signInAgain: `重新登录`,
   subsessionBadge: `子会话`,
+  subsessionCount: `{arg1} 个子会话`,
   switchBackend: `切换用户`,
   sysPromptByPreset: `系统提示由所选预设决定，不可直接修改。`,
   systemPresetBadge: `系统`,
@@ -558,7 +559,6 @@ const zh = {
   voicePermission: `未获得麦克风权限`,
   voiceTooShort: `录音太短`,
   workspace: `工作区`,
-  // ---- workspace: roles / code / service ----
   roleAdmin: `管理员`,
   roleExplorer: `勘探者`,
   roleMaintainer: `维护者`,

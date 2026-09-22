@@ -102,29 +102,65 @@
   }
 
   /**
-   * Type → icon + label + accent, refined by SOURCE so a human prompt is
-   * distinguishable from another session's hand-off / a system event.
+   * Type → icon + localized label + accent, refined by SOURCE so a human
+   * prompt is distinguishable from another session's hand-off or a system
+   * event. `source` is an open string:
+   *   `user`              -> the person's own message
+   *   `session:{name}`    -> sent by another session (subsession / mail-send)
+   *   `system:{name}`     -> automation
+   *   anything else       -> the generic label for the type
    */
   function metaOf(
     msgType: string,
     source: string,
   ): { icon: Component; label: string; cls: string; origin: string } {
     if (msgType === 'interrupt') {
-      return { icon: AppIcons.stop, label: t('mailboxInterrupt'), cls: 'bg-destructive/12 text-destructive', origin: '' }
+      return {
+        icon: AppIcons.stop,
+        label: t('mailboxInterrupt'),
+        cls: 'bg-destructive/12 text-destructive',
+        origin: '',
+      }
     }
     if (msgType !== 'trigger') {
-      return { icon: AppIcons.bolt, label: t('mailboxEvent'), cls: 'bg-warning/12 text-warning', origin: '' }
+      return {
+        icon: AppIcons.bolt,
+        label: t('mailboxEvent'),
+        cls: 'bg-warning/12 text-warning',
+        origin: '',
+      }
     }
+    // A trigger that drives a turn — attribute it.
     if (source === 'user') {
-      return { icon: AppIcons.user, label: t('mailboxPrompt'), cls: 'bg-primary/12 text-primary', origin: '' }
+      return {
+        icon: AppIcons.user,
+        label: t('mailboxPrompt'),
+        cls: 'bg-primary/12 text-primary',
+        origin: '',
+      }
     }
     if (source.startsWith('session:')) {
-      return { icon: AppIcons.mail, label: t('mailboxFromSession'), cls: 'bg-sky-500/15 text-sky-600 dark:text-sky-400', origin: source.slice('session:'.length) }
+      return {
+        icon: AppIcons.mail,
+        label: t('mailboxFromSession'),
+        cls: 'bg-sky-500/15 text-sky-600 dark:text-sky-400',
+        origin: source.slice('session:'.length),
+      }
     }
     if (source.startsWith('system:')) {
-      return { icon: AppIcons.bolt, label: t('mailboxFromSystem'), cls: 'bg-violet-500/15 text-violet-600 dark:text-violet-400', origin: source.slice('system:'.length) }
+      return {
+        icon: AppIcons.bolt,
+        label: t('mailboxFromSystem'),
+        cls: 'bg-violet-500/15 text-violet-600 dark:text-violet-400',
+        origin: source.slice('system:'.length),
+      }
     }
-    return { icon: AppIcons.bolt, label: t('mailboxPrompt'), cls: 'bg-primary/12 text-primary', origin: source }
+    return {
+      icon: AppIcons.bolt,
+      label: t('mailboxPrompt'),
+      cls: 'bg-primary/12 text-primary',
+      origin: source,
+    }
   }
 </script>
 
