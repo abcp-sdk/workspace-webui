@@ -5,11 +5,14 @@
   import type { CardSpec, CardField, CardBody } from '$lib/tool-cards'
   import type { AppStore } from '$lib/store.svelte'
   import { cn } from '$lib/utils'
+  import { renderMarkdown } from '$lib/markdown'
   import { AppIcons } from '$lib/icons'
   import DiffView from './DiffView.svelte'
   import CodeSurface from './CodeSurface.svelte'
+  import MediaAttachment from './MediaAttachment.svelte'
+  import { openViewer } from '$lib/fileviewer.svelte'
 
-  let { card, store }: { card: CardSpec; store?: AppStore } = $props()
+  let { card, store, api }: { card: CardSpec; store?: AppStore; api?: import('$lib/api').AgentApi } = $props()
 
   function icon(name: string) {
     return AppIcons[name as keyof typeof AppIcons] ?? AppIcons.tools
@@ -194,6 +197,76 @@
             {#if r.type !== 'dir'}<span class="shrink-0 text-[10px] text-muted-foreground">{r.size}B</span>{/if}
           </div>
         {/each}
+      </div>
+    {:else if b.kind === 'list'}
+      <div class="min-w-0 rounded-sm border border-border/40">
+        {#each b.rows.slice(0, 100) as r, i (i)}
+          {@const Icon = icon(r.icon ?? 'file')}
+          {#if r.link && store}
+            <button
+              type="button"
+              class="flex w-full min-w-0 items-center gap-1.5 border-b border-border/30 px-1.5 py-1 text-left text-micro last:border-b-0 hover:bg-muted"
+              onclick={() => store?.openPage(r.link!)}
+            >
+              <Icon class="size-3.5 shrink-0 text-primary" />
+              <span class="min-w-0 flex-1 truncate">
+                <span class={cn('block truncate', r.tone === 'success' && 'text-success', r.tone === 'destructive' && 'text-destructive')}>{r.label}</span>
+                {#if r.sub}<span class="block truncate text-[10px] text-muted-foreground">{r.sub}</span>{/if}
+              </span>
+            </button>
+          {:else}
+            <div class="flex min-w-0 items-start gap-1.5 border-b border-border/30 px-1.5 py-1 text-micro last:border-b-0">
+              <Icon class="mt-0.5 size-3.5 shrink-0 text-primary" />
+              <span class="min-w-0 flex-1">
+                <span class={cn('block truncate', r.tone === 'success' && 'text-success', r.tone === 'destructive' && 'text-destructive')}>{r.label}</span>
+                {#if r.sub}<span class="block text-[10px] whitespace-pre-wrap text-muted-foreground">{r.sub}</span>{/if}
+              </span>
+            </div>
+          {/if}
+        {/each}
+      </div>
+    {:else if b.kind === 'kv'}
+      <div class="min-w-0 rounded-sm border border-border/40">
+        {#each b.rows as r, i (i)}
+          <div class="flex min-w-0 items-center gap-1.5 border-b border-border/30 px-1.5 py-0.5 text-micro last:border-b-0">
+            <span class="shrink-0 text-muted-foreground">{r.k}</span>
+            <span class={cn('min-w-0 flex-1 truncate text-right', r.mono && 'font-mono')}>{r.v}</span>
+          </div>
+        {/each}
+      </div>
+    {:else if b.kind === 'messages'}
+      <div class="min-w-0 rounded-sm border border-border/40">
+        {#each b.entries.slice(0, 60) as e, i (i)}
+          <div class="flex min-w-0 items-start gap-1.5 border-b border-border/30 px-1.5 py-1 text-micro last:border-b-0">
+            <span class={cn('mt-px shrink-0 rounded px-1 py-px text-[9px] leading-4', e.role === 'user' ? 'bg-primary/15 text-primary' : e.role === 'assistant' ? 'bg-muted text-foreground' : 'bg-muted text-muted-foreground')}>{e.role}</span>
+            <span class="min-w-0 flex-1">
+              <span class="block line-clamp-4 whitespace-pre-wrap">{e.content}</span>
+              {#if e.tool_name || e.change_id}
+                <span class="mt-0.5 flex flex-wrap items-center gap-1 text-[9px] text-muted-foreground">
+                  {#if e.tool_name}<span class="rounded bg-muted px-1 font-mono">{e.tool_name}</span>{/if}
+                  {#if e.change_id}<span class="rounded bg-muted px-1 font-mono">{e.change_id}</span>{/if}
+                </span>
+              {/if}
+            </span>
+            {#if e.depth !== undefined}<span class="shrink-0 text-[9px] text-muted-foreground/60">#{e.depth}</span>{/if}
+          </div>
+        {/each}
+      </div>
+    {:else if b.kind === 'markdown'}
+      <div class="md-body max-h-72 min-w-0 overflow-auto rounded-sm bg-card px-2 py-1.5 text-meta">{@html renderMarkdown(b.text)}</div>
+    {:else if b.kind === 'audio'}
+      <div class="min-w-0 space-y-1">
+        {#if api}
+          <MediaAttachment {api} code={b.code} mime="audio/mpeg" />
+        {/if}
+        {#if b.caption}<pre class="max-h-40 min-w-0 overflow-auto rounded-sm bg-muted/40 p-1.5 font-mono text-[11px] whitespace-pre-wrap">{b.caption}</pre>{/if}
+      </div>
+    {:else if b.kind === 'media'}
+      <div class="min-w-0 space-y-1">
+        {#if api}
+          <MediaAttachment {api} code={b.code} mime={b.mime ?? null} name={b.name ?? ''} onTap={() => openViewer({ code: b.code, mime: b.mime ?? null, name: b.name ?? null })} />
+        {/if}
+        {#if b.caption}<pre class="max-h-40 min-w-0 overflow-auto rounded-sm bg-muted/40 p-1.5 text-[11px] whitespace-pre-wrap">{b.caption}</pre>{/if}
       </div>
     {/if}
   {/if}

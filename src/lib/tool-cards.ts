@@ -46,6 +46,18 @@ export type CardBody =
   | { kind: 'code'; name: string; text: string }
   // An indented tree (sandbox-ls).
   | { kind: 'tree'; rows: Array<{ path: string; depth: number; type: string; size: number }> }
+  // A generic clickable list (services / sandboxes / orgs / repos).
+  | { kind: 'list'; rows: Array<{ label: string; sub?: string; icon?: string; link?: AppPage; tone?: 'default' | 'success' | 'destructive' | 'muted' }> }
+  // A key/value definition table (file-info).
+  | { kind: 'kv'; rows: Array<{ k: string; v: string; mono?: boolean }> }
+  // Chat-history entries (history-search / history-range).
+  | { kind: 'messages'; entries: Array<{ role: string; content: string; tool_name?: string; change_id?: string; created_at?: string; depth?: number }> }
+  // Rendered markdown (web-fetch ONLY — never repo/file reads).
+  | { kind: 'markdown'; text: string }
+  // An audio player + optional caption (transcription / TTS).
+  | { kind: 'audio'; code: string; caption?: string }
+  // A single image preview + optional caption (image-read).
+  | { kind: 'media'; code: string; mime?: string; name?: string; caption?: string }
 
 export interface CardSpec {
   /** Header subtitle (replaces the redundant italic title). */
@@ -91,7 +103,18 @@ const diffTone = (a: number, d: number): CardField['tone'] => (d > 0 ? 'destruct
  * is the tool's result TEXT (needed by the terminal/code bodies, whose payload
  * is not in `data`).
  */
-export function cardFor(tool: string, data: Data, input: Data, output = ''): CardSpec | null {
+/**
+ * The bare tool name: a colliding tool arrives extension-qualified
+ * (`bundled.mail-send`); strip ONE leading `<word>.` segment so cards match by
+ * their bare name.
+ */
+export function bareToolName(tool: string): string {
+  const m = /^[A-Za-z0-9_-]+\.([a-z0-9][a-z0-9-]*)$/.exec(tool)
+  return m ? m[1]! : tool
+}
+
+export function cardFor(rawTool: string, data: Data, input: Data, output = ''): CardSpec | null {
+  const tool = bareToolName(rawTool)
   const org = pick(data, input, 'org')
   const repo = pick(data, input, 'repo')
   const ref = pick(data, input, 'ref') || pick(data, input, 'branch')
@@ -482,9 +505,6 @@ export function cardFor(tool: string, data: Data, input: Data, output = ''): Car
         actions: [{ label: name, icon: 'server', page: P.servicePage(name) }],
       }
     }
-    case 'service-list': {
-      return { subtitle: 'services', fields: [{ icon: 'server', label: 'count', value: String(n(data, 'count')) }] }
-    }
     case 'service-delete': {
       const name = s(data, 'name') || pick(data, input, 'name')
       return { subtitle: name, fields: [{ icon: 'delete', label: 'deleted', value: name, mono: true, tone: 'destructive' }] }
@@ -568,9 +588,6 @@ export function cardFor(tool: string, data: Data, input: Data, output = ''): Car
       if (s(data, 'url')) fields.push({ icon: 'link', label: 'url', value: s(data, 'url'), mono: true, tone: 'muted' })
       return { subtitle: 'sandbox', fields }
     }
-    case 'sandbox-list': {
-      return { subtitle: 'sandboxes', fields: [{ icon: 'box', label: 'count', value: String(n(data, 'count')) }] }
-    }
     case 'sandbox-download':
     case 'sandbox-upload': {
       const path = pick(data, input, 'path')
@@ -581,6 +598,192 @@ export function cardFor(tool: string, data: Data, input: Data, output = ''): Car
           ...(path ? [{ icon: 'file_code', label: 'path', value: path, mono: true } as CardField] : []),
           ...(code ? [{ icon: 'file', label: 'file', value: code, mono: true, tone: 'muted' } as CardField] : []),
         ],
+      }
+    }
+
+    // ---- workspace lists ----
+    case 'service-list': {
+      const services = arr<{ name: string; phase: string; image: string; url: string; session: string; publicUrl: string }>(data, 'services')
+      if (!services.length) return { subtitle: 'services', fields: [{ icon: 'server', label: 'count', value: '0' }] }
+      return {
+        subtitle: 'services',
+        fields: [{ icon: 'server', label: 'services', value: String(services.length) }],
+        body: {
+          kind: 'list',
+          rows: services.map(s => ({
+            label: s.name,
+            sub: `${s.phase}${s.publicUrl ? ` · ${s.publicUrl}` : s.url ? ` · ${s.url}` : ''}`,
+            icon: 'server',
+            tone: s.phase === 'Running' ? 'success' : 'muted',
+            link: P.servicePage(s.name),
+          })),
+        },
+      }
+    }
+    case 'sandbox-list': {
+      const sandboxes = arr<{ name: string; phase: string; image: string; url: string; creator: string; session: string }>(data, 'sandboxes')
+      if (!sandboxes.length) return { subtitle: 'sandboxes', fields: [{ icon: 'box', label: 'count', value: '0' }] }
+      return {
+        subtitle: 'sandboxes',
+        fields: [{ icon: 'box', label: 'sandboxes', value: String(sandboxes.length) }],
+        body: {
+          kind: 'list',
+          rows: sandboxes.map(s => ({
+            label: s.name,
+            sub: `${s.phase}${s.image ? ` · ${s.image}` : ''}`,
+            icon: 'box',
+            tone: s.phase === 'Running' ? 'success' : 'muted',
+            link: P.sandboxPage(s.name),
+          })),
+        },
+      }
+    }
+
+    // ---- bundled: history (data.entries) ----
+    case 'history-search':
+    case 'history-range': {
+      const entries = arr<{ role: string; content: string; tool_name?: string; change_id?: string; created_at?: string; depth?: number }>(data, 'entries')
+      return {
+        subtitle: 'history',
+        fields: [{ icon: 'history', label: 'entries', value: String(entries.length) }],
+        body: entries.length ? { kind: 'messages', entries } : undefined,
+      }
+    }
+
+    // ---- bundled: file-info / file-read ----
+    case 'file-info': {
+      const meta = (data['meta'] ?? {}) as Data
+      const rows = [
+        { k: 'name', v: s(meta, 'name') },
+        { k: 'mime', v: s(meta, 'mime'), mono: true },
+        { k: 'size', v: String(n(meta, 'size')) },
+        { k: 'sha256', v: s(meta, 'sha256'), mono: true },
+      ].filter(r => r.v !== '')
+      return {
+        subtitle: s(meta, 'name') || s(data, 'code') || 'file',
+        fields: [{ icon: 'file', label: 'code', value: pick(data, input, 'code'), mono: true, tone: 'muted' }],
+        body: rows.length ? { kind: 'kv', rows } : undefined,
+      }
+    }
+    case 'file-read': {
+      const name = s(data, 'name') || pick(data, input, 'name') || pick(data, input, 'code')
+      const total = n(data, 'total_lines')
+      const start = n(data, 'start')
+      const shown = n(data, 'shown')
+      const range = total > 0 ? `L${start + 1}–L${start + shown} / ${total}` : ''
+      return {
+        subtitle: name,
+        fields: [
+          { icon: 'file_code', label: 'code', value: pick(data, input, 'code'), mono: true },
+          ...(range ? [{ icon: 'list', label: 'lines', value: range, mono: true } as CardField] : []),
+        ],
+        body: { kind: 'code', name: name.split('/').pop() || name, text: stripLineNumbers(output) },
+      }
+    }
+
+    // ---- bundled: web-fetch (rendered markdown ONLY here) ----
+    case 'web-fetch': {
+      const url = s(data, 'url') || pick(data, input, 'url')
+      const format = s(data, 'format') || pick(data, input, 'format')
+      const ctype = s(data, 'contentType')
+      return {
+        subtitle: url,
+        fields: [
+          { icon: 'link', label: 'url', value: url, mono: true, tone: 'muted' },
+          ...(ctype ? [{ icon: 'file', label: 'type', value: ctype, mono: true, tone: 'muted' } as CardField] : []),
+          ...(format ? [{ icon: 'list', label: 'format', value: format, tone: 'muted' } as CardField] : []),
+        ],
+        body: { kind: 'markdown', text: output },
+      }
+    }
+
+    // ---- bundled: audio (transcribe / tts) ----
+    case 'audio-transcribe': {
+      const code = pick(data, input, 'code')
+      return {
+        subtitle: s(data, 'name') || code || 'audio',
+        fields: [
+          { icon: 'file', label: 'code', value: code, mono: true, tone: 'muted' },
+          ...(s(data, 'model') ? [{ icon: 'server', label: 'model', value: s(data, 'model'), mono: true, tone: 'muted' } as CardField] : []),
+        ],
+        body: code ? { kind: 'audio', code, caption: output } : { kind: 'text', text: output },
+      }
+    }
+    case 'tts-generate':
+    case 'tts-clone': {
+      const files = arr<{ code: string; mime: string; name: string }>(data, 'files')
+      const first = files[0]
+      return {
+        subtitle: 'tts',
+        fields: [
+          ...(s(data, 'model') ? [{ icon: 'server', label: 'model', value: s(data, 'model'), mono: true, tone: 'muted' } as CardField] : []),
+          ...(s(data, 'reference') ? [{ icon: 'file', label: 'reference', value: s(data, 'reference'), mono: true, tone: 'muted' } as CardField] : []),
+        ],
+        body: first?.code ? { kind: 'audio', code: first.code, caption: pick(data, input, 'text') } : undefined,
+      }
+    }
+
+    // ---- bundled: image-read ----
+    case 'image-read': {
+      const code = pick(data, input, 'code')
+      return {
+        subtitle: s(data, 'name') || code || 'image',
+        fields: [
+          { icon: 'file', label: 'code', value: code, mono: true, tone: 'muted' },
+          ...(s(data, 'model') ? [{ icon: 'server', label: 'model', value: s(data, 'model'), mono: true, tone: 'muted' } as CardField] : []),
+        ],
+        body: code ? { kind: 'media', code, mime: s(data, 'mime') || undefined, caption: output } : { kind: 'text', text: output },
+      }
+    }
+
+    // ---- bundled: generation (files rendered by MediaAttachment already) ----
+    case 'image-generate':
+    case 'image-edit':
+    case 'video-generate': {
+      const fields: CardField[] = []
+      const prompt = pick(data, input, 'prompt')
+      if (prompt) fields.push({ icon: 'sparkles', label: 'prompt', value: prompt })
+      if (s(data, 'model')) fields.push({ icon: 'server', label: 'model', value: s(data, 'model'), mono: true, tone: 'muted' })
+      if (s(data, 'source')) fields.push({ icon: 'file', label: 'source', value: s(data, 'source'), mono: true, tone: 'muted' })
+      return { subtitle: tool, fields }
+    }
+
+    // ---- bundled: cross-session ----
+    case 'subsession-create': {
+      const name = s(data, 'name') || pick(data, input, 'name')
+      const desc = s(data, 'description') || pick(data, input, 'description')
+      const prompt = pick(data, input, 'prompt')
+      return {
+        subtitle: name || 'subsession',
+        fields: [
+          ...(name ? [{ icon: 'bot', label: 'session', value: name, mono: true } as CardField] : []),
+          ...(desc ? [{ icon: 'info', label: 'label', value: desc } as CardField] : []),
+        ],
+        body: prompt ? { kind: 'text', text: prompt } : undefined,
+      }
+    }
+    case 'mail-send': {
+      const to = s(data, 'to') || pick(data, input, 'to')
+      const text = s(data, 'text') || pick(data, input, 'text')
+      return {
+        subtitle: to || 'mail',
+        fields: [{ icon: 'mail', label: 'to', value: to, mono: true }],
+        body: text ? { kind: 'text', text } : undefined,
+      }
+    }
+
+    // ---- bundled: brave-search (results only when upstream adds data.results) ----
+    case 'brave-search': {
+      const results = arr<{ title: string; url: string; description?: string }>(data, 'results')
+      const query = s(data, 'query') || pick(data, input, 'query')
+      if (!results.length) return { subtitle: query || 'search', fields: [{ icon: 'search', label: 'query', value: query }] }
+      return {
+        subtitle: query || 'search',
+        fields: [{ icon: 'search', label: 'query', value: query }, { icon: 'list', label: 'results', value: String(results.length) }],
+        body: {
+          kind: 'list',
+          rows: results.map(r => ({ label: r.title || r.url, sub: r.description || r.url, icon: 'link' })),
+        },
       }
     }
 

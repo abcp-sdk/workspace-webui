@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { cardFor } from './tool-cards'
+import { bareToolName, cardFor } from './tool-cards'
+
+describe('bareToolName', () => {
+  it('strips one extension qualifier', () => {
+    expect(bareToolName('bundled.mail-send')).toBe('mail-send')
+    expect(bareToolName('workspace.repo-read')).toBe('repo-read')
+    expect(bareToolName('repo-read')).toBe('repo-read')
+    expect(bareToolName('web-fetch')).toBe('web-fetch')
+  })
+})
 
 describe('cardFor', () => {
   it('repo-read: path + line range + blob sha + open-file action', () => {
@@ -78,10 +87,42 @@ describe('cardFor', () => {
     expect(c.body!.kind).toBe('tree')
   })
 
+  it('matches an extension-qualified tool name', () => {
+    const c = cardFor('bundled.history-search', { entries: [{ role: 'user', content: 'hi' }] }, {})!
+    expect(c.body!.kind).toBe('messages')
+  })
+
+  it('service-list renders a clickable list body', () => {
+    const c = cardFor('service-list', { services: [{ name: 'db', phase: 'Running', image: 'i', url: 'http://db', session: '', publicUrl: 'https://db.x' }] }, {})!
+    expect(c.body!.kind).toBe('list')
+    expect((c.body as { rows: Array<{ link: unknown }> }).rows[0]!.link).toMatchObject({ kind: 'service_detail', name: 'db' })
+  })
+
+  it('sandbox-list renders a clickable list body', () => {
+    const c = cardFor('sandbox-list', { sandboxes: [{ name: 'sb', phase: 'Running', image: 'i', url: 'u', creator: 't', session: 's' }] }, {})!
+    expect((c.body as { rows: Array<{ link: unknown }> }).rows[0]!.link).toMatchObject({ kind: 'sandbox_detail', name: 'sb' })
+  })
+
+  it('file-read renders a code body', () => {
+    const c = cardFor('file-read', { code: 'abc', total_lines: 2, start: 0, shown: 2, name: 'a.go' }, {}, '1  package main\n2  func main(){}')!
+    expect(c.body).toMatchObject({ kind: 'code', name: 'a.go' })
+  })
+
+  it('web-fetch renders markdown; file-info renders kv', () => {
+    expect(cardFor('web-fetch', { url: 'https://x', format: 'markdown' }, {}, '# Hi')!.body!.kind).toBe('markdown')
+    const fi = cardFor('file-info', { code: 'abc', meta: { name: 'x.png', mime: 'image/png', size: 12, sha256: 'ff' } }, {})!
+    expect(fi.body!.kind).toBe('kv')
+  })
+
+  it('audio-transcribe / image-read render audio / media bodies', () => {
+    expect(cardFor('audio-transcribe', { code: 'a1' }, {}, 'hello')!.body!.kind).toBe('audio')
+    expect(cardFor('image-read', { code: 'i1', mime: 'image/png' }, {}, 'a cat')!.body!.kind).toBe('media')
+  })
+
   it('falls back to input coordinates and returns null for unknown tools', () => {
     const c = cardFor('repo-read', {}, { org: 'a', repo: 'b', ref: 'main', path: 'p' })!
     expect(c.actions![0]!.page).toMatchObject({ kind: 'repo_blob', path: 'p' })
-    expect(cardFor('web-fetch', {}, {})).toBeNull()
+    expect(cardFor('image-generate', {}, {})).not.toBeNull()
     expect(cardFor('repo-read', { org: 'a' }, {})).toBeNull()
   })
 })

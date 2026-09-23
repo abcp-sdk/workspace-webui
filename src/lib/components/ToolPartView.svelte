@@ -51,9 +51,13 @@
   // (only inputText) the raw preview below is used.
   const todoList = $derived(isTodoWrite(tool) ? parseTodos(input) : null)
 
-  // The registered card spec (null = no pretty view; raw JSON only).
+  // The registered card spec (null = no pretty view; raw JSON only). Gated on
+  // the tool-call having ARRIVED (`state.input != null`), not on it being
+  // non-empty: a zero-argument tool (sandbox-list, service-list, job-list, …)
+  // sends `input: {}` and must still render its card.
+  const inputReady = $derived(toolState?.input != null)
   const card = $derived(
-    !running && Object.keys(input).length > 0 ? cardFor(tool, meta, input, output) : null,
+    !running && inputReady ? cardFor(tool, meta, input, output) : null,
   )
   const hasPretty = $derived(card !== null || todoList !== null)
 
@@ -158,8 +162,8 @@
           <TodosPanel todos={todoList} />
         </div>
       {:else if card !== null && pretty}
-        <ToolCard {card} {store} />
-      {:else if Object.keys(input).length}
+        <ToolCard {card} {store} {api} />
+      {:else if inputReady}
         <div class="min-w-0 rounded-sm border border-border/50 bg-background/50">
           <button
             type="button"
