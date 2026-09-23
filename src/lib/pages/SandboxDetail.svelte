@@ -23,10 +23,10 @@
   let loading = $state(true)
   let jobsError = $state('')
 
-  // The active job is the sibling `sandbox_job` page (if the stack is on one),
+  // The active job is the deeper `sandbox_job` page (if the stack is on one),
   // so the list can highlight it without owning the selection.
   const activeJobId = $derived.by(() => {
-    const top = store.topPage
+    const top = store.focusedPage
     return top.kind === 'sandbox_job' && top.name === name ? top.jobId : ''
   })
 
@@ -65,8 +65,8 @@
     try {
       await store.api.deleteSandbox(name)
       showToast(t('deleted'))
-      // The sandbox is gone: fall back to the service root.
-      store.navigate({ kind: 'service_root', key: 'service_root' }, { replace: true })
+      // The sandbox is gone: fall back to the parent (service root).
+      store.popPage()
     } catch (e) {
       showErrorToast(String(e))
     }

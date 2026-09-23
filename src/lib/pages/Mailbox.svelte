@@ -12,7 +12,7 @@
   import EmptyState from '$lib/components/layout/EmptyState.svelte'
   import { AppIcons } from '$lib/icons'
 
-  let { store }: PageProps = $props()
+  let { store, session = '' }: PageProps & { session?: string } = $props()
 
   // NEWEST-FIRST, paged backward (older) as the user scrolls DOWN.
   let entries = $state<MailboxEntry[]>([])
@@ -21,7 +21,7 @@
   let hasMore = $state(false)
   let error = $state('')
 
-  const sid = $derived(store.activeSessionId ?? '')
+  const sid = $derived(session || (store.activeSessionId ?? ''))
   let scrollEl: HTMLElement | null = $state(null)
 
   $effect(() => {

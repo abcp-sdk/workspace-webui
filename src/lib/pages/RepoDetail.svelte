@@ -25,45 +25,29 @@
     repo,
     ref,
     showBack = false,
-    tab: tabProp,
-    mrState: mrStateProp,
   }: PageProps & { org: string; repo: string; ref: string } = $props()
 
   const api = $derived(store.api)
   type Tab = 'files' | 'commits' | 'tags' | 'releases' | 'changes'
 
-  // The active sub-tab and MR filter live in the URL (?tab= / ?state=), so a
-  // deep link / refresh restores them. The props are the single source of
-  // truth; changing either navigates (replace, so the tab is not a history
-  // entry of its own).
-  const tab = $derived<Tab>(tabProp ?? 'files')
-  const mrState = $derived(mrStateProp ?? 'open')
+  // The sub-tab and MR filter are component-local view state (not part of the
+  // page identity): switching either must not push a new stack page.
+  let tab = $state<Tab>('files')
+  let mrState = $state('open')
 
-  function detailLeaf(over: Partial<{ ref: string; tab: Tab; mrState: string }>) {
-    return {
-      kind: 'repo_detail' as const,
-      key: `repo:${org}/${repo}@${over.ref ?? ref}`,
-      org,
-      repo,
-      ref: over.ref ?? ref,
-      tab: over.tab ?? tab,
-      mrState: over.mrState ?? mrState,
-    }
-  }
-
-  /** Switch the active ref (branch) — replaces the detail page. */
+  /** Switch the active ref (branch) — replaces the detail page in place. */
   function onPickRef(r: string) {
-    store.navigate(detailLeaf({ ref: r }), { replace: true })
+    store.open({ kind: 'repo_detail', key: `repo:${org}/${repo}@${r}`, org, repo, ref: r })
   }
   /** Open a tag as its own browse page (tree at that tag). */
   function onPickTag(t: string) {
-    store.navigate({ kind: 'repo_tag', key: `tag:${org}/${repo}@${t}`, org, repo, ref: t })
+    store.open({ kind: 'repo_tag', key: `tag:${org}/${repo}@${t}`, org, repo, ref: t })
   }
   function pickTab(t: Tab) {
-    store.navigate(detailLeaf({ tab: t }), { replace: true })
+    tab = t
   }
   function pickMrState(s: string) {
-    store.navigate(detailLeaf({ mrState: s }), { replace: true })
+    mrState = s
   }
 
   let branches = $state<BranchInfo[]>([])
@@ -209,7 +193,7 @@
   // The active file is the sibling `repo_blob` page (if the stack is on one),
   // so the tree can highlight it without owning the selection itself.
   const activePath = $derived.by(() => {
-    const top = store.topPage
+    const top = store.focusedPage
     if (top.kind === 'repo_blob' && top.org === org && top.repo === repo && top.ref === ref) {
       return top.path
     }

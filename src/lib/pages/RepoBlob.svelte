@@ -17,21 +17,19 @@
     repo,
     ref,
     path,
-    view: viewProp,
     showBack = false,
   }: PageProps & { org: string; repo: string; ref: string; path: string } = $props()
 
   const name = $derived(path.split('/').pop() ?? path)
-  // Code/Blame lives in the URL (?view=) so the mode survives a refresh. The
-  // prop is the single source of truth; toggling navigates (replace).
-  const view = $derived<'code' | 'blame'>(viewProp ?? 'code')
+  // Code/Blame is component-local view state (not part of the page identity).
+  let view = $state<'code' | 'blame'>('code')
 
   function pickView(v: 'code' | 'blame') {
-    store.navigate({ kind: 'repo_blob', key: `blob:${org}/${repo}@${ref}:${path}`, org, repo, ref, path, view: v }, { replace: true })
+    view = v
   }
 
   function openHistory() {
-    store.navigate({ kind: 'repo_history', key: `hist:${org}/${repo}@${ref}:${path}`, org, repo, ref, path })
+    store.open({ kind: 'repo_history', key: `hist:${org}/${repo}@${ref}:${path}`, org, repo, ref, path })
   }
 </script>
 <div class="flex h-full w-full flex-col">

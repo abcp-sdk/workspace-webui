@@ -1,14 +1,22 @@
-// Navigation model — the URL is the SOURCE OF TRUTH. Every visible page has a
-// canonical ancestry that is a pure function of the leaf page (`stackFor`), so
-// there is no in-memory per-tab stack to keep in sync and no history.state
-// snapshot: a deep link or a refresh reconstructs the exact same stack.
+// Navigation model — a FOREST.
 //
-// The push helpers below remain for the few places that build a stack ad hoc
-// (tests, legacy call sites); the router uses `stackFor`.
+// Every page declares exactly ONE parent (`parentOf`). A visible stack is
+// therefore always a root→leaf PATH through that forest, never an ad-hoc
+// accumulation: the stack for a page is `ancestry(page)`, a pure function.
+//
+// The invariant that makes the UI sane: a path contains AT MOST ONE page of
+// each `kind`. Two sessions (chatA / chatB) are siblings in the forest, so a
+// single path can never contain both. `pushPath` enforces this: opening a page
+// whose kind is already in the stack TRUNCATES to that depth and replaces
+// (left-column click = replace the right pane); a genuinely deeper kind APPENDS
+// (right-column click = the right pane becomes the left, a new right pane
+// appears). Cross-lane references (a chat tool-card link to a blob) do NOT
+// touch the main path at all — the store opens them in a separate DRAWER whose
+// own stack obeys the same rule.
 export type SiderTab = 'chat' | 'code' | 'service' | 'config'
 export type SessionOverlay = 'mailbox'
 
-/** Sub-tabs of the repo browser (mirrored in the URL `?tab=`). */
+/** Sub-tabs of the repo browser (component-local state, not in the stack). */
 export type RepoTab = 'files' | 'commits' | 'tags' | 'releases' | 'changes'
 
 export type AppPage =
@@ -25,22 +33,9 @@ export type AppPage =
   | { kind: 'providers_list'; key: 'providers_list' }
   | { kind: 'provider_form'; key: 'provider_form' }
   | { kind: 'provider_models'; key: string; modelId: string | null }
-  // code tab (read-only git browse; stack: tree -> repo detail -> blob -> ...)
-  | {
-      kind: 'code_root'
-      key: 'code_root'
-      tab?: RepoTab
-      mrState?: string
-    }
-  | {
-      kind: 'repo_detail'
-      key: string
-      org: string
-      repo: string
-      ref: string
-      tab?: RepoTab
-      mrState?: string
-    }
+  // code lane (read-only git browse)
+  | { kind: 'code_root'; key: 'code_root' }
+  | { kind: 'repo_detail'; key: string; org: string; repo: string; ref: string }
   | {
       kind: 'repo_blob'
       key: string
@@ -48,7 +43,6 @@ export type AppPage =
       repo: string
       ref: string
       path: string
-      view?: 'code' | 'blame'
     }
   // A file's commit history (one row per commit touching the path).
   | {
@@ -58,7 +52,6 @@ export type AppPage =
       repo: string
       ref: string
       path: string
-      tab?: RepoTab
     }
   // Diff of one historical version of a file vs the current ref version.
   | {
@@ -98,14 +91,7 @@ export type AppPage =
       tag: string
     }
   // Browse a repository at a tag (opened from the Tags sub-tab).
-  | {
-      kind: 'repo_tag'
-      key: string
-      org: string
-      repo: string
-      ref: string
-      tab?: RepoTab
-    }
+  | { kind: 'repo_tag'; key: string; org: string; repo: string; ref: string }
   // Diff between two refs (multi-file), opened from the `repo-diff` tool card.
   | {
       kind: 'repo_compare'
@@ -116,20 +102,14 @@ export type AppPage =
       base: string
       head: string
     }
-  // service tab (read-only sandboxes + services)
+  // service lane (sandboxes + services)
   | { kind: 'service_root'; key: 'service_root' }
   | { kind: 'sandbox_detail'; key: string; name: string }
   | { kind: 'sandbox_job'; key: string; name: string; jobId: string }
-  | {
-      kind: 'service_detail'
-      key: string
-      name: string
-      logs?: 'follow' | 'tail'
-      prev?: boolean
-    }
+  | { kind: 'service_detail'; key: string; name: string }
 
-export function rootPageFor(tab: SiderTab): AppPage {
-  switch (tab) {
+export function rootPageFor(lane: SiderTab): AppPage {
+  switch (lane) {
     case 'chat':
       return { kind: 'chat_list', key: 'chat_list' }
     case 'code':
@@ -141,8 +121,8 @@ export function rootPageFor(tab: SiderTab): AppPage {
   }
 }
 
-/** The tab a page lives in (drives the Shell's tab selection + URL prefix). */
-export function tabForPage(page: AppPage): SiderTab {
+/** The lane (tab) a page lives in. */
+export function laneOf(page: AppPage): SiderTab {
   switch (page.kind) {
     case 'chat_list':
     case 'chat_session':
@@ -173,12 +153,14 @@ export function tabForPage(page: AppPage): SiderTab {
   }
 }
 
-/** The ref an ancestor `repo_detail` should carry (leaf ref, else main). */
+/** Back-compat alias for {@link laneOf}. */
+export const tabForPage = laneOf
+
 function refOf(page: AppPage): string {
   return 'ref' in page && page.ref ? page.ref : 'main'
 }
 
-function detailFor(org: string, repo: string, ref: string): AppPage {
+function repoDetail(org: string, repo: string, ref: string): AppPage {
   return {
     kind: 'repo_detail',
     key: `repo:${org}/${repo}@${ref}`,
@@ -187,141 +169,112 @@ function detailFor(org: string, repo: string, ref: string): AppPage {
     ref,
   }
 }
+function repoBlob(
+  org: string,
+  repo: string,
+  ref: string,
+  path: string,
+): AppPage {
+  return {
+    kind: 'repo_blob',
+    key: `blob:${org}/${repo}@${ref}:${path}`,
+    org,
+    repo,
+    ref,
+    path,
+  }
+}
+function repoHistory(
+  org: string,
+  repo: string,
+  ref: string,
+  path: string,
+): AppPage {
+  return {
+    kind: 'repo_history',
+    key: `hist:${org}/${repo}@${ref}:${path}`,
+    org,
+    repo,
+    ref,
+    path,
+  }
+}
 
 /**
- * The canonical ancestor stack for a leaf page. Pure: the same leaf always
- * yields the same stack, so the URL alone can restore the view.
+ * The unique parent of a page, or null for a lane root. This is the SINGLE
+ * source of the page hierarchy — `ancestry` walks it, so a page can never
+ * appear with an inconsistent set of ancestors.
  */
-export function stackFor(leaf: AppPage): AppPage[] {
-  switch (leaf.kind) {
+export function parentOf(page: AppPage): AppPage | null {
+  switch (page.kind) {
     case 'chat_list':
     case 'code_root':
     case 'service_root':
     case 'config_root':
-      return [leaf]
+      return null
     case 'chat_session':
-      return [{ kind: 'chat_list', key: 'chat_list' }, leaf]
+      return { kind: 'chat_list', key: 'chat_list' }
     case 'chat_overlay':
-      return [
-        { kind: 'chat_list', key: 'chat_list' },
-        { kind: 'chat_session', key: 'chat_session', session: leaf.session },
-        leaf,
-      ]
+      return {
+        kind: 'chat_session',
+        key: 'chat_session',
+        session: page.session,
+      }
     case 'config_sub':
     case 'providers_list':
-      return [{ kind: 'config_root', key: 'config_root' }, leaf]
+      return { kind: 'config_root', key: 'config_root' }
     case 'provider_form':
-      return [
-        { kind: 'config_root', key: 'config_root' },
-        { kind: 'providers_list', key: 'providers_list' },
-        leaf,
-      ]
+      return { kind: 'providers_list', key: 'providers_list' }
     case 'provider_models':
-      return [
-        { kind: 'config_root', key: 'config_root' },
-        { kind: 'providers_list', key: 'providers_list' },
-        { kind: 'provider_form', key: 'provider_form' },
-        leaf,
-      ]
+      return { kind: 'provider_form', key: 'provider_form' }
     case 'repo_detail':
-      return [{ kind: 'code_root', key: 'code_root' }, leaf]
+      return { kind: 'code_root', key: 'code_root' }
     case 'repo_tag':
-      return [
-        { kind: 'code_root', key: 'code_root' },
-        detailFor(leaf.org, leaf.repo, leaf.ref),
-        leaf,
-      ]
     case 'repo_blob':
-      return [
-        { kind: 'code_root', key: 'code_root' },
-        detailFor(leaf.org, leaf.repo, leaf.ref),
-        leaf,
-      ]
-    case 'repo_history':
-      return [
-        { kind: 'code_root', key: 'code_root' },
-        detailFor(leaf.org, leaf.repo, leaf.ref),
-        {
-          kind: 'repo_blob',
-          key: `blob:${leaf.org}/${leaf.repo}@${leaf.ref}:${leaf.path}`,
-          org: leaf.org,
-          repo: leaf.repo,
-          ref: leaf.ref,
-          path: leaf.path,
-        },
-        leaf,
-      ]
-    case 'repo_history_diff':
-      return [
-        { kind: 'code_root', key: 'code_root' },
-        detailFor(leaf.org, leaf.repo, leaf.ref),
-        {
-          kind: 'repo_blob',
-          key: `blob:${leaf.org}/${leaf.repo}@${leaf.ref}:${leaf.path}`,
-          org: leaf.org,
-          repo: leaf.repo,
-          ref: leaf.ref,
-          path: leaf.path,
-        },
-        {
-          kind: 'repo_history',
-          key: `hist:${leaf.org}/${leaf.repo}@${leaf.ref}:${leaf.path}`,
-          org: leaf.org,
-          repo: leaf.repo,
-          ref: leaf.ref,
-          path: leaf.path,
-        },
-        leaf,
-      ]
     case 'repo_commit':
     case 'repo_mr':
     case 'repo_release':
     case 'repo_compare':
-      return [
-        { kind: 'code_root', key: 'code_root' },
-        detailFor(leaf.org, leaf.repo, refOf(leaf)),
-        leaf,
-      ]
+      return repoDetail(page.org, page.repo, refOf(page))
+    case 'repo_history':
+      return repoBlob(page.org, page.repo, page.ref, page.path)
+    case 'repo_history_diff':
+      return repoHistory(page.org, page.repo, page.ref, page.path)
     case 'sandbox_detail':
-      return [{ kind: 'service_root', key: 'service_root' }, leaf]
-    case 'sandbox_job':
-      return [
-        { kind: 'service_root', key: 'service_root' },
-        { kind: 'sandbox_detail', key: `sbx:${leaf.name}`, name: leaf.name },
-        leaf,
-      ]
     case 'service_detail':
-      return [{ kind: 'service_root', key: 'service_root' }, leaf]
+      return { kind: 'service_root', key: 'service_root' }
+    case 'sandbox_job':
+      return {
+        kind: 'sandbox_detail',
+        key: `sbx:${page.name}`,
+        name: page.name,
+      }
   }
 }
 
-/** Push a page; a same-key page replaces at (and truncates from) its depth. */
-export function pushPage(stack: AppPage[], page: AppPage): AppPage[] {
-  const list = [...stack]
-  const idx = list.findIndex(p => p.key === page.key)
-  if (idx !== -1) list.splice(idx, list.length - idx)
-  list.push(page)
-  return list
+/** The root→leaf path for a page (always non-empty). */
+export function ancestry(page: AppPage): AppPage[] {
+  const path: AppPage[] = []
+  let cur: AppPage | null = page
+  while (cur) {
+    path.unshift(cur)
+    cur = parentOf(cur)
+  }
+  return path
 }
 
-/** Push a SIBLING drill-in: replaces the current drill-in, keeping the stack
- *  at [root, current] so the tablet split never shows two parallels. */
-export function pushSibling(stack: AppPage[], page: AppPage): AppPage[] {
-  const list = stack.length > 1 ? stack.slice(0, 1) : [...stack]
-  return pushPage(list, page)
-}
+/** Back-compat alias for {@link ancestry}. */
+export const stackFor = ancestry
 
 /**
- * Push a CHILD drill-in (the leaf of a split). Appends when the current top is
- * a different page kind, otherwise REPLACES the top so repeatedly opening a
- * file/job does not grow the stack without bound. Keeps the stack at
- * [root, parent, child] so the tablet split shows the parent list | the leaf.
+ * Push a page onto a path, enforcing the one-kind-per-path invariant:
+ * - the page's kind is already present → truncate to that depth and replace
+ *   (this is a left-column "sibling" navigation);
+ * - otherwise → append (a right-column "drill one level deeper").
  */
-export function pushChild(stack: AppPage[], page: AppPage): AppPage[] {
-  const top = stack[stack.length - 1]
-  if (top !== undefined && top.kind === page.kind) {
-    return [...stack.slice(0, -1), page]
-  }
+export function pushPath(stack: AppPage[], page: AppPage): AppPage[] {
+  const idx = stack.findIndex(p => p.kind === page.kind)
+  if (idx !== -1) return [...stack.slice(0, idx), page]
   return [...stack, page]
 }
 

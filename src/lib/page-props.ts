@@ -18,6 +18,8 @@ export interface PageProps {
   initialId?: string
   overlay?: 'mailbox'
   modelId?: string | null
+  /** The chat session this pane shows (the page's own identity). */
+  session?: string
   /** Service tab drill-in param (sandbox name). */
   name?: string
   /** Service tab job drill-in param (job id). */
@@ -36,14 +38,4 @@ export interface PageProps {
   /** Compare refs (repo_compare). */
   base?: string
   head?: string
-  /** Repo browser sub-tab (repo_detail / repo_tag / code_root), from `?tab=`. */
-  tab?: 'files' | 'commits' | 'tags' | 'releases' | 'changes'
-  /** MR list filter (repo_detail / code_root), from `?state=`. */
-  mrState?: string
-  /** repo_blob view mode, from `?view=`. */
-  view?: 'code' | 'blame'
-  /** Service log source, from `?logs=`. */
-  logs?: 'follow' | 'tail'
-  /** Service log "previous instance" flag, from `?prev=1`. */
-  prev?: boolean
 }

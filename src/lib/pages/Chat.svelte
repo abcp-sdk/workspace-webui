@@ -31,7 +31,7 @@
   import TodosPanel from '$lib/components/TodosPanel.svelte'
   import { latestTodos, todoCounts } from '$lib/todos'
 
-  let { store }: PageProps = $props()
+  let { store, session: sessionId = '' }: PageProps & { session?: string } = $props()
 
   // The controller instance is REACTIVE: switching sessions replaces it, and
   // the message list must re-render against the NEW one. With a plain (non
@@ -76,8 +76,13 @@
   let taEl: HTMLTextAreaElement | null = $state(null)
   const recorder = new VoiceRecorder()
 
-  const session = $derived<Session | null>(store.activeSession)
-  const sid = $derived(session?.id ?? '')
+  // The session is THIS pane's page identity (passed by the Shell), not a
+  // store-wide "active session": the drawer and the main pane can each host a
+  // different chat at once.
+  const session = $derived<Session | null>(
+    sessionId ? store.sessionById(sessionId) : null,
+  )
+  const sid = $derived(session?.id ?? sessionId)
   const role = $derived(session ? roleOfSession(session) : '')
 
   // The session's current todos, derived from the LAST `todo-write` call in the
@@ -564,10 +569,10 @@
   async function menuAction(v: string) {
     switch (v) {
       case 'repo': {
-        // Jump to the session's repository in the Code tab (tree | detail).
+        // Explicit "open the repository" → switch to the Code lane (main).
         const s = session
         if (s?.org && s.repo) {
-          store.openCodePage({
+          store.openMain({
             kind: 'repo_detail',
             key: `repo:${s.org}/${s.repo}@${s.branch || 'main'}`,
             org: s.org,

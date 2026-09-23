@@ -10,7 +10,6 @@
   import { scopeOf } from './lib/scope'
   import type { LocalStore } from './lib/db'
   import { AppStore } from './lib/store.svelte'
-  import { installRouter } from './lib/router.svelte'
   import { showErrorToast } from './lib/toast.svelte'
   import { setAuthExpiredHandler } from './lib/events'
   import { confirmDialog } from './lib/dialogs'
@@ -105,12 +104,6 @@
     void boot()
   })
 
-  // ---- URL routing ----
-  // The URL is the source of truth (see lib/router.svelte.ts): the router
-  // decodes it into the store's visible leaf on boot/popstate and mirrors leaf
-  // changes back into history. No sentinel entries, no history.state.
-  let disposeRouter: (() => void) | null = null
-
   // The webui is served SAME-ORIGIN with the agent: the aggregating proxy in
   // front forwards `/agent.v1.*` to the agent, so the API base is always this
   // page's own origin. No domain is ever entered — a user supplies only a
@@ -139,6 +132,14 @@
     if (base !== prefs.baseUrl || tok !== prefs.token) Prefs.save(base, tok)
     baseUrl = base
     token = tok
+    // Scrub any dev-only connection params (?base=/?token=) from the address
+    // bar so a bearer token never lingers in the URL / history.
+    if (qp.has('base') || qp.has('token')) {
+      qp.delete('base')
+      qp.delete('token')
+      const q = qp.toString()
+      history.replaceState(null, '', location.pathname + (q ? `?${q}` : ''))
+    }
     await enterApp()
   }
 
@@ -157,9 +158,6 @@
     try {
       store = await buildStore()
       phase = 'app'
-      // Bind the URL <-> view (also strips ?token=/?base= from the address bar).
-      disposeRouter?.()
-      disposeRouter = installRouter(store)
       // Backfill the username for entries saved before GetIdentity existed
       // (best-effort, after the app is usable).
       void refreshIdentity()
@@ -224,8 +222,6 @@
   async function switchBackend(b: BackendCfg) {
     const base = SAME_ORIGIN_BASE
     // Tear down the previous connection's streams before replacing the store.
-    disposeRouter?.()
-    disposeRouter = null
     store?.dispose()
     Prefs.save(base, b.token)
     baseUrl = base
@@ -255,8 +251,6 @@
 
   function logout() {
     Prefs.clearActive()
-    disposeRouter?.()
-    disposeRouter = null
     store?.dispose()
     token = ''
     store = null

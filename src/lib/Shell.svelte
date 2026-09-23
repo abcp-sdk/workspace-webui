@@ -61,6 +61,43 @@
     { id: 'config' as const, label: 'tabConfig', icon: AppIcons.settings },
   ]
 
+  /** Build the prop bag for one pane from its page (its own identity). */
+  function propsFor(page: AppPage, isTop: boolean): PageProps {
+    return {
+      store,
+      themeMode,
+      onThemeMode,
+      onSwitchBackend,
+      onBackendSwitched,
+      onUiLocale,
+      onAddUser,
+      showBack: isTop,
+      initialId: page.kind === 'config_sub' ? page.id : undefined,
+      overlay: page.kind === 'chat_overlay' ? page.overlay : undefined,
+      modelId: page.kind === 'provider_models' ? page.modelId : undefined,
+      session:
+        page.kind === 'chat_session' || page.kind === 'chat_overlay'
+          ? page.session
+          : undefined,
+      name:
+        page.kind === 'sandbox_detail' ||
+        page.kind === 'sandbox_job' ||
+        page.kind === 'service_detail'
+          ? page.name
+          : undefined,
+      jobId: page.kind === 'sandbox_job' ? page.jobId : undefined,
+      org: 'org' in page ? page.org : undefined,
+      repo: 'repo' in page ? page.repo : undefined,
+      ref: 'ref' in page ? page.ref : undefined,
+      path: 'path' in page ? page.path : undefined,
+      sha: 'sha' in page ? page.sha : undefined,
+      index: 'index' in page ? page.index : undefined,
+      tag: 'tag' in page ? page.tag : undefined,
+      base: 'base' in page ? page.base : undefined,
+      head: 'head' in page ? page.head : undefined,
+    }
+  }
+
   function componentFor(page: AppPage): Component<PageProps> {
     switch (page.kind) {
       case 'chat_list':
@@ -109,20 +146,22 @@
     }
   }
 
-  // The last two pages of the visible stack (oldest → newest). On a narrow
-  // container the earlier pane is hidden by a CSS container query, so the
-  // split adapts to the PANE width rather than the window.
+  // The last two pages of the MAIN path (oldest → newest). The non-top pane
+  // auto-hides via the panes' own container query when that region is too
+  // narrow — so docking the drawer simply narrows the region and the split
+  // adapts, without ever disturbing the main path itself.
   const panes = $derived.by(() => {
-    const stack = store.currentStack
+    const stack = store.primaryStack
     const start = Math.max(0, stack.length - 2)
-    return stack
-      .slice(start)
-      .map((page, i, arr) => ({
-        page,
-        isTop: i === arr.length - 1,
-        C: componentFor(page),
-      }))
+    return stack.slice(start).map((page, i, arr) => ({
+      page,
+      isTop: i === arr.length - 1,
+      C: componentFor(page),
+    }))
   })
+
+  const drawerTop = $derived(store.drawerTop)
+  const DrawerC = $derived(drawerTop ? componentFor(drawerTop) : null)
 </script>
 
 <div class="flex h-dvh w-full flex-col overflow-hidden bg-background sm:flex-row">
@@ -144,48 +183,70 @@
     </nav>
   {/if}
 
-  <main class={cn('@container flex min-h-0 min-w-0 flex-1', isCompact && !hideBottomBar && 'pb-[60px]')}>
-    {#each panes as p, i (p.page.key)}
-      <!-- The non-top pane is the "list" column: hidden once the container is
-           too narrow for a comfortable two-column split. -->
+  <main class={cn('relative flex min-h-0 min-w-0 flex-1', isCompact && !hideBottomBar && 'pb-[60px]')}>
+    <!-- The main region: its own container, so the two-pane split follows THIS
+         region's width. Docking the drawer narrows it and the split collapses
+         on its own — the main path is never touched. -->
+    <div class="@container relative flex min-h-0 min-w-0 flex-1">
+      {#each panes as p, i (p.page.key)}
+        <!-- The non-top pane is the "list" column: hidden once the region is
+             too narrow for a comfortable two-column split. -->
+        <div
+          class={cn(
+            'relative flex min-h-0 min-w-0 flex-1',
+            i > 0 && 'border-l border-border',
+            !p.isTop && 'hidden @md:flex',
+          )}
+          onpointerdowncapture={() => (store.navTarget = 'main')}
+        >
+          <p.C {...propsFor(p.page, p.isTop)} />
+        </div>
+      {/each}
+    </div>
+
+    <!-- Drawer: a cross-lane reference (a chat tool-card link to a blob) shown
+         beside the main region without disturbing it. Wide windows dock it;
+         narrow ones overlay it full-width. -->
+    {#if drawerTop && DrawerC}
       <div
-        class={cn(
-          'relative flex min-h-0 min-w-0 flex-1',
-          i > 0 && 'border-l border-border',
-          !p.isTop && 'hidden @md:flex',
-        )}
+        class="absolute inset-0 z-20 flex min-h-0 min-w-0 flex-col bg-background sm:static sm:w-[45%] sm:max-w-[560px] sm:shrink-0 sm:border-l sm:border-border"
+        onpointerdowncapture={() => (store.navTarget = 'drawer')}
       >
-        <p.C
-          {store}
-          {themeMode}
-          {onThemeMode}
-          {onSwitchBackend}
-          {onBackendSwitched}
-          {onUiLocale}
-          {onAddUser}
-          showBack={p.isTop}
-          initialId={p.page.kind === 'config_sub' ? p.page.id : undefined}
-          overlay={p.page.kind === 'chat_overlay' ? p.page.overlay : undefined}
-          modelId={p.page.kind === 'provider_models' ? p.page.modelId : undefined}
-          name={p.page.kind === 'sandbox_detail' || p.page.kind === 'sandbox_job' || p.page.kind === 'service_detail' ? p.page.name : undefined}
-          jobId={p.page.kind === 'sandbox_job' ? p.page.jobId : undefined}
-          org={'org' in p.page ? p.page.org : undefined}
-          repo={'repo' in p.page ? p.page.repo : undefined}
-          ref={'ref' in p.page ? p.page.ref : undefined}
-          path={'path' in p.page ? p.page.path : undefined}
-          sha={'sha' in p.page ? p.page.sha : undefined}
-          index={'index' in p.page ? p.page.index : undefined}
-          tag={'tag' in p.page ? p.page.tag : undefined}
-          base={'base' in p.page ? p.page.base : undefined}
-          head={'head' in p.page ? p.page.head : undefined}
-          tab={'tab' in p.page ? p.page.tab : undefined}
-          mrState={'mrState' in p.page ? p.page.mrState : undefined}
-          view={p.page.kind === 'repo_blob' ? p.page.view : undefined}
-          logs={p.page.kind === 'service_detail' ? p.page.logs : undefined}
-          prev={p.page.kind === 'service_detail' ? p.page.prev : undefined}
-        />
+        <!-- drawer toolbar: back / open-in-tab -->
+        <div class="flex h-8 shrink-0 items-center gap-1 border-b border-border/60 px-1.5 text-micro text-muted-foreground">
+          <button
+            type="button"
+            class="flex items-center gap-1 rounded px-1.5 py-1 hover:bg-muted"
+            title={t('back')}
+            onclick={() => store.popPage()}
+          >
+            <AppIcons.back class="size-3.5" />
+            {t('back')}
+          </button>
+          <span class="min-w-0 flex-1 truncate text-center">{t('preview')}</span>
+          <button
+            type="button"
+            class="flex items-center gap-1 rounded px-1.5 py-1 hover:bg-muted"
+            title={t('openInTab')}
+            onclick={() => drawerTop && store.openMain(drawerTop)}
+          >
+            {t('openInTab')}
+            <AppIcons.expand class="size-3.5" />
+          </button>
+          <button
+            type="button"
+            class="rounded p-1 hover:bg-muted"
+            title={t('close')}
+            onclick={() => store.closeDrawer()}
+          >
+            <AppIcons.close class="size-3.5" />
+          </button>
+        </div>
+        <div class="relative flex min-h-0 min-w-0 flex-1">
+          <DrawerC {...propsFor(drawerTop, false)} showBack={false} />
+        </div>
       </div>
-    {/each}
+    {/if}
   </main>
 
   {#if isCompact && !hideBottomBar}

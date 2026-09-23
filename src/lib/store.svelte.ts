@@ -14,11 +14,12 @@ import {
 } from './models'
 import {
   type AppPage,
+  ancestry,
+  laneOf,
+  pushPath,
   rootPageFor,
   type SessionOverlay,
   type SiderTab,
-  stackFor,
-  tabForPage,
 } from './nav'
 import { Prefs } from './prefs'
 import { sortSessionsByRecency } from './session-order'
@@ -35,18 +36,20 @@ export class AppStore {
 
   sessionRevision = $state(0)
 
-  // ---- navigation: the visible LEAF page is the single source of truth ----
-  // The router mirrors `leaf` to the URL and restores it on popstate/boot, so
-  // there is no per-tab stack to keep in sync and no history.state. The full
-  // stack is derived purely from the leaf via `stackFor`.
-  leaf = $state<AppPage>(rootPageFor('chat'))
-  /** Set by navigate()/hydrate() so the router knows push vs replace. */
-  navOp: 'push' | 'replace' = 'push'
-  /** Bumped on every navigation so the router effect re-runs even for a
-   *  same-leaf navigation (e.g. a tab switch back to the same root). */
-  navSeq = $state(0)
-  /** Per-tab last leaf, for pleasant tab switching. In-memory ONLY: never
-   *  persisted, so a refresh restores just the visible view (as required). */
+  // ---- navigation: a forest of pages, one PATH per lane, plus a DRAWER ----
+  // `primary` is the leaf of the active lane's path; `primaryStack` is its
+  // root→leaf ancestry. Cross-lane references (a chat tool-card link to a
+  // blob) open in `drawer`, a SEPARATE path, so the main path is untouched.
+  // A path never contains two pages of the same kind (see nav.pushPath), so
+  // two sibling sessions can never share a path.
+  primary = $state<AppPage>(rootPageFor('chat'))
+  /** The drawer's own path ([] = closed). Its bottom is the entry page. */
+  drawer = $state<AppPage[]>([])
+  /** Which region the next `open()` acts on. The Shell sets this on
+   *  pointerdown of the main region vs the drawer, so a click inside the
+   *  drawer drills the drawer and a click in the main pane dismisses it. */
+  navTarget: 'main' | 'drawer' = 'main'
+  /** Per-lane last primary leaf, for pleasant tab switching. In-memory only. */
   private lastLeaf: Record<SiderTab, AppPage> = {
     chat: rootPageFor('chat'),
     code: rootPageFor('code'),
@@ -216,9 +219,9 @@ export class AppStore {
     }
   }
 
-  /** The session id of the visible chat page (null when on the list). */
+  /** The session id of the FOCUSED chat page (drawer if open, else main). */
   get activeSessionId(): string | null {
-    const l = this.leaf
+    const l = this.focusedPage
     if (l.kind === 'chat_session' || l.kind === 'chat_overlay') return l.session
     return null
   }
@@ -227,9 +230,10 @@ export class AppStore {
     return this.sessions.find(s => s.id === this.activeSessionId) ?? null
   }
 
-  /** The overlay shown over the active chat (from the leaf page). */
+  /** The overlay shown over the focused chat (from the leaf page). */
   get sessionOverlay(): SessionOverlay | null {
-    return this.leaf.kind === 'chat_overlay' ? this.leaf.overlay : null
+    const l = this.focusedPage
+    return l.kind === 'chat_overlay' ? l.overlay : null
   }
 
   sessionById(id: string): Session | null {
@@ -387,7 +391,7 @@ export class AppStore {
   openOverlay(v: SessionOverlay) {
     const sid = this.activeSessionId
     if (sid == null) return
-    this.navigate({
+    this.open({
       kind: 'chat_overlay',
       key: 'chat_overlay',
       overlay: v,
@@ -398,69 +402,114 @@ export class AppStore {
   closeOverlay() {
     const sid = this.activeSessionId
     if (sid == null) return
-    this.navigate({ kind: 'chat_session', key: 'chat_session', session: sid })
+    this.open({ kind: 'chat_session', key: 'chat_session', session: sid })
   }
 
-  /** Close the open conversation; chat tab returns to the session list. */
+  /** Close the open conversation; chat lane returns to the session list. */
   closeSession() {
-    this.navigate(rootPageFor('chat'))
+    this.openMain(rootPageFor('chat'))
   }
 
   bumpSessionRevision() {
     this.sessionRevision++
   }
 
-  /** The tab the visible leaf lives in. */
+  /** The lane the primary page lives in. */
   get siderTab(): SiderTab {
-    return tabForPage(this.leaf)
+    return laneOf(this.primary)
   }
 
-  /** Switch tabs, returning to that tab's LAST leaf (in-memory, per session). */
-  switchTab(tab: SiderTab) {
-    if (tab === this.siderTab) return
-    this.navigate(this.lastLeaf[tab] ?? rootPageFor(tab))
+  /** Switch lanes, returning to that lane's LAST leaf (in-memory, per run). */
+  switchTab(lane: SiderTab) {
+    if (lane === this.siderTab) return
+    this.closeDrawer()
+    this.primary = this.lastLeaf[lane] ?? rootPageFor(lane)
   }
 
   /**
-   * Navigate to a page from ANYWHERE (chat tool cards, the ⋮ menu, …). The URL
-   * is the source of truth: the leaf is recorded, its canonical ancestry is
-   * derived via `stackFor`, and the router mirrors it into the address bar.
+   * Navigate to a page. The rule (a forest path, one kind per path):
+   * - while the DRAWER is open, the drawer is the active context — the page is
+   *   pushed onto the drawer path;
+   * - same lane as the primary page → the page is pushed onto the primary path
+   *   (an existing same-kind page is replaced at its depth = a sibling swap;
+   *   a new kind appends = one level deeper);
+   * - a DIFFERENT lane → the page opens in the drawer, leaving the main path
+   *   untouched (a cross-lane reference, e.g. a chat tool-card link to a blob).
    */
-  navigate(page: AppPage, opts: { replace?: boolean } = {}) {
-    this.lastLeaf[tabForPage(page)] = page
-    this.navOp = opts.replace ? 'replace' : 'push'
-    this.leaf = page
-    this.navSeq++
+  open(page: AppPage) {
+    // A click inside the drawer drills the drawer (its own path).
+    if (this.drawer.length > 0 && this.navTarget === 'drawer') {
+      this.drawer = pushPath(this.drawer, page)
+      return
+    }
+    // A click in the main region while a drawer is open DISMISSES the drawer
+    // (the main pane is what the user chose to act on).
+    if (this.drawer.length > 0) this.drawer = []
+    if (laneOf(page) === laneOf(this.primary)) {
+      const stack = pushPath(this.primaryStack, page)
+      this.primary = stack[stack.length - 1]!
+      this.lastLeaf[laneOf(this.primary)] = this.primary
+    } else {
+      this.drawer = [page]
+    }
   }
 
-  /** Replace the visible view WITHOUT pushing a history entry (boot/popstate). */
-  hydrate(page: AppPage) {
-    this.lastLeaf[tabForPage(page)] = page
-    this.navOp = 'replace'
-    this.leaf = page
-    this.navSeq++
+  /** Force a page onto its lane's MAIN path (switching lanes if needed) and
+   *  close the drawer. Used by "open repository" and the drawer's
+   *  "open in tab" action. */
+  openMain(page: AppPage) {
+    this.drawer = []
+    this.primary = page
+    this.lastLeaf[laneOf(page)] = page
   }
 
-  /** Back-compat alias for {@link navigate}. */
+  /** Back-compat aliases for {@link open}. */
+  navigate(page: AppPage) {
+    this.open(page)
+  }
   openPage(page: AppPage) {
-    this.navigate(page)
+    this.open(page)
   }
-
-  /** Back-compat alias for {@link navigate}. */
   openCodePage(page: AppPage) {
-    this.navigate(page)
+    this.open(page)
   }
-
-  // With canonical ancestry every navigation derives its own stack, so the
-  // former push/sibling/child distinction is moot — all three are navigate().
   pushPage(page: AppPage) {
-    this.navigate(page)
+    this.open(page)
   }
   pushSibling(page: AppPage) {
-    this.navigate(page)
+    this.open(page)
   }
   pushChild(page: AppPage) {
-    this.navigate(page)
+    this.open(page)
+  }
+
+  // ---- drawer (a separate inspection path over the main one) ----
+
+  /** Open the drawer on `page` as its bottom (single-page seed). */
+  openDrawer(page: AppPage) {
+    this.drawer = [page]
+  }
+
+  /** Push a page onto the drawer path (same one-kind rule). */
+  pushDrawer(page: AppPage) {
+    this.drawer = pushPath(this.drawer, page)
+  }
+
+  /** Pop the drawer one level; popping the bottom closes it. */
+  popDrawer() {
+    this.drawer = this.drawer.length > 1 ? this.drawer.slice(0, -1) : []
+  }
+
+  closeDrawer() {
+    this.drawer = []
+  }
+
+  get drawerOpen(): boolean {
+    return this.drawer.length > 0
+  }
+
+  get drawerTop(): AppPage | null {
+    return this.drawer[this.drawer.length - 1] ?? null
   }
 
   /** Apply a settings/fork/rename result onto the live list. */
@@ -471,33 +520,38 @@ export class AppStore {
     this.bumpSessionRevision()
   }
 
-  // ---- navigation (derived from the leaf) ----
+  // ---- navigation (derived from the primary path + drawer) ----
 
-  /** The full visible stack, derived purely from the current leaf. */
+  /** The main lane's root→leaf path. */
   get currentStack(): AppPage[] {
-    return stackFor(this.leaf)
+    return this.primaryStack
+  }
+
+  get primaryStack(): AppPage[] {
+    return ancestry(this.primary)
   }
 
   get topPage(): AppPage {
-    return this.leaf
+    return this.primary
   }
 
-  /** Installed by the router: an in-app "back" consumes a browser history
-   *  entry when one exists (so forward/back stay symmetric). */
-  backRequest: (() => void) | null = null
+  /** The leaf of whichever context is focused (drawer if open, else main). */
+  get focusedPage(): AppPage {
+    return this.drawerTop ?? this.primary
+  }
 
-  /** Navigate to the parent of the current leaf (a stack pop). */
+  /** In-app back: pop the drawer one level, else pop the main path. */
   popPage() {
-    if (this.backRequest) {
-      this.backRequest()
+    if (this.drawer.length > 0) {
+      if (this.drawer.length > 1) this.drawer = this.drawer.slice(0, -1)
+      else this.drawer = []
       return
     }
-    const stack = this.currentStack
-    if (stack.length <= 1) return
-    this.navigate(stack[stack.length - 2]!, { replace: true })
+    if (this.primaryStack.length <= 1) return
+    this.primary = this.primaryStack[this.primaryStack.length - 2]!
   }
 
   get canPopPage(): boolean {
-    return this.currentStack.length > 1
+    return this.drawer.length > 0 || this.primaryStack.length > 1
   }
 }

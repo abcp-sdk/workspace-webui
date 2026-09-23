@@ -14,37 +14,21 @@
   import EmptyState from '$lib/components/layout/EmptyState.svelte'
   import IconButton from '$lib/components/layout/IconButton.svelte'
 
-  let {
-    store,
-    name,
-    logs: logsProp,
-    prev: prevProp,
-    showBack = false,
-  }: PageProps & { name: string } = $props()
+  let { store, name, showBack = false }: PageProps & { name: string } = $props()
 
   let svc = $state<ServiceInfo | null>(null)
   let lines = $state<string[]>([])
   let streaming = $state(false)
-  // The log source lives in the URL (?logs=follow|tail&prev=1) so a refresh
-  // restores the exact view. The props are the single source of truth.
-  const previous = $derived(prevProp ?? false)
-  const follow = $derived((logsProp ?? 'follow') === 'follow')
+  // The log source is component-local view state (not part of the identity).
+  let previous = $state(false)
+  let follow = $state(true)
   let logError = $state('')
   let outEl: HTMLElement | null = $state(null)
   let abort: AbortController | null = null
 
   function pickLogSource(next: { follow?: boolean; previous?: boolean }) {
-    const f = next.follow ?? follow
-    const p = next.previous ?? previous
-    const leaf: {
-      kind: 'service_detail'
-      key: string
-      name: string
-      logs?: 'follow' | 'tail'
-      prev?: boolean
-    } = { kind: 'service_detail', key: `svc:${name}`, name, logs: f ? 'follow' : 'tail' }
-    if (p) leaf.prev = true
-    store.navigate(leaf, { replace: true })
+    follow = next.follow ?? follow
+    previous = next.previous ?? previous
   }
 
   async function load() {
@@ -72,7 +56,7 @@
     try {
       await store.api.deleteService(name)
       showToast(t('deleted'))
-      store.navigate({ kind: 'service_root', key: 'service_root' }, { replace: true })
+      store.popPage()
     } catch (e) {
       showErrorToast(String(e))
     }
