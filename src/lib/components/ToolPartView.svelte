@@ -1,9 +1,11 @@
 <script lang="ts">
-  // ToolPartView — a foldable tool card. Once a call's arguments have fully
-  // streamed, a tool with a registered card (see $lib/tool-cards) renders a
-  // PRETTY view (fields + body + actions) instead of raw JSON; a toggle
-  // switches between the pretty render and the raw JSON. Tools without a card,
-  // and calls still streaming, fall back to the raw JSON + output sections.
+  // ToolPartView — a foldable tool card with TWO independent halves:
+  //   Input  — the call's arguments, with a Pretty | JSON toggle
+  //   Result — what came back, with a Pretty | Text toggle
+  // While the arguments are still streaming (only `inputText`), the input half
+  // shows the raw JSON preview; the pretty input card appears once the full
+  // `input` arrives. Tools without a registered card fall back to raw JSON +
+  // the result text.
   import type { ChatPart, ToolState } from '$lib/models'
   import type { AgentApi } from '$lib/api'
   import { t } from '$lib/i18n.svelte'
@@ -13,7 +15,7 @@
   import TodosPanel from './TodosPanel.svelte'
   import ToolCard from './ToolCard.svelte'
   import { isTodoWrite, parseTodos } from '$lib/todos'
-  import { cardFor } from '$lib/tool-cards'
+  import { cardFor, type CardSection } from '$lib/tool-cards'
   import type { FileRef } from '$lib/models'
   import type { AppStore } from '$lib/store.svelte'
 
@@ -31,10 +33,11 @@
 
   let open = $state(true)
   let inputOpen = $state(true)
-  let contentOpen = $state(true)
+  let resultOpen = $state(true)
   let metaOpen = $state(true)
-  // Pretty (structured card) vs raw JSON for the input section.
-  let pretty = $state(true)
+  // Pretty (structured card) vs raw (JSON for input, text for result).
+  let inputPretty = $state(true)
+  let resultPretty = $state(true)
 
   const toolState: ToolState | null = $derived(part.state ?? null)
   const tool = $derived(part.tool)
@@ -51,15 +54,29 @@
   // (only inputText) the raw preview below is used.
   const todoList = $derived(isTodoWrite(tool) ? parseTodos(input) : null)
 
-  // The registered card spec (null = no pretty view; raw JSON only). Gated on
-  // the tool-call having ARRIVED (`state.input != null`), not on it being
-  // non-empty: a zero-argument tool (sandbox-list, service-list, job-list, …)
-  // sends `input: {}` and must still render its card.
+  // The registered card spec (null = no pretty view; raw only). Gated on the
+  // tool-call having ARRIVED (`state.input != null`), not on it being
+  // non-empty: a zero-argument tool (sandbox-list, service-list, …) sends
+  // `input: {}` and must still render its card.
   const inputReady = $derived(toolState?.input != null)
   const card = $derived(
     !running && inputReady ? cardFor(tool, meta, input, output) : null,
   )
-  const hasPretty = $derived(card !== null || todoList !== null)
+  const hasInputPretty = $derived(card !== null || todoList !== null)
+
+  // A section is "present" when it has any field/body/actions.
+  function hasSection(sec: CardSection | undefined): boolean {
+    return !!sec && (sec.fields.length > 0 || !!sec.body || !!sec.actions?.length)
+  }
+  const inputSection = $derived(card?.input)
+  const resultSection = $derived(card?.result)
+  const hasInputCard = $derived(hasSection(inputSection))
+  const hasResultCard = $derived(hasSection(resultSection))
+  // The result half exists when there is a pretty result, raw output text, or
+  // an error. The input half exists while arguments stream OR a pretty input.
+  const showResult = $derived(
+    !!output || hasResultCard || (hasError && !!toolState?.error),
+  )
 
   interface MediaRef {
     code: string
@@ -103,11 +120,19 @@
     return out
   })
 
-  const changeId = $derived((toolState?.changeId as string | undefined) ?? ((toolState?.data?.['change_id'] as string | undefined) ?? ''))
-  const diffText = $derived((toolState?.diff as string | undefined) ?? ((toolState?.data?.['diff'] as string | undefined) ?? ''))
+  const changeId = $derived(
+    (toolState?.changeId as string | undefined) ??
+      ((toolState?.data?.['change_id'] as string | undefined) ?? ''),
+  )
+  const diffText = $derived(
+    (toolState?.diff as string | undefined) ??
+      ((toolState?.data?.['diff'] as string | undefined) ?? ''),
+  )
   const additions = $derived((toolState?.additions as number | undefined) ?? 0)
   const deletions = $derived((toolState?.deletions as number | undefined) ?? 0)
-  const hasMeta = $derived(!!changeId || !!diffText || additions > 0 || deletions > 0)
+  const hasMeta = $derived(
+    !!changeId || !!diffText || additions > 0 || deletions > 0,
+  )
 
   /** flutter `toolDisplayName`: `todowrite` shows as `todo`. */
   function toolDisplayName(name: string): string {
@@ -156,98 +181,106 @@
 
   {#if open}
     <div class="min-w-0 space-y-2 px-2.5 pb-2.5">
-      <!-- params section: pretty card / todo checklist / raw JSON -->
-      {#if todoList !== null && pretty}
-        <div class="min-w-0 rounded-sm border border-border/50 bg-background/50 p-2">
-          <TodosPanel todos={todoList} />
-        </div>
-      {:else if card !== null && pretty}
-        <ToolCard {card} {store} {api} />
-      {:else if inputReady}
-        <div class="min-w-0 rounded-sm border border-border/50 bg-background/50">
-          <button
-            type="button"
-            class="flex w-full items-center gap-1 px-2 py-1 text-micro text-muted-foreground"
-            onclick={() => (inputOpen = !inputOpen)}
-          >
-            {#if inputOpen}<AppIcons.chevron_down class="size-3.5" />{:else}<AppIcons.chevron_right class="size-3.5" />{/if}
-            <AppIcons.braces class="size-[13px] text-primary" />
-            <span>{t('toolInputParams')}</span>
-          </button>
-          {#if inputOpen}
-            <pre class="max-h-52 min-w-0 overflow-auto px-2 pb-2 font-mono text-[11px] wrap-anywhere whitespace-pre-wrap">{prettyJson(input)}</pre>
-          {/if}
-        </div>
-      {:else if toolState?.inputText}
-        <!-- Arguments still streaming (tool-input-delta): raw JSON preview. -->
-        <div class="min-w-0 rounded-sm border border-border/50 bg-background/50">
-          <button
-            type="button"
-            class="flex w-full items-center gap-1 px-2 py-1 text-micro text-muted-foreground"
-            onclick={() => (inputOpen = !inputOpen)}
-          >
-            {#if inputOpen}<AppIcons.chevron_down class="size-3.5" />{:else}<AppIcons.chevron_right class="size-3.5" />{/if}
-            <AppIcons.braces class="size-[13px] text-primary" />
-            <span>{t('toolInputParams')}</span>
-          </button>
-          {#if inputOpen}
-            <pre class="max-h-52 min-w-0 overflow-auto px-2 pb-2 font-mono text-[11px] wrap-anywhere whitespace-pre-wrap">{toolState.inputText}</pre>
-          {/if}
-        </div>
-      {/if}
-
-      <!-- pretty / raw JSON toggle (only when a pretty view exists) -->
-      {#if hasPretty}
-        <div class="flex items-center justify-end">
-          <div class="flex items-center gap-0.5 rounded-full border border-border p-0.5">
+      <!-- ===== INPUT ===== -->
+      {#if inputReady || toolState?.inputText}
+        <div class="min-w-0 space-y-1.5">
+          <div class="flex items-center gap-1">
             <button
               type="button"
-              class={cn('rounded-full px-2 py-0.5 text-[10px]', pretty ? 'bg-primary/15 text-primary' : 'text-muted-foreground')}
-              title={t('prettyView')}
-              onclick={() => (pretty = true)}
-            >{t('prettyView')}</button>
-            <button
-              type="button"
-              class={cn('rounded-full px-2 py-0.5 text-[10px]', !pretty ? 'bg-primary/15 text-primary' : 'text-muted-foreground')}
-              title={t('rawJson')}
-              onclick={() => (pretty = false)}
-            >{t('rawJson')}</button>
-          </div>
-        </div>
-      {/if}
-
-      <!-- content section -->
-      {#if hasError}
-        <div class="min-w-0 rounded-sm border border-destructive/40 bg-background/50">
-          <button type="button" class="flex w-full items-center gap-1 px-2 py-1 text-micro text-destructive">
-            <AppIcons.chevron_down class="size-3.5" />
-            <AppIcons.error class="size-[13px]" />
-            <span>{t('error')}</span>
-          </button>
-          <pre class="max-h-52 min-w-0 overflow-auto px-2 pb-2 font-mono text-[11px] wrap-anywhere whitespace-pre-wrap text-destructive">{toolState?.error}</pre>
-        </div>
-      {/if}
-
-      <div class="min-w-0 rounded-sm border border-border/50 bg-background/50">
-        <button
-          type="button"
-          class="flex w-full items-center gap-1 px-2 py-1 text-micro text-muted-foreground"
-          onclick={() => (contentOpen = !contentOpen)}
-        >
-          {#if contentOpen}<AppIcons.chevron_down class="size-3.5" />{:else}<AppIcons.chevron_right class="size-3.5" />{/if}
-          <AppIcons.file class="size-[13px] text-primary" />
-          <span>{t('toolContent')}</span>
-        </button>
-        {#if contentOpen}
-          <div class="px-2 pb-2">
-            {#if running}
-              <p class="text-micro text-muted-foreground italic">{t('running')}</p>
-            {:else if output}
-              <pre class="max-h-72 min-w-0 overflow-auto font-mono text-[11px] wrap-anywhere whitespace-pre-wrap">{output}</pre>
+              class="flex min-w-0 items-center gap-1 text-micro text-muted-foreground"
+              onclick={() => (inputOpen = !inputOpen)}
+            >
+              {#if inputOpen}<AppIcons.chevron_down class="size-3.5" />{:else}<AppIcons.chevron_right class="size-3.5" />{/if}
+              <AppIcons.braces class="size-[13px] text-primary" />
+              <span>{t('toolInputParams')}</span>
+            </button>
+            {#if inputReady && hasInputPretty}
+              <div class="ml-auto flex items-center gap-0.5 rounded-full border border-border p-0.5">
+                <button
+                  type="button"
+                  class={cn('rounded-full px-2 py-0.5 text-[10px]', inputPretty ? 'bg-primary/15 text-primary' : 'text-muted-foreground')}
+                  title={t('prettyView')}
+                  onclick={() => (inputPretty = true)}
+                >{t('prettyView')}</button>
+                <button
+                  type="button"
+                  class={cn('rounded-full px-2 py-0.5 text-[10px]', !inputPretty ? 'bg-primary/15 text-primary' : 'text-muted-foreground')}
+                  title={t('rawJson')}
+                  onclick={() => (inputPretty = false)}
+                >{t('rawJson')}</button>
+              </div>
             {/if}
           </div>
-        {/if}
-      </div>
+          {#if inputOpen}
+            {#if !inputReady && toolState?.inputText}
+              <!-- Arguments still streaming (tool-input-delta): raw JSON. -->
+              <pre class="max-h-52 min-w-0 overflow-auto rounded-sm border border-border/50 bg-background/50 px-2 py-1.5 font-mono text-[11px] wrap-anywhere whitespace-pre-wrap">{toolState.inputText}</pre>
+            {:else if todoList !== null && inputPretty}
+              <div class="min-w-0 rounded-sm border border-border/50 bg-background/50 p-2">
+                <TodosPanel todos={todoList} />
+              </div>
+            {:else if hasInputCard && inputPretty}
+              <ToolCard section={inputSection!} {store} {api} />
+            {:else}
+              <pre class="max-h-52 min-w-0 overflow-auto rounded-sm border border-border/50 bg-background/50 px-2 py-1.5 font-mono text-[11px] wrap-anywhere whitespace-pre-wrap">{prettyJson(input)}</pre>
+            {/if}
+          {/if}
+        </div>
+      {/if}
+
+      <!-- ===== RESULT ===== -->
+      {#if showResult}
+        <div class="min-w-0 space-y-1.5">
+          <div class="flex items-center gap-1">
+            <button
+              type="button"
+              class="flex min-w-0 items-center gap-1 text-micro text-muted-foreground"
+              onclick={() => (resultOpen = !resultOpen)}
+            >
+              {#if resultOpen}<AppIcons.chevron_down class="size-3.5" />{:else}<AppIcons.chevron_right class="size-3.5" />{/if}
+              <AppIcons.file class="size-[13px] text-primary" />
+              <span>{t('toolResult')}</span>
+            </button>
+            {#if hasResultCard}
+              <div class="ml-auto flex items-center gap-0.5 rounded-full border border-border p-0.5">
+                <button
+                  type="button"
+                  class={cn('rounded-full px-2 py-0.5 text-[10px]', resultPretty ? 'bg-primary/15 text-primary' : 'text-muted-foreground')}
+                  title={t('prettyView')}
+                  onclick={() => (resultPretty = true)}
+                >{t('prettyView')}</button>
+                <button
+                  type="button"
+                  class={cn('rounded-full px-2 py-0.5 text-[10px]', !resultPretty ? 'bg-primary/15 text-primary' : 'text-muted-foreground')}
+                  title={t('rawText')}
+                  onclick={() => (resultPretty = false)}
+                >{t('rawText')}</button>
+              </div>
+            {/if}
+          </div>
+          {#if resultOpen}
+            {#if hasError}
+              <div class="min-w-0 rounded-sm border border-destructive/40 bg-background/50">
+                <div class="flex items-center gap-1 px-2 py-1 text-micro text-destructive">
+                  <AppIcons.error class="size-[13px]" />
+                  <span>{t('error')}</span>
+                </div>
+                <pre class="max-h-52 min-w-0 overflow-auto px-2 pb-2 font-mono text-[11px] wrap-anywhere whitespace-pre-wrap text-destructive">{toolState?.error}</pre>
+              </div>
+            {:else if running}
+              <p class="text-micro text-muted-foreground italic">{t('running')}</p>
+            {:else if hasResultCard && resultPretty}
+              <ToolCard section={resultSection!} {store} {api} />
+            {:else if output}
+              <pre class="max-h-72 min-w-0 overflow-auto rounded-sm border border-border/50 bg-background/50 px-2 py-1.5 font-mono text-[11px] wrap-anywhere whitespace-pre-wrap">{output}</pre>
+            {:else if hasResultCard}
+              <!-- Pretty card is empty but the section exists (e.g. only
+                   actions): render it so deep links stay reachable. -->
+              <ToolCard section={resultSection!} {store} {api} />
+            {/if}
+          {/if}
+        </div>
+      {/if}
 
       <!-- produced files (first-class cards, `data.files`) -->
       {#if fileRefs.length}

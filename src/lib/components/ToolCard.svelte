@@ -1,8 +1,10 @@
 <script lang="ts">
-  // ToolCard — renders a `CardSpec` from $lib/tool-cards: labelled parameter
-  // fields (optionally clickable → Code/Service tabs), an optional list body
-  // (diff / commits / files / ports / …), and primary action buttons.
-  import type { CardSpec, CardField, CardBody } from '$lib/tool-cards'
+  // ToolCard — renders one `CardSection` from $lib/tool-cards: labelled fields
+  // (optionally clickable → Code/Service tabs), an optional body (diff /
+  // commits / files / ports / …), and primary action buttons. The caller
+  // (ToolPartView) renders TWO of these: one for the call's INPUT and one for
+  // its RESULT, each behind its own Pretty/raw toggle.
+  import type { CardSection, CardField, CardBody } from '$lib/tool-cards'
   import type { AppStore } from '$lib/store.svelte'
   import { cn } from '$lib/utils'
   import { renderMarkdown } from '$lib/markdown'
@@ -12,17 +14,29 @@
   import MediaAttachment from './MediaAttachment.svelte'
   import { openViewer } from '$lib/fileviewer.svelte'
 
-  let { card, store, api }: { card: CardSpec; store?: AppStore; api?: import('$lib/api').AgentApi } = $props()
+  let {
+    section,
+    store,
+    api,
+  }: {
+    section: CardSection
+    store?: AppStore
+    api?: import('$lib/api').AgentApi
+  } = $props()
 
   function icon(name: string) {
     return AppIcons[name as keyof typeof AppIcons] ?? AppIcons.tools
   }
   function toneClass(t: CardField['tone']): string {
     switch (t) {
-      case 'success': return 'text-success'
-      case 'destructive': return 'text-destructive'
-      case 'muted': return 'text-muted-foreground'
-      default: return ''
+      case 'success':
+        return 'text-success'
+      case 'destructive':
+        return 'text-destructive'
+      case 'muted':
+        return 'text-muted-foreground'
+      default:
+        return ''
     }
   }
   function short(sha: string): string {
@@ -32,7 +46,7 @@
 
 <div class="min-w-0 space-y-1.5 rounded-sm border border-border/50 bg-background/50 p-2">
   <!-- parameter fields -->
-  {#each card.fields as f, i (i)}
+  {#each section.fields as f, i (i)}
     {@const Icon = icon(f.icon)}
     {#if f.link && store}
       <button
@@ -55,8 +69,8 @@
   {/each}
 
   <!-- body -->
-  {#if card.body}
-    {@const b: CardBody = card.body}
+  {#if section.body}
+    {@const b: CardBody = section.body}
     {#if b.kind === 'diff'}
       <div class="max-h-72 min-w-0 overflow-auto rounded-sm bg-card">
         <DiffView diff={b.diff} />
@@ -272,9 +286,9 @@
   {/if}
 
   <!-- actions -->
-  {#if card.actions?.length && store}
+  {#if section.actions?.length && store}
     <div class="flex flex-wrap gap-1">
-      {#each card.actions as a, i (i)}
+      {#each section.actions as a, i (i)}
         {@const Icon = icon(a.icon)}
         <button
           type="button"
