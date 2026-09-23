@@ -17,14 +17,21 @@
     repo,
     ref,
     path,
+    view: viewProp,
     showBack = false,
   }: PageProps & { org: string; repo: string; ref: string; path: string } = $props()
 
   const name = $derived(path.split('/').pop() ?? path)
-  let view = $state<'code' | 'blame'>('code')
+  // Code/Blame lives in the URL (?view=) so the mode survives a refresh. The
+  // prop is the single source of truth; toggling navigates (replace).
+  const view = $derived<'code' | 'blame'>(viewProp ?? 'code')
+
+  function pickView(v: 'code' | 'blame') {
+    store.navigate({ kind: 'repo_blob', key: `blob:${org}/${repo}@${ref}:${path}`, org, repo, ref, path, view: v }, { replace: true })
+  }
 
   function openHistory() {
-    store.pushChild({ kind: 'repo_history', key: `hist:${org}/${repo}@${ref}:${path}`, org, repo, ref, path })
+    store.navigate({ kind: 'repo_history', key: `hist:${org}/${repo}@${ref}:${path}`, org, repo, ref, path })
   }
 </script>
 <div class="flex h-full w-full flex-col">
@@ -40,12 +47,12 @@
       <button
         type="button"
         class={cn('rounded-full px-2 py-0.5 text-[10px]', view === 'code' ? 'bg-primary/15 text-primary' : 'text-muted-foreground')}
-        onclick={() => (view = 'code')}
+        onclick={() => pickView('code')}
       >{t('code')}</button>
       <button
         type="button"
         class={cn('rounded-full px-2 py-0.5 text-[10px]', view === 'blame' ? 'bg-primary/15 text-primary' : 'text-muted-foreground')}
-        onclick={() => (view = 'blame')}
+        onclick={() => pickView('blame')}
       >{t('blame')}</button>
     </div>
     <IconButton icon={AppIcons.history} label={t('fileHistory')} onclick={openHistory} />

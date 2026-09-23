@@ -5,23 +5,47 @@
   import type { PageProps } from '$lib/page-props'
   import type { ServiceInfo } from '$lib/api'
   import { t } from '$lib/i18n.svelte'
-  import { showErrorToast } from '$lib/toast.svelte'
+  import { showErrorToast, showToast } from '$lib/toast.svelte'
+  import { confirmDialog } from '$lib/dialogs'
   import { cn } from '$lib/utils'
   import { AppIcons } from '$lib/icons'
+  import { usePoll } from '$lib/poll.svelte'
   import PageHeader from '$lib/components/layout/PageHeader.svelte'
   import EmptyState from '$lib/components/layout/EmptyState.svelte'
   import IconButton from '$lib/components/layout/IconButton.svelte'
 
-  let { store, name, showBack = false }: PageProps & { name: string } = $props()
+  let {
+    store,
+    name,
+    logs: logsProp,
+    prev: prevProp,
+    showBack = false,
+  }: PageProps & { name: string } = $props()
 
   let svc = $state<ServiceInfo | null>(null)
   let lines = $state<string[]>([])
   let streaming = $state(false)
-  let previous = $state(false)
-  let follow = $state(true)
+  // The log source lives in the URL (?logs=follow|tail&prev=1) so a refresh
+  // restores the exact view. The props are the single source of truth.
+  const previous = $derived(prevProp ?? false)
+  const follow = $derived((logsProp ?? 'follow') === 'follow')
   let logError = $state('')
   let outEl: HTMLElement | null = $state(null)
   let abort: AbortController | null = null
+
+  function pickLogSource(next: { follow?: boolean; previous?: boolean }) {
+    const f = next.follow ?? follow
+    const p = next.previous ?? previous
+    const leaf: {
+      kind: 'service_detail'
+      key: string
+      name: string
+      logs?: 'follow' | 'tail'
+      prev?: boolean
+    } = { kind: 'service_detail', key: `svc:${name}`, name, logs: f ? 'follow' : 'tail' }
+    if (p) leaf.prev = true
+    store.navigate(leaf, { replace: true })
+  }
 
   async function load() {
     try {
@@ -32,12 +56,54 @@
   }
 
   $effect(() => {
-    const n = name
-    void n
+    void name
     void load()
-    const id = setInterval(() => void load(), 10000)
-    return () => clearInterval(id)
   })
+  usePoll(() => void load(), 10000, { immediate: false })
+
+  async function deleteService() {
+    const ok = await confirmDialog({
+      title: t('deleteServiceTitle'),
+      body: t('deleteServiceBody', { arg1: name }),
+      confirmLabel: t('delete'),
+      destructive: true,
+    })
+    if (!ok) return
+    try {
+      await store.api.deleteService(name)
+      showToast(t('deleted'))
+      store.navigate({ kind: 'service_root', key: 'service_root' }, { replace: true })
+    } catch (e) {
+      showErrorToast(String(e))
+    }
+  }
+
+  async function togglePause() {
+    try {
+      if (svc?.paused) await store.api.resumeService(name)
+      else await store.api.pauseService(name)
+      await load()
+    } catch (e) {
+      showErrorToast(String(e))
+    }
+  }
+
+  function copyUrl(u: string) {
+    void navigator.clipboard?.writeText(u).then(
+      () => showToast(t('copied')),
+      () => showErrorToast(t('copyFailed')),
+    )
+  }
+
+  /** Remaining TTL as a compact label (e.g. "12m", "2h"). */
+  function ttlLabel(expiresAt: number): string {
+    const ms = expiresAt - Date.now()
+    if (ms <= 0) return t('expired')
+    const mins = Math.floor(ms / 60000)
+    if (mins < 1) return '<1m'
+    if (mins < 60) return `${mins}m`
+    return `${Math.floor(mins / 60)}h`
+  }
 
   async function startLogs() {
     abort?.abort()
@@ -90,7 +156,15 @@
     <AppIcons.server class="size-4 shrink-0 text-primary" />
     <span class="min-w-0 flex-1 truncate text-base font-semibold">{name}</span>
     {#if svc?.stage === 'preview'}<span class="shrink-0 rounded-full bg-warning/15 px-2 py-px text-[10px] text-warning">{t('serviceStagePreview')}</span>{/if}
-    {#if svc}<span class="shrink-0 rounded-full bg-muted px-2 py-px text-[10px] leading-4 text-muted-foreground">{svc.ready ? 'Ready' : svc.phase}</span>{/if}
+    {#if svc}<span class="shrink-0 rounded-full bg-muted px-2 py-px text-[10px] leading-4 text-muted-foreground">{svc.paused ? t('servicePaused') : svc.ready ? 'Ready' : svc.phase}</span>{/if}
+    {#if svc}
+      <IconButton
+        icon={svc.paused ? AppIcons.play : AppIcons.pause}
+        label={svc.paused ? t('resume') : t('pause')}
+        onclick={() => void togglePause()}
+      />
+      <IconButton icon={AppIcons.delete} label={t('deleteServiceTitle')} variant="destructive" onclick={() => void deleteService()} />
+    {/if}
   </PageHeader>
 
   {#if svc}
@@ -100,15 +174,34 @@
         {#if svc.podPhase}<span>{t('servicePodPhase')}: {svc.podPhase}</span>{/if}
         <span class={cn(svc.restarts > 0 && 'text-destructive')}>{t('serviceRestarts')}: {svc.restarts}</span>
         <span>{svc.replicas}×</span>
-        {#if svc.session}<span>{svc.session}</span>{/if}
+        {#if svc.session}
+          {#if store.sessionById(svc.session)}
+            <button
+              type="button"
+              class="text-primary hover:underline"
+              onclick={() => svc && store.pickSession(svc.session)}
+            >{svc.session}</button>
+          {:else}
+            <span>{svc.session}</span>
+          {/if}
+        {/if}
+        {#if svc.stage === 'preview' && svc.expiresAt > 0}
+          <span class="text-warning">{t('serviceTtl')}: {ttlLabel(svc.expiresAt)}</span>
+        {/if}
       </div>
       {#if svc.message}
         <div class="mt-1 rounded bg-destructive/10 px-2 py-1 text-destructive">{svc.message}</div>
       {/if}
-      <div class="mt-1 flex flex-wrap gap-x-3">
-        <span class="font-mono">{svc.url}</span>
+      <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span class="flex items-center gap-1">
+          <span class="font-mono">{svc.url}</span>
+          <button type="button" class="rounded p-0.5 hover:bg-muted" title={t('copy')} onclick={() => svc && copyUrl(svc.url)}><AppIcons.copy class="size-3" /></button>
+        </span>
         {#each svc.ports.filter(p => p.publicUrl) as p (p.publicUrl)}
-          <a href={p.publicUrl} target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">{p.publicUrl}</a>
+          <span class="flex items-center gap-1">
+            <a href={p.publicUrl} target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">{p.publicUrl}</a>
+            <button type="button" class="rounded p-0.5 hover:bg-muted" title={t('copy')} onclick={() => copyUrl(p.publicUrl)}><AppIcons.copy class="size-3" /></button>
+          </span>
         {/each}
       </div>
     </div>
@@ -120,10 +213,10 @@
     <span>{t('serviceLogs')}</span>
     {#if streaming}<span class="flex items-center gap-1 text-warning"><span class="size-2 animate-pulse rounded-full bg-warning"></span>{t('live')}</span>{/if}
     <label class="ml-auto flex items-center gap-1">
-      <input type="checkbox" bind:checked={previous} /> {t('serviceLogsPrevious')}
+      <input type="checkbox" checked={previous} onchange={e => pickLogSource({ previous: e.currentTarget.checked })} /> {t('serviceLogsPrevious')}
     </label>
     <label class="flex items-center gap-1">
-      <input type="checkbox" bind:checked={follow} /> {t('serviceLogsFollow')}
+      <input type="checkbox" checked={follow} onchange={e => pickLogSource({ follow: e.currentTarget.checked })} /> {t('serviceLogsFollow')}
     </label>
     <button type="button" class="rounded p-1 hover:bg-muted" title={t('refresh')} onclick={() => void startLogs()}><AppIcons.refresh class="size-3.5" /></button>
   </div>

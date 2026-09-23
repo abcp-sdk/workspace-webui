@@ -5,8 +5,11 @@
   import type { PageProps } from '$lib/page-props'
   import type { SandboxInfo, SandboxJob } from '$lib/api'
   import { t } from '$lib/i18n.svelte'
+  import { showErrorToast, showToast } from '$lib/toast.svelte'
+  import { confirmDialog } from '$lib/dialogs'
   import { cn } from '$lib/utils'
   import { AppIcons } from '$lib/icons'
+  import { usePoll } from '$lib/poll.svelte'
   import PageHeader from '$lib/components/layout/PageHeader.svelte'
   import ListRow from '$lib/components/layout/ListRow.svelte'
   import SectionLabel from '$lib/components/layout/SectionLabel.svelte'
@@ -39,16 +42,34 @@
     loading = false
   }
 
+  // Reload when the sandbox changes; poll only while visible (the $effect does
+  // the immediate load, so the poll itself must not fire one).
   $effect(() => {
-    const sbx = name
-    void sbx
+    void name
     void load()
-    const id = setInterval(() => void load(), 15000)
-    return () => clearInterval(id)
   })
+  usePoll(() => void load(), 15000, { immediate: false })
 
   function openJob(job: SandboxJob) {
-    store.pushChild({ kind: 'sandbox_job', key: `job:${name}:${job.id}`, name, jobId: job.id })
+    store.navigate({ kind: 'sandbox_job', key: `job:${name}:${job.id}`, name, jobId: job.id })
+  }
+
+  async function deleteSandbox() {
+    const ok = await confirmDialog({
+      title: t('deleteSandboxTitle'),
+      body: t('deleteSandboxBody', { arg1: name }),
+      confirmLabel: t('delete'),
+      destructive: true,
+    })
+    if (!ok) return
+    try {
+      await store.api.deleteSandbox(name)
+      showToast(t('deleted'))
+      // The sandbox is gone: fall back to the service root.
+      store.navigate({ kind: 'service_root', key: 'service_root' }, { replace: true })
+    } catch (e) {
+      showErrorToast(String(e))
+    }
   }
 
   function stateTone(s: string): string {
@@ -73,6 +94,7 @@
     <AppIcons.box class="size-4 shrink-0 text-primary" />
     <span class="min-w-0 flex-1 truncate text-base font-semibold">{name}</span>
     {#if sandbox}<span class="shrink-0 rounded-full bg-muted px-2 py-px text-[10px] leading-4 text-muted-foreground">{sandbox.phase}</span>{/if}
+    <IconButton icon={AppIcons.delete} label={t('deleteSandboxTitle')} variant="destructive" onclick={() => void deleteSandbox()} />
   </PageHeader>
 
   {#if sandbox}

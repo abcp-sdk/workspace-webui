@@ -836,7 +836,9 @@ export class AgentApi {
     base: string,
     head: string,
   ): Promise<CompareFile[]> {
-    const r = await this._guard(() => this._c.compare({ org, repo, base, head }))
+    const r = await this._guard(() =>
+      this._c.compare({ org, repo, base, head }),
+    )
     return (r.files ?? []).map(f => ({
       path: f.path,
       status: f.status,
@@ -855,7 +857,9 @@ export class AgentApi {
     head: string,
     path: string,
   ): Promise<string> {
-    const r = await this._guard(() => this._c.fileDiff({ org, repo, base, head, path }))
+    const r = await this._guard(() =>
+      this._c.fileDiff({ org, repo, base, head, path }),
+    )
     return r.diff
   }
 
@@ -1006,30 +1010,7 @@ export class AgentApi {
 
   async listServices(): Promise<ServiceInfo[]> {
     const r = await this._guard(() => this._c.listServices({}))
-    return (r.services ?? []).map(s => ({
-      name: s.name,
-      image: s.image,
-      phase: s.phase,
-      ready: s.ready,
-      replicas: s.replicas,
-      url: s.url,
-      publicUrl: s.publicUrl,
-      ports: (s.ports ?? []).map(p => ({
-        name: p.name,
-        preset: p.preset,
-        port: p.port,
-        protocol: p.protocol,
-        targetPort: p.targetPort,
-        publicUrl: p.publicUrl,
-      })),
-      creator: s.creator,
-      session: s.session,
-      stage: s.stage,
-      podPhase: s.podPhase,
-      restarts: s.restarts,
-      message: s.message,
-      expiresAt: Number(s.expiresAt),
-    }))
+    return (r.services ?? []).map(serviceFromPb)
   }
 
   async getService(name: string): Promise<ServiceInfo | null> {
@@ -1037,9 +1018,33 @@ export class AgentApi {
     return all.find(s => s.name === name) ?? null
   }
 
+  /** Delete a service the tenant owns (Deployment + its Services). */
+  async deleteService(name: string): Promise<boolean> {
+    const r = await this._guard(() => this._c.deleteService({ name }))
+    return r.ok
+  }
+
+  /** Scale a service to zero replicas (remembering the prior count). */
+  async pauseService(name: string): Promise<ServiceInfo | null> {
+    const r = await this._guard(() => this._c.pauseService({ name }))
+    return r.service ? serviceFromPb(r.service) : null
+  }
+
+  /** Restore a paused service to its pre-pause replica count. */
+  async resumeService(name: string): Promise<ServiceInfo | null> {
+    const r = await this._guard(() => this._c.resumeService({ name }))
+    return r.service ? serviceFromPb(r.service) : null
+  }
+
   /** Tail a service's container log (previous = the crashed instance). */
-  async serviceLogs(name: string, tailLines = 500, previous = false): Promise<string[]> {
-    const r = await this._guard(() => this._c.serviceLogs({ name, tailLines: BigInt(tailLines), previous }))
+  async serviceLogs(
+    name: string,
+    tailLines = 500,
+    previous = false,
+  ): Promise<string[]> {
+    const r = await this._guard(() =>
+      this._c.serviceLogs({ name, tailLines: BigInt(tailLines), previous }),
+    )
     return r.lines ?? []
   }
 
@@ -1232,6 +1237,61 @@ export interface ServiceInfo {
   restarts: number
   message: string
   expiresAt: number
+  /** Scaled to zero by PauseService (resume restores the prior count). */
+  paused: boolean
+}
+
+type PbServiceInfo = {
+  name: string
+  image: string
+  phase: string
+  ready: boolean
+  replicas: number
+  url: string
+  publicUrl: string
+  ports: {
+    name: string
+    preset: string
+    port: number
+    protocol: string
+    targetPort: number
+    publicUrl: string
+  }[]
+  creator: string
+  session: string
+  stage: string
+  podPhase: string
+  restarts: number
+  message: string
+  expiresAt: bigint
+  paused: boolean
+}
+function serviceFromPb(s: PbServiceInfo): ServiceInfo {
+  return {
+    name: s.name,
+    image: s.image,
+    phase: s.phase,
+    ready: s.ready,
+    replicas: s.replicas,
+    url: s.url,
+    publicUrl: s.publicUrl,
+    ports: (s.ports ?? []).map(p => ({
+      name: p.name,
+      preset: p.preset,
+      port: p.port,
+      protocol: p.protocol,
+      targetPort: p.targetPort,
+      publicUrl: p.publicUrl,
+    })),
+    creator: s.creator,
+    session: s.session,
+    stage: s.stage,
+    podPhase: s.podPhase,
+    restarts: s.restarts,
+    message: s.message,
+    expiresAt: Number(s.expiresAt),
+    paused: s.paused,
+  }
 }
 
 type PbBranchSession = {

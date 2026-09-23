@@ -40,6 +40,9 @@
     onAddUser,
   }: Omit<PageProps, 'showBack' | 'initialId' | 'overlay' | 'modelId'> = $props()
 
+  // Container queries: the split is decided by the PANE width (the <main>
+  // element), not the window — so a tablet showing two columns each still
+  // renders its own content responsively.
   let width = $state(typeof window !== 'undefined' ? window.innerWidth : 1280)
   $effect(() => {
     const on = () => (width = window.innerWidth)
@@ -47,6 +50,7 @@
     return () => window.removeEventListener('resize', on)
   })
 
+  // The bottom tab bar is a PHONE affordance (window-driven).
   const isCompact = $derived(width < 640)
   const hideBottomBar = $derived(isCompact && store.siderTab === 'chat' && store.activeSessionId != null)
 
@@ -105,11 +109,12 @@
     }
   }
 
-  // The last N pages of the current tab's stack (oldest → newest).
+  // The last two pages of the visible stack (oldest → newest). On a narrow
+  // container the earlier pane is hidden by a CSS container query, so the
+  // split adapts to the PANE width rather than the window.
   const panes = $derived.by(() => {
     const stack = store.currentStack
-    const n = isCompact ? 1 : 2
-    const start = Math.max(0, Math.min(stack.length - n, stack.length - 1))
+    const start = Math.max(0, stack.length - 2)
     return stack
       .slice(start)
       .map((page, i, arr) => ({
@@ -139,9 +144,17 @@
     </nav>
   {/if}
 
-  <main class={cn('flex min-h-0 min-w-0 flex-1', isCompact && !hideBottomBar && 'pb-[60px]')}>
+  <main class={cn('@container flex min-h-0 min-w-0 flex-1', isCompact && !hideBottomBar && 'pb-[60px]')}>
     {#each panes as p, i (p.page.key)}
-      <div class="relative flex min-h-0 min-w-0 flex-1 {i > 0 ? 'border-l border-border' : ''}">
+      <!-- The non-top pane is the "list" column: hidden once the container is
+           too narrow for a comfortable two-column split. -->
+      <div
+        class={cn(
+          'relative flex min-h-0 min-w-0 flex-1',
+          i > 0 && 'border-l border-border',
+          !p.isTop && 'hidden @md:flex',
+        )}
+      >
         <p.C
           {store}
           {themeMode}
@@ -165,6 +178,11 @@
           tag={'tag' in p.page ? p.page.tag : undefined}
           base={'base' in p.page ? p.page.base : undefined}
           head={'head' in p.page ? p.page.head : undefined}
+          tab={'tab' in p.page ? p.page.tab : undefined}
+          mrState={'mrState' in p.page ? p.page.mrState : undefined}
+          view={p.page.kind === 'repo_blob' ? p.page.view : undefined}
+          logs={p.page.kind === 'service_detail' ? p.page.logs : undefined}
+          prev={p.page.kind === 'service_detail' ? p.page.prev : undefined}
         />
       </div>
     {/each}

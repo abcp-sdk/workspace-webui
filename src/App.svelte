@@ -10,6 +10,7 @@
   import { scopeOf } from './lib/scope'
   import type { LocalStore } from './lib/db'
   import { AppStore } from './lib/store.svelte'
+  import { installRouter } from './lib/router.svelte'
   import { showErrorToast } from './lib/toast.svelte'
   import { setAuthExpiredHandler } from './lib/events'
   import { confirmDialog } from './lib/dialogs'
@@ -104,41 +105,11 @@
     void boot()
   })
 
-  // ---- browser Back / swipe-back drives the in-app navigation stack ----
-  // Every in-app "forward" navigation pushes a history entry; a popstate pops
-  // one in-app page and re-arms a sentinel entry so the NEXT back still has
-  // something to consume. Without this, the phone's edge-swipe / back button
-  // did nothing (or left the SPA), so no page obeyed the system gesture.
-  let navDepth = 0
-
-  function inAppDepth(): number {
-    if (!store || phase !== 'app') return 0
-    return store.currentStack.length - 1
-  }
-
-  if (typeof window !== 'undefined') {
-    window.history.replaceState({ agentNav: 0 }, '')
-    window.addEventListener('popstate', () => {
-      if (phase !== 'app' || !store) return
-      if (store.currentStack.length > 1) {
-        // Consume the back as one in-app pop … (pushState below does NOT fire
-        // popstate, so this never recurses).
-        store.popPage()
-        navDepth = inAppDepth()
-        window.history.pushState({ agentNav: navDepth + 1 }, '')
-        navDepth += 1
-      }
-    })
-  }
-
-  // Mirror in-app pushes into history so Back/swipe has depth to consume.
-  $effect(() => {
-    const target = inAppDepth()
-    for (let i = navDepth; i < target; i++) {
-      window.history.pushState({ agentNav: i + 1 }, '')
-    }
-    if (target > navDepth) navDepth = target
-  })
+  // ---- URL routing ----
+  // The URL is the source of truth (see lib/router.svelte.ts): the router
+  // decodes it into the store's visible leaf on boot/popstate and mirrors leaf
+  // changes back into history. No sentinel entries, no history.state.
+  let disposeRouter: (() => void) | null = null
 
   // The webui is served SAME-ORIGIN with the agent: the aggregating proxy in
   // front forwards `/agent.v1.*` to the agent, so the API base is always this
@@ -186,6 +157,9 @@
     try {
       store = await buildStore()
       phase = 'app'
+      // Bind the URL <-> view (also strips ?token=/?base= from the address bar).
+      disposeRouter?.()
+      disposeRouter = installRouter(store)
       // Backfill the username for entries saved before GetIdentity existed
       // (best-effort, after the app is usable).
       void refreshIdentity()
@@ -250,6 +224,8 @@
   async function switchBackend(b: BackendCfg) {
     const base = SAME_ORIGIN_BASE
     // Tear down the previous connection's streams before replacing the store.
+    disposeRouter?.()
+    disposeRouter = null
     store?.dispose()
     Prefs.save(base, b.token)
     baseUrl = base
@@ -279,6 +255,8 @@
 
   function logout() {
     Prefs.clearActive()
+    disposeRouter?.()
+    disposeRouter = null
     store?.dispose()
     token = ''
     store = null

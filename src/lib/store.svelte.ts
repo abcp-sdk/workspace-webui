@@ -14,13 +14,11 @@ import {
 } from './models'
 import {
   type AppPage,
-  popPage,
-  pushChild,
-  pushPage,
-  pushSibling,
   rootPageFor,
   type SessionOverlay,
   type SiderTab,
+  stackFor,
+  tabForPage,
 } from './nav'
 import { Prefs } from './prefs'
 import { sortSessionsByRecency } from './session-order'
@@ -33,12 +31,28 @@ export class AppStore {
   api: AgentApi
   local: LocalStore | null
 
-  siderTab = $state<SiderTab>('chat')
   sessions = $state<Session[]>([])
-  activeSessionId = $state<string | null>(null)
-  sessionOverlay = $state<SessionOverlay | null>(null)
 
   sessionRevision = $state(0)
+
+  // ---- navigation: the visible LEAF page is the single source of truth ----
+  // The router mirrors `leaf` to the URL and restores it on popstate/boot, so
+  // there is no per-tab stack to keep in sync and no history.state. The full
+  // stack is derived purely from the leaf via `stackFor`.
+  leaf = $state<AppPage>(rootPageFor('chat'))
+  /** Set by navigate()/hydrate() so the router knows push vs replace. */
+  navOp: 'push' | 'replace' = 'push'
+  /** Bumped on every navigation so the router effect re-runs even for a
+   *  same-leaf navigation (e.g. a tab switch back to the same root). */
+  navSeq = $state(0)
+  /** Per-tab last leaf, for pleasant tab switching. In-memory ONLY: never
+   *  persisted, so a refresh restores just the visible view (as required). */
+  private lastLeaf: Record<SiderTab, AppPage> = {
+    chat: rootPageFor('chat'),
+    code: rootPageFor('code'),
+    service: rootPageFor('service'),
+    config: rootPageFor('config'),
+  }
 
   /** session → last read message_seq (client-local). */
   readSeqs: Record<string, number> = $state({})
@@ -83,16 +97,6 @@ export class AppStore {
       /* keep the fallback */
     }
   }
-
-  // $state: push/pop must be reactive (the Shell derives its panes from it).
-  // Both tabs are pre-seeded so no lazy mutation happens during render
-  // (Svelte 5 forbids state_unsafe_mutation inside deriveds).
-  private stacks = $state<Record<SiderTab, AppPage[]>>({
-    chat: [rootPageFor('chat')],
-    code: [rootPageFor('code')],
-    service: [rootPageFor('service')],
-    config: [rootPageFor('config')],
-  })
 
   // ---- watchSessions live list ----
   private sessionAbort: AbortController | null = null
@@ -212,8 +216,20 @@ export class AppStore {
     }
   }
 
+  /** The session id of the visible chat page (null when on the list). */
+  get activeSessionId(): string | null {
+    const l = this.leaf
+    if (l.kind === 'chat_session' || l.kind === 'chat_overlay') return l.session
+    return null
+  }
+
   get activeSession(): Session | null {
     return this.sessions.find(s => s.id === this.activeSessionId) ?? null
+  }
+
+  /** The overlay shown over the active chat (from the leaf page). */
+  get sessionOverlay(): SessionOverlay | null {
+    return this.leaf.kind === 'chat_overlay' ? this.leaf.overlay : null
   }
 
   sessionById(id: string): Session | null {
@@ -248,7 +264,6 @@ export class AppStore {
         await this.api.deleteSession(id)
         void this.local?.removeSession(id)
         if (this.activeSessionId === id) {
-          this.activeSessionId = null
           closedActive = true
         }
       } catch {
@@ -265,7 +280,11 @@ export class AppStore {
     if (!id) return false
     try {
       const s = await this.api.forkBranchSession(id, branch)
-      this.activeSessionId = s.id
+      this.navigate({
+        kind: 'chat_session',
+        key: 'chat_session',
+        session: s.id,
+      })
       await this.refreshSessions()
       return true
     } catch {
@@ -274,10 +293,8 @@ export class AppStore {
   }
 
   pickSession(id: string) {
-    this.activeSessionId = id
-    this.sessionOverlay = null
     this.markSessionRead(id)
-    this.pushPage({ kind: 'chat_session', key: 'chat_session' })
+    this.navigate({ kind: 'chat_session', key: 'chat_session', session: id })
   }
 
   /** Read state is CLIENT-LOCAL: record a per-session read watermark. */
@@ -368,45 +385,82 @@ export class AppStore {
   // ---- overlays ----
 
   openOverlay(v: SessionOverlay) {
-    if (this.activeSessionId == null) return
-    this.sessionOverlay = v
+    const sid = this.activeSessionId
+    if (sid == null) return
+    this.navigate({
+      kind: 'chat_overlay',
+      key: 'chat_overlay',
+      overlay: v,
+      session: sid,
+    })
   }
 
   closeOverlay() {
-    this.sessionOverlay = null
+    const sid = this.activeSessionId
+    if (sid == null) return
+    this.navigate({ kind: 'chat_session', key: 'chat_session', session: sid })
   }
 
   /** Close the open conversation; chat tab returns to the session list. */
   closeSession() {
-    this.activeSessionId = null
-    this.sessionOverlay = null
-    const list = this.stackFor('chat')
-    if (list.length > 1) list.splice(1, list.length - 1)
+    this.navigate(rootPageFor('chat'))
   }
 
   bumpSessionRevision() {
     this.sessionRevision++
   }
 
+  /** The tab the visible leaf lives in. */
+  get siderTab(): SiderTab {
+    return tabForPage(this.leaf)
+  }
+
+  /** Switch tabs, returning to that tab's LAST leaf (in-memory, per session). */
   switchTab(tab: SiderTab) {
-    this.siderTab = tab
+    if (tab === this.siderTab) return
+    this.navigate(this.lastLeaf[tab] ?? rootPageFor(tab))
   }
 
   /**
-   * Open a stack page from ANYWHERE (chat tool cards, the ⋮ menu, …). The page
-   * kind decides the tab: `repo_*` → Code; `sandbox_*` / `service_*` →
-   * Service. The page is pushed as a SIBLING of that tab's root, so the
-   * root | page split shows and a repeated call replaces the page.
+   * Navigate to a page from ANYWHERE (chat tool cards, the ⋮ menu, …). The URL
+   * is the source of truth: the leaf is recorded, its canonical ancestry is
+   * derived via `stackFor`, and the router mirrors it into the address bar.
    */
-  openPage(page: AppPage) {
-    const tab: SiderTab = page.kind.startsWith('repo_') ? 'code' : 'service'
-    this.siderTab = tab
-    this.stacks[tab] = pushSibling(this.stacks[tab], page)
+  navigate(page: AppPage, opts: { replace?: boolean } = {}) {
+    this.lastLeaf[tabForPage(page)] = page
+    this.navOp = opts.replace ? 'replace' : 'push'
+    this.leaf = page
+    this.navSeq++
   }
 
-  /** Back-compat alias for {@link openPage}. */
+  /** Replace the visible view WITHOUT pushing a history entry (boot/popstate). */
+  hydrate(page: AppPage) {
+    this.lastLeaf[tabForPage(page)] = page
+    this.navOp = 'replace'
+    this.leaf = page
+    this.navSeq++
+  }
+
+  /** Back-compat alias for {@link navigate}. */
+  openPage(page: AppPage) {
+    this.navigate(page)
+  }
+
+  /** Back-compat alias for {@link navigate}. */
   openCodePage(page: AppPage) {
-    this.openPage(page)
+    this.navigate(page)
+  }
+
+  // With canonical ancestry every navigation derives its own stack, so the
+  // former push/sibling/child distinction is moot — all three are navigate().
+  pushPage(page: AppPage) {
+    this.navigate(page)
+  }
+  pushSibling(page: AppPage) {
+    this.navigate(page)
+  }
+  pushChild(page: AppPage) {
+    this.navigate(page)
   }
 
   /** Apply a settings/fork/rename result onto the live list. */
@@ -417,47 +471,30 @@ export class AppStore {
     this.bumpSessionRevision()
   }
 
-  // ---- navigation stacks (per tab) ----
+  // ---- navigation (derived from the leaf) ----
 
-  private stackFor(tab: SiderTab): AppPage[] {
-    return this.stacks[tab] ?? [rootPageFor(tab)]
-  }
-
+  /** The full visible stack, derived purely from the current leaf. */
   get currentStack(): AppPage[] {
-    return this.stackFor(this.siderTab)
+    return stackFor(this.leaf)
   }
 
   get topPage(): AppPage {
-    return this.currentStack[this.currentStack.length - 1]
+    return this.leaf
   }
 
-  /** Push a page; same-key pages replace at their existing depth. */
-  pushPage(page: AppPage) {
-    this.stacks[this.siderTab] = pushPage(this.currentStack, page)
-  }
+  /** Installed by the router: an in-app "back" consumes a browser history
+   *  entry when one exists (so forward/back stay symmetric). */
+  backRequest: (() => void) | null = null
 
-  /** Push a SIBLING drill-in (replaces the current drill-in, keeps stack at
-   * [root, current] so the tablet split never shows two parallels). */
-  pushSibling(page: AppPage) {
-    this.stacks[this.siderTab] = pushSibling(this.currentStack, page)
-  }
-
-  /** Push a CHILD drill-in (the leaf of a split): appends, or replaces the top
-   * when it is the same page kind, so [root, parent, leaf] stays bounded. */
-  pushChild(page: AppPage) {
-    this.stacks[this.siderTab] = pushChild(this.currentStack, page)
-  }
-
-  /** Pop the top page; never pops below the root. */
+  /** Navigate to the parent of the current leaf (a stack pop). */
   popPage() {
-    const cur = this.currentStack
-    if (cur.length <= 1) return
-    const next = popPage(cur)
-    this.stacks[this.siderTab] = next
-    if (this.siderTab === 'chat' && next.length === 1) {
-      this.activeSessionId = null
-      this.sessionOverlay = null
+    if (this.backRequest) {
+      this.backRequest()
+      return
     }
+    const stack = this.currentStack
+    if (stack.length <= 1) return
+    this.navigate(stack[stack.length - 2]!, { replace: true })
   }
 
   get canPopPage(): boolean {

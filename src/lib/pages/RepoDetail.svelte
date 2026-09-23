@@ -25,19 +25,46 @@
     repo,
     ref,
     showBack = false,
+    tab: tabProp,
+    mrState: mrStateProp,
   }: PageProps & { org: string; repo: string; ref: string } = $props()
 
   const api = $derived(store.api)
-  /** Switch the active ref (branch) — re-pushes the detail page (replace). */
+  type Tab = 'files' | 'commits' | 'tags' | 'releases' | 'changes'
+
+  // The active sub-tab and MR filter live in the URL (?tab= / ?state=), so a
+  // deep link / refresh restores them. The props are the single source of
+  // truth; changing either navigates (replace, so the tab is not a history
+  // entry of its own).
+  const tab = $derived<Tab>(tabProp ?? 'files')
+  const mrState = $derived(mrStateProp ?? 'open')
+
+  function detailLeaf(over: Partial<{ ref: string; tab: Tab; mrState: string }>) {
+    return {
+      kind: 'repo_detail' as const,
+      key: `repo:${org}/${repo}@${over.ref ?? ref}`,
+      org,
+      repo,
+      ref: over.ref ?? ref,
+      tab: over.tab ?? tab,
+      mrState: over.mrState ?? mrState,
+    }
+  }
+
+  /** Switch the active ref (branch) — replaces the detail page. */
   function onPickRef(r: string) {
-    store.pushSibling({ kind: 'repo_detail', key: `repo:${org}/${repo}@${r}`, org, repo, ref: r })
+    store.navigate(detailLeaf({ ref: r }), { replace: true })
   }
   /** Open a tag as its own browse page (tree at that tag). */
   function onPickTag(t: string) {
-    store.pushChild({ kind: 'repo_tag', key: `tag:${org}/${repo}@${t}`, org, repo, ref: t })
+    store.navigate({ kind: 'repo_tag', key: `tag:${org}/${repo}@${t}`, org, repo, ref: t })
   }
-  type Tab = 'files' | 'commits' | 'tags' | 'releases' | 'changes'
-  let tab = $state<Tab>('files')
+  function pickTab(t: Tab) {
+    store.navigate(detailLeaf({ tab: t }), { replace: true })
+  }
+  function pickMrState(s: string) {
+    store.navigate(detailLeaf({ mrState: s }), { replace: true })
+  }
 
   let branches = $state<BranchInfo[]>([])
   let tags = $state<TagInfo[]>([])
@@ -46,7 +73,6 @@
   let expanded = $state<Set<string>>(new Set()) // expanded dir paths (Files tree)
   let commits = $state<CommitInfo[]>([])
   let mrs = $state<MRInfo[]>([])
-  let mrState = $state('open')
   let loading = $state(true)
 
   const tabs: { id: Tab; label: string; icon: any }[] = [
@@ -70,6 +96,11 @@
     expanded = new Set()
     void Promise.all([loadTree(), loadCommits()])
   })
+  // Reload the MR list when its filter (URL-backed) changes.
+  $effect(() => {
+    void mrState
+    void loadMRs()
+  })
 
   async function initLists() {
     loading = true
@@ -86,7 +117,6 @@
       showErrorToast(String(e))
     }
     loading = false
-    void loadMRs()
   }
 
   async function loadTree() {
@@ -234,7 +264,7 @@
   <!-- sub-tabs -->
   <TabBar>
     {#each tabs as tb (tb.id)}
-      <TabItem active={tab === tb.id} onclick={() => (tab = tb.id)}>
+      <TabItem active={tab === tb.id} onclick={() => pickTab(tb.id)}>
         <tb.icon class="size-3.5" />{t(tb.label)}
       </TabItem>
     {/each}
@@ -325,7 +355,7 @@
           <button
             type="button"
             class={cn('rounded-full border px-3 py-1 text-micro', mrState === st ? 'border-primary/50 bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted')}
-            onclick={() => { mrState = st; void loadMRs() }}
+            onclick={() => pickMrState(st)}
           >{t(key)}</button>
         {/each}
       </div>

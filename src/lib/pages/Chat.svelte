@@ -593,7 +593,7 @@
         break
       }
       case 'mailbox':
-        store.pushPage({ kind: 'chat_overlay', key: 'chat_overlay', overlay: 'mailbox' })
+        if (sid) store.openOverlay('mailbox')
         break
       case 'fork': {
         const branch = await promptDialog({ title: t('fork'), confirmLabel: t('create') })
@@ -673,7 +673,14 @@
       </div>
       <div class="ml-auto flex items-center gap-0.5">
         {#if store.phaseFor(sid)}
-          <span class="rounded-full bg-muted px-2 py-px text-[10px] leading-4 text-muted-foreground">{store.phaseFor(sid)}</span>
+          <!-- The sandbox name IS the session id: the phase chip jumps to the
+               sandbox's job list in the Service tab. -->
+          <button
+            type="button"
+            class="rounded-full bg-muted px-2 py-px text-[10px] leading-4 text-muted-foreground hover:bg-muted/70"
+            title={t('tabService')}
+            onclick={() => store.navigate({ kind: 'sandbox_detail', key: `sbx:${sid}`, name: sid })}
+          >{store.phaseFor(sid)}</button>
         {/if}
         <!-- Todos: the session's current checklist (from the last todo-write).
              Badge = remaining (not completed/cancelled). -->
