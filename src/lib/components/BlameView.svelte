@@ -6,6 +6,7 @@
   import type { BlameLine } from '$lib/api'
   import { t } from '$lib/i18n.svelte'
   import { showErrorToast } from '$lib/toast.svelte'
+  import { gutterWidth } from '$lib/line-gutter'
   import EmptyState from '$lib/components/layout/EmptyState.svelte'
 
   let {
@@ -20,6 +21,8 @@
   let lines = $state<BlameLine[]>([])
   let loading = $state(true)
   let error = $state(false)
+
+  const gutterW = $derived(gutterWidth(lines.length ? lines[lines.length - 1]!.line : 1, 0.75))
 
   $effect(() => {
     let cancelled = false
@@ -84,7 +87,7 @@
           <span class="shrink-0 font-mono">{shortSha(l.sha)}</span>
           <span class="ml-auto shrink-0">{relTime(l.date)}</span>
         </button>
-        <span class="w-10 shrink-0 px-1 text-right text-muted-foreground/60 select-none">{l.line}</span>
+        <span class="shrink-0 px-1 text-right text-muted-foreground/60 select-none" style="width: {gutterW}; min-width: {gutterW}">{l.line}</span>
         <span class="min-w-0 flex-1 px-1 break-all whitespace-pre-wrap">{l.content}</span>
       </div>
     {/each}

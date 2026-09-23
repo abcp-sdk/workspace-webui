@@ -20,6 +20,7 @@
   import { VoiceRecorder } from '$lib/voice'
   import { cn } from '$lib/utils'
   import IconButton from '$lib/components/layout/IconButton.svelte'
+  import Marquee from '$lib/components/Marquee.svelte'
   import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '$lib/components/ui/dropdown-menu'
   import { AppIcons } from '$lib/icons'
   import MessageBubble from '$lib/components/MessageBubble.svelte'
@@ -652,7 +653,10 @@
     ondrop={e => void onDrop(e)}
   >
     <!-- top bar -->
-    <header class="relative flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
+    <!-- 3-column grid: [left controls] [centered name] [right toolbar]. The
+         name column is min-w-0 and the toolbar is its own column, so a long
+         name can NEVER overlap the todo / mailbox / menu icons. -->
+    <header class="grid h-12 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-border px-2">
       <div class="flex min-w-0 items-center gap-2">
         <IconButton icon={AppIcons.back} label={t('back')} onclick={() => store.popPage()} />
         <span class={cn('size-2 rounded-full', ctrl.sending ? 'bg-warning' : 'bg-success')}></span>
@@ -660,23 +664,21 @@
           <span class="text-micro text-muted-foreground tabular-nums">{ctxLabel}</span>
         {/if}
       </div>
-      <div class="pointer-events-none absolute inset-x-0 flex justify-center">
-        <button
-          type="button"
-          class="pointer-events-auto flex min-w-24 max-w-48 items-center gap-1.5 truncate rounded-full bg-primary/14 px-3 py-1 text-center text-meta font-semibold text-primary"
-          onclick={() => (infoOpen = true)}
-          title={t('settingsTitle')}
-        >
-          {#if role}
-            {@const RoleIcon = roleIcon(role)}
-            <span class={cn('flex size-4 shrink-0 items-center justify-center rounded-full', roleTone(role))}>
-              <RoleIcon class="size-3" />
-            </span>
-          {/if}
-          <span class="min-w-0 truncate">{session?.id}</span>
-        </button>
-      </div>
-      <div class="ml-auto flex items-center gap-0.5">
+      <button
+        type="button"
+        class="flex w-[clamp(8rem,40vw,20rem)] max-w-full items-center gap-1.5 rounded-full bg-primary/14 px-3 py-1 text-center text-meta font-semibold text-primary"
+        onclick={() => (infoOpen = true)}
+        title={session?.id}
+      >
+        {#if role}
+          {@const RoleIcon = roleIcon(role)}
+          <span class={cn('flex size-4 shrink-0 items-center justify-center rounded-full', roleTone(role))}>
+            <RoleIcon class="size-3" />
+          </span>
+        {/if}
+        <Marquee text={session?.id ?? ''} class="min-w-0 flex-1 text-center" />
+      </button>
+      <div class="flex items-center justify-end gap-0.5">
         {#if store.phaseFor(sid)}
           <!-- The sandbox name IS the session id: the phase chip jumps to the
                sandbox's job list in the Service tab. -->

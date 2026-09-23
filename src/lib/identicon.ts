@@ -212,6 +212,30 @@ function fgRgbFor(
   return best
 }
 
+/** Parse a gateway session id `org:repo:branch` into its three parts. Returns
+ *  nulls when the id is not in that shape (e.g. a free session name). */
+export function parseSessionId(id: string): {
+  org: string
+  repo: string
+  branch: string
+} {
+  const parts = id.split(':')
+  if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+    return { org: parts[0], repo: parts[1], branch: parts[2] }
+  }
+  return { org: '', repo: '', branch: '' }
+}
+
+/** Avatar for a session id. A repo-bound session (`org:repo:branch`) uses the
+ *  three-level scheme so every BRANCH of one repo shares the repo's
+ *  background (org tint) — only the honeycomb pattern is branch-specific.
+ *  Anything else (a free session) falls back to the plain id-seeded avatar. */
+export function sessionAvatarSpec(id: string): AvatarSpec {
+  const { org, repo, branch } = parseSessionId(id)
+  if (org) return avatarSpecFor(org, repo, branch, 'branch')
+  return avatarSpec(id)
+}
+
 /** Level-aware avatar: org solid, repo wreath, branch a branch-seeded
  *  honeycomb. Colors always come from org (bg) + repo (fg). */
 export function avatarSpecFor(

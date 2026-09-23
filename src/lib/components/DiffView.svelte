@@ -15,6 +15,7 @@
   import { AppIcons } from '$lib/icons'
   import { cn } from '$lib/utils'
   import { highlightLines, langForName, themeFor, type Token } from '$lib/highlight'
+  import { gutterWidth } from '$lib/line-gutter'
 
   let { diff, name = '' }: { diff: string; name?: string } = $props()
 
@@ -189,6 +190,19 @@
     if (parsed.length) void highlightAll(parsed)
   })
 
+  /** The widest line number this file will print, so its gutter can size
+   *  itself to the digit count (never a fixed width that overflows). */
+  function fileMaxLine(f: DFile): number {
+    let max = 0
+    for (const h of f.hunks) {
+      for (const l of h.lines) {
+        if (l.oldNo != null && l.oldNo > max) max = l.oldNo
+        if (l.newNo != null && l.newNo > max) max = l.newNo
+      }
+    }
+    return max
+  }
+
   /** Side-by-side pairing: match del/add runs, pad the short side. */
   function pairRows(lines: DLine[]): Row[] {
     const empty: Cell = { kind: 'empty', no: null, html: '' }
@@ -276,18 +290,19 @@
           {/if}
         </div>
         {#if !f.binary}
-          <div class="overflow-x-auto bg-card font-mono text-[11.5px] leading-[1.55]">
+          {@const gw = gutterWidth(fileMaxLine(f), 0.75)}
+          <div class="bg-card font-mono text-[11.5px] leading-[1.55]">
             {#each f.hunks as h, hi (hi)}
               <div class="bg-primary/8 px-2 py-0.5 text-[10.5px] text-primary/80">{h.header}</div>
               {#if wide}
                 {#each pairRows(h.lines) as r (r.key)}
                   <div class="grid grid-cols-2 border-b border-border/40">
                     <div class={cn('flex min-w-0 border-r border-border/40', r.left.kind === 'del' && 'bg-destructive/12')}>
-                      <span class="w-10 shrink-0 px-1 text-right text-muted-foreground/60 select-none">{r.left.no ?? ''}</span>
+                      <span class="shrink-0 px-1 text-right text-muted-foreground/60 select-none" style="width: {gw}; min-width: {gw}">{r.left.no ?? ''}</span>
                       <span class="min-w-0 flex-1 px-1 break-all whitespace-pre-wrap {r.left.kind === 'del' ? 'text-destructive' : ''}">{@html r.left.html}</span>
                     </div>
                     <div class={cn('flex min-w-0', r.right.kind === 'add' && 'bg-success/12')}>
-                      <span class="w-10 shrink-0 px-1 text-right text-muted-foreground/60 select-none">{r.right.no ?? ''}</span>
+                      <span class="shrink-0 px-1 text-right text-muted-foreground/60 select-none" style="width: {gw}; min-width: {gw}">{r.right.no ?? ''}</span>
                       <span class="min-w-0 flex-1 px-1 break-all whitespace-pre-wrap {r.right.kind === 'add' ? 'text-success' : ''}">{@html r.right.html}</span>
                     </div>
                   </div>
@@ -295,8 +310,8 @@
               {:else}
                 {#each h.lines as l, li (li)}
                   <div class={cn('flex min-w-0', l.kind === 'add' && 'bg-success/12', l.kind === 'del' && 'bg-destructive/12')}>
-                    <span class="w-9 shrink-0 px-1 text-right text-muted-foreground/60 select-none">{l.oldNo ?? ''}</span>
-                    <span class="w-9 shrink-0 px-1 text-right text-muted-foreground/60 select-none">{l.newNo ?? ''}</span>
+                    <span class="shrink-0 px-1 text-right text-muted-foreground/60 select-none" style="width: {gw}; min-width: {gw}">{l.oldNo ?? ''}</span>
+                    <span class="shrink-0 px-1 text-right text-muted-foreground/60 select-none" style="width: {gw}; min-width: {gw}">{l.newNo ?? ''}</span>
                     <span class={cn('w-4 shrink-0 text-center select-none', l.kind === 'add' ? 'text-success' : l.kind === 'del' ? 'text-destructive' : 'text-transparent')}>{l.kind === 'add' ? '+' : l.kind === 'del' ? '-' : ' '}</span>
                     <span class="min-w-0 flex-1 px-1 break-all whitespace-pre-wrap">{@html l.html}</span>
                   </div>

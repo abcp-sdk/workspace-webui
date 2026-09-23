@@ -181,6 +181,17 @@ body {
   animation: select-pop 160ms ease-out;
 }
 
+/* Marquee: ping-pong a too-wide label across its fixed slot (see Marquee.svelte
+   and lib/marquee.ts). The travel distance is passed as --mq-dist. */
+@keyframes mq-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(var(--mq-dist, 0));
+  }
+}
+
 /* Markdown body inside message bubbles (prose base + token colors). */.md-body {
   font-size: 14px;
   line-height: 1.5;

@@ -4,8 +4,12 @@
   // Flutter implementation: avatar (honeycomb identicon) | title row
   // (name / subsession pill / expand chip / fixed 52px right-aligned stamp) |
   // preview row (subtitle + unread badge), 12px horizontal / 8px vertical.
+  //
+  // Naming: a repo-bound row shows the REPO only (no branch); an expanded
+  // branch child shows its BRANCH only (no org/repo prefix). The avatar is
+  // ALWAYS the first element (every row's avatar is left-aligned); the expand
+  // chevron lives at the RIGHT end of the title row, not beside the avatar.
   import type { Session } from '$lib/models'
-  import { sessionName } from '$lib/models'
   import { t } from '$lib/i18n.svelte'
   import { roleLabelKey, roleIcon, roleTone } from '$lib/roles'
   import { cn } from '$lib/utils'
@@ -108,6 +112,16 @@
 
   const stamp = $derived(fmtTime(session.lastMessageAt || session.updatedAt))
   const RoleIcon = $derived(role ? roleIcon(role) : null)
+
+  // Title text: a branch child shows just its branch; a repo-bound row shows
+  // `org:repo` (no branch); a free session shows its id.
+  const title = $derived(
+    isChild && session.branch
+      ? session.branch
+      : session.org
+        ? `${session.org}:${session.repo}`
+        : session.id,
+  )
 </script>
 
 <button
@@ -136,39 +150,8 @@
   ontouchend={lpEnd}
   ontouchcancel={lpCancel}
 >
-  {#if isChild}
-    <span class="flex w-2.5 shrink-0 justify-center">
-      <span class="h-[34px] w-0.5 bg-muted-foreground/35"></span>
-    </span>
-    <span class="w-1 shrink-0"></span>
-  {:else if childCount > 0}
-    <!-- Expand affordance (branches of this repo's main session): a LEFT
-         triangle, so the tree read is "main ▸ its branches", not a right-side
-         count chip. A span (not a button): the row itself is a button, so a
-         nested button would be invalid HTML. -->
-    <span
-      role="button"
-      tabindex="0"
-      class="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-      aria-label={t('branch')}
-      aria-expanded={expanded}
-      onclick={e => {
-        e.stopPropagation()
-        onToggleExpand?.()
-      }}
-      onkeydown={e => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          e.stopPropagation()
-          onToggleExpand?.()
-        }
-      }}
-    >
-      {#if expanded}<AppIcons.chevron_down class="size-4" />{:else}<AppIcons.chevron_right class="size-4" />{/if}
-    </span>
-  {:else}
-    <span class="w-6 shrink-0"></span>
-  {/if}
+  <!-- The avatar (or selection circle) is ALWAYS the first element, so every
+       row's avatar is left-aligned regardless of children/indentation. -->
   {#if selectable}
     <span
       class={cn(
@@ -188,8 +171,11 @@
   <span class="w-3 shrink-0"></span>
   <span class="min-w-0 flex-1">
     <span class="flex items-center">
+      {#if isChild}
+        <AppIcons.branch class="mr-1 size-3.5 shrink-0 text-muted-foreground/70" />
+      {/if}
       <span class="min-w-0 flex-1 truncate text-meta font-semibold" class:text-primary={isActive}
-        >{sessionName(session)}</span
+        >{title}</span
       >
       {#if role}
         <span class={cn('ml-1 flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-px text-[9px] leading-none', roleTone(role))}>
@@ -200,9 +186,37 @@
       <!-- Fixed-width right-aligned slot: every trailing chip ends at the same
            x on every row, exactly like the Flutter implementation. -->
       <span class="w-[52px] shrink-0 text-right text-micro text-muted-foreground" style="line-height:1.4">{stamp}</span>
+      <!-- Expand affordance (branches of this repo's main session): at the
+           RIGHT end so it never pushes the avatar off the left edge. A span
+           (not a button): the row itself is a button, so a nested button would
+           be invalid HTML. -->
+      {#if childCount > 0}
+        <span
+          role="button"
+          tabindex="0"
+          class="ml-1 flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted"
+          aria-label={t('branch')}
+          aria-expanded={expanded}
+          onclick={e => {
+            e.stopPropagation()
+            onToggleExpand?.()
+          }}
+          onkeydown={e => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              e.stopPropagation()
+              onToggleExpand?.()
+            }
+          }}
+        >
+          {#if expanded}<AppIcons.chevron_down class="size-4" />{:else}<AppIcons.chevron_right class="size-4" />{/if}
+        </span>
+      {:else}
+        <span class="w-5 shrink-0"></span>
+      {/if}
     </span>
     <span class="mt-0.5 flex items-center">
-      <span class="min-w-0 flex-1 truncate text-micro text-muted-foreground">{subtitle || session.id}</span>
+      <span class="min-w-0 flex-1 truncate text-micro text-muted-foreground">{subtitle || title}</span>
       {#if unread && !isActive && unreadCount > 0}
         <span class="ml-1 flex h-[18px] shrink-0 items-center rounded-full bg-destructive px-1.5 text-[10px] leading-none font-semibold text-white"
           >{unreadCount > 99 ? '99+' : unreadCount}</span

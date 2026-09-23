@@ -64,7 +64,7 @@
   {:else if error}
     <div class="p-6 text-center text-meta text-white/60">{t('fileUnsupported')}</div>
   {:else if html}
-    <pre class="p-3 font-mono text-[12px] leading-relaxed text-white/90"><code>{@html html}</code></pre>
+    <pre class="p-3 font-mono text-[12px] leading-relaxed whitespace-pre-wrap wrap-anywhere text-white/90"><code>{@html html}</code></pre>
   {:else}
     <pre class="p-3 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-white/90">{text}</pre>
   {/if}

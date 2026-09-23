@@ -2,11 +2,16 @@
   // ChatAvatar — honeycomb identicon circle, an exact port of the Flutter /
   // Compose implementation (same seed hash + pattern), rendered as an inline
   // SVG. Used by the session list (seeded by the session id).
-  import { avatarSpec, type HexCell } from '$lib/identicon'
+  //
+  // A repo-bound session id (`org:repo:branch`) is rendered with the
+  // three-level scheme so EVERY branch of one repo shares the repo's
+  // background tint; only the honeycomb pattern varies per branch. A free
+  // session (or the `assistant` sentinel) uses the plain id-seeded avatar.
+  import { sessionAvatarSpec, type HexCell } from '$lib/identicon'
 
   let { seed, size = 40 }: { seed: string; size?: number } = $props()
 
-  const spec = $derived(avatarSpec(seed))
+  const spec = $derived(sessionAvatarSpec(seed))
   const d = $derived(size)
 
   function points(h: HexCell): string {
