@@ -15,6 +15,7 @@ import {
 import {
   type AppPage,
   popPage,
+  pushChild,
   pushPage,
   pushSibling,
   rootPageFor,
@@ -422,6 +423,12 @@ export class AppStore {
    * [root, current] so the tablet split never shows two parallels). */
   pushSibling(page: AppPage) {
     this.stacks[this.siderTab] = pushSibling(this.currentStack, page)
+  }
+
+  /** Push a CHILD drill-in (the leaf of a split): appends, or replaces the top
+   * when it is the same page kind, so [root, parent, leaf] stays bounded. */
+  pushChild(page: AppPage) {
+    this.stacks[this.siderTab] = pushChild(this.currentStack, page)
   }
 
   /** Pop the top page; never pops below the root. */

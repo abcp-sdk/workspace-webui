@@ -8,6 +8,8 @@
   import { cn } from '$lib/utils'
   import { AppIcons } from '$lib/icons'
   import MediaAttachment from './MediaAttachment.svelte'
+  import TodosPanel from './TodosPanel.svelte'
+  import { isTodoWrite, parseTodos } from '$lib/todos'
   import type { FileRef } from '$lib/models'
 
   let {
@@ -35,6 +37,11 @@
   const output = $derived(toolState?.output ?? '')
   const meta = $derived((toolState?.data ?? {}) as Record<string, unknown>)
   const metaEntries = $derived(Object.entries(meta).filter(([k]) => k !== 'files'))
+
+  // A `todo-write` card renders the checklist instead of raw JSON once its
+  // arguments have fully streamed (state.input is present); while streaming
+  // (only inputText) the raw preview below is used.
+  const todoList = $derived(isTodoWrite(tool) ? parseTodos(input) : null)
 
   interface MediaRef {
     code: string
@@ -86,7 +93,7 @@
 
   /** flutter `toolDisplayName`: `todowrite` shows as `todo`. */
   function toolDisplayName(name: string): string {
-    return name === 'todowrite' ? 'todo' : name
+    return isTodoWrite(name) ? 'todo' : name
   }
 
 
@@ -131,7 +138,12 @@
   {#if open}
     <div class="min-w-0 space-y-2 px-2.5 pb-2.5">
       <!-- input section -->
-      {#if Object.keys(input).length}
+      {#if todoList !== null}
+        <!-- todo-write with fully-streamed arguments: render the checklist. -->
+        <div class="min-w-0 rounded-sm border border-border/50 bg-background/50 p-2">
+          <TodosPanel todos={todoList} />
+        </div>
+      {:else if Object.keys(input).length}
         <div class="min-w-0 rounded-sm border border-border/50 bg-background/50">
           <button
             type="button"

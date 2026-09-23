@@ -57,9 +57,10 @@
   const totalAdd = $derived(files.reduce((n, f) => n + f.additions, 0))
   const totalDel = $derived(files.reduce((n, f) => n + f.deletions, 0))
 
-  // Layout: auto (wide=split, narrow=unified) with a manual override toggle.
+  // Layout: UNIFIED (one column) by default — panes are often narrow — with a
+  // manual Split/Unified toggle. "auto" keeps the old container-width behaviour.
   let autoWide = $state(false)
-  let mode = $state<'auto' | 'split' | 'unified'>('auto')
+  let mode = $state<'auto' | 'split' | 'unified'>('unified')
   const wide = $derived(mode === 'split' ? true : mode === 'unified' ? false : autoWide)
 
   // Container width drives the AUTO layout.

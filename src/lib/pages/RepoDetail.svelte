@@ -3,14 +3,13 @@
   // Code tab). The parent CodeTab owns the left tree (org > repo > branch) and
   // passes the active `ref`; sub-tabs here are Files / Commits / Tags /
   // Releases / Changes (MRs). Everything is GET-only.
-  import type { BranchInfo, CommitInfo, MRInfo, ReleaseAsset, ReleaseInfo, TagInfo, TreeEntry } from '$lib/api'
-  import type { AgentApi } from '$lib/api'
+  import type { BranchInfo, CommitInfo, MRInfo, ReleaseInfo, TagInfo, TreeEntry } from '$lib/api'
+  import type { PageProps } from '$lib/page-props'
   import { t } from '$lib/i18n.svelte'
-  import { showErrorToast, showToast } from '$lib/toast.svelte'
+  import { showErrorToast } from '$lib/toast.svelte'
   import { formatBytes } from '$lib/media'
   import { cn } from '$lib/utils'
   import { AppIcons } from '$lib/icons'
-  import DiffView from '$lib/components/DiffView.svelte'
   import RepoAvatar from '$lib/components/RepoAvatar.svelte'
   import PageHeader from '$lib/components/layout/PageHeader.svelte'
   import TabBar from '$lib/components/layout/TabBar.svelte'
@@ -21,24 +20,22 @@
   import IconButton from '$lib/components/layout/IconButton.svelte'
 
   let {
-    api,
+    store,
     org,
     repo,
     ref,
-    onPickRef,
-    onOpenFile,
-    onMenu = null,
-  }: {
-    api: AgentApi
-    org: string
-    repo: string
-    ref: string
-    onPickRef: (ref: string) => void
-    onOpenFile: (path: string) => void
-    /** When set (compact), render a tree-drawer button in the header. */
-    onMenu?: (() => void) | null
-  } = $props()
+    showBack = false,
+  }: PageProps & { org: string; repo: string; ref: string } = $props()
 
+  const api = $derived(store.api)
+  /** Switch the active ref (branch) — re-pushes the detail page (replace). */
+  function onPickRef(r: string) {
+    store.pushSibling({ kind: 'repo_detail', key: `repo:${org}/${repo}@${r}`, org, repo, ref: r })
+  }
+  /** Open a tag as its own browse page (tree at that tag). */
+  function onPickTag(t: string) {
+    store.pushChild({ kind: 'repo_tag', key: `tag:${org}/${repo}@${t}`, org, repo, ref: t })
+  }
   type Tab = 'files' | 'commits' | 'tags' | 'releases' | 'changes'
   let tab = $state<Tab>('files')
 
@@ -46,22 +43,11 @@
   let tags = $state<TagInfo[]>([])
   let releases = $state<ReleaseInfo[]>([])
   let tree = $state<TreeEntry[]>([])
-  let path = $state('') // current directory
+  let expanded = $state<Set<string>>(new Set()) // expanded dir paths (Files tree)
   let commits = $state<CommitInfo[]>([])
   let mrs = $state<MRInfo[]>([])
   let mrState = $state('open')
   let loading = $state(true)
-
-  // commit detail overlay
-  let commitSha = $state('')
-  let commitDiff = $state('')
-  let commitLoading = $state(false)
-
-  // MR detail overlay
-  let mrDetail = $state<MRInfo | null>(null)
-  let mrDiffText = $state('')
-  let mrComments = $state<{ id: number; author: string; body: string; createdAt: string }[]>([])
-  let mrLoading = $state(false)
 
   const tabs: { id: Tab; label: string; icon: any }[] = [
     { id: 'files', label: 'files', icon: AppIcons.folder },
@@ -81,7 +67,7 @@
   $effect(() => {
     const rf = ref
     if (!rf) return
-    path = ''
+    expanded = new Set()
     void Promise.all([loadTree(), loadCommits()])
   })
 
@@ -105,7 +91,8 @@
 
   async function loadTree() {
     try {
-      tree = await api.tree(org, repo, ref, path)
+      // One recursive fetch for the whole ref; the tree below is derived.
+      tree = await api.tree(org, repo, ref, '')
     } catch (e) {
       showErrorToast(String(e))
       tree = []
@@ -126,89 +113,100 @@
     }
   }
 
-  // Entries at the current directory level.
-  const entries = $derived.by(() => {
-    const prefix = path ? path.replace(/\/$/, '') + '/' : ''
-    const seen = new Set<string>()
-    const out: { name: string; path: string; type: string; size: number }[] = []
+  interface TreeNode {
+    name: string
+    path: string
+    type: string
+    size: number
+    children: TreeNode[]
+  }
+
+  // Build a nested tree from the gateway's FLAT recursive listing. Directories
+  // appear both as their own entry and as a prefix of children, so we insert by
+  // path (idempotent) rather than trusting entry order.
+  const rootNodes = $derived.by(() => {
+    const root: TreeNode = { name: '', path: '', type: 'dir', size: 0, children: [] }
+    const byPath = new Map<string, TreeNode>([['', root]])
+    const ensureDir = (p: string): TreeNode => {
+      const hit = byPath.get(p)
+      if (hit) return hit
+      const slash = p.lastIndexOf('/')
+      const parent = ensureDir(slash === -1 ? '' : p.slice(0, slash))
+      const node: TreeNode = { name: p.slice(slash + 1), path: p, type: 'dir', size: 0, children: [] }
+      byPath.set(p, node)
+      parent.children.push(node)
+      return node
+    }
     for (const e of tree) {
-      if (!e.path.startsWith(prefix)) continue
-      const rest = e.path.slice(prefix.length)
-      if (rest === '') continue
-      const slash = rest.indexOf('/')
-      if (slash === -1) {
-        out.push({ name: rest, path: e.path, type: e.type, size: e.size })
+      const slash = e.path.lastIndexOf('/')
+      const parent = ensureDir(slash === -1 ? '' : e.path.slice(0, slash))
+      if (e.type === 'dir') {
+        ensureDir(e.path)
       } else {
-        const dir = rest.slice(0, slash)
-        if (!seen.has(dir)) {
-          seen.add(dir)
-          out.push({ name: dir, path: prefix + dir, type: 'dir', size: 0 })
-        }
+        const node: TreeNode = { name: e.path.slice(slash + 1), path: e.path, type: 'file', size: e.size, children: [] }
+        byPath.set(e.path, node)
+        parent.children.push(node)
       }
     }
-    return out.sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'dir' ? -1 : 1))
+    const sortRec = (n: TreeNode) => {
+      n.children.sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'dir' ? -1 : 1))
+      for (const c of n.children) sortRec(c)
+    }
+    sortRec(root)
+    return root.children
   })
 
-  const crumbs = $derived(path ? path.split('/').filter(Boolean) : [])
+  // Flatten to visible rows: a directory's children show only when expanded.
+  const visibleRows = $derived.by(() => {
+    const out: { node: TreeNode; depth: number }[] = []
+    const walk = (nodes: TreeNode[], depth: number) => {
+      for (const n of nodes) {
+        out.push({ node: n, depth })
+        if (n.type === 'dir' && expanded.has(n.path)) walk(n.children, depth + 1)
+      }
+    }
+    walk(rootNodes, 0)
+    return out
+  })
 
-  function openEntry(e: { path: string; type: string }) {
+  function toggleDir(p: string) {
+    const next = new Set(expanded)
+    if (next.has(p)) next.delete(p)
+    else next.add(p)
+    expanded = next
+  }
+
+  // The active file is the sibling `repo_blob` page (if the stack is on one),
+  // so the tree can highlight it without owning the selection itself.
+  const activePath = $derived.by(() => {
+    const top = store.topPage
+    if (top.kind === 'repo_blob' && top.org === org && top.repo === repo && top.ref === ref) {
+      return top.path
+    }
+    return ''
+  })
+
+  function openEntry(e: TreeNode) {
     if (e.type === 'dir') {
-      path = e.path
-      void loadTree()
+      toggleDir(e.path)
     } else {
-      onOpenFile(e.path)
+      store.pushChild({ kind: 'repo_blob', key: `blob:${org}/${repo}@${ref}:${e.path}`, org, repo, ref, path: e.path })
     }
   }
 
-  function up() {
-    const parts = path.split('/').filter(Boolean)
-    parts.pop()
-    path = parts.join('/')
-    void loadTree()
+  /** Open a commit as its own page (meta + files + diff). */
+  function openCommit(c: CommitInfo) {
+    store.pushChild({ kind: 'repo_commit', key: `commit:${org}/${repo}@${c.sha}`, org, repo, ref, sha: c.sha })
   }
 
-  async function openCommit(c: CommitInfo) {
-    commitSha = c.sha
-    commitDiff = ''
-    commitLoading = true
-    try {
-      commitDiff = await api.commitDiff(org, repo, c.sha)
-    } catch (e) {
-      showErrorToast(String(e))
-    }
-    commitLoading = false
+  /** Open a change request as its own page (meta + diff + comments). */
+  function openMR(m: MRInfo) {
+    store.pushChild({ kind: 'repo_mr', key: `mr:${org}/${repo}:${m.index}`, org, repo, index: m.index })
   }
 
-  async function openMR(m: MRInfo) {
-    mrDetail = m
-    mrDiffText = ''
-    mrComments = []
-    mrLoading = true
-    try {
-      const [d, c] = await Promise.all([api.mrDiff(org, repo, m.index), api.listMRComments(org, repo, m.index)])
-      mrDiffText = d
-      mrComments = c
-    } catch (e) {
-      showErrorToast(String(e))
-    }
-    mrLoading = false
-  }
-
-  /** Download a release asset (bytes proxied by the gateway). */
-  async function downloadAsset(a: ReleaseAsset) {
-    try {
-      const { data } = await api.getReleaseAsset(org, repo, a.releaseId, a.id)
-      const url = URL.createObjectURL(new Blob([new Uint8Array(data)], { type: 'application/octet-stream' }))
-      const el = document.createElement('a')
-      el.href = url
-      el.download = a.name
-      el.click()
-      el.remove()
-      setTimeout(() => URL.revokeObjectURL(url), 10_000)
-      showToast(t('download'))
-    } catch (e) {
-      showErrorToast(String(e))
-    }
+  /** Open a release as its own page (meta + assets). */
+  function openRelease(rel: ReleaseInfo) {
+    store.pushChild({ kind: 'repo_release', key: `rel:${org}/${repo}:${rel.tagName}`, org, repo, tag: rel.tagName })
   }
 
   function shortSha(s: string): string {
@@ -225,9 +223,9 @@
   }
 </script>
 
-<div class="flex h-full w-full flex-col">
+<div class="relative flex h-full w-full flex-col">
   <PageHeader>
-    {#if onMenu}<IconButton icon={AppIcons.list} label={t('tabCode')} onclick={onMenu} />{/if}
+    {#if showBack}<IconButton icon={AppIcons.back} onclick={() => store.popPage()} />{/if}
     <RepoAvatar {org} {repo} branch={ref} level="repo" size={28} />
     <span class="min-w-0 flex-1 truncate text-base font-semibold">{org}/{repo}</span>
     <span class="shrink-0 rounded-full bg-muted px-2 py-px text-[10px] leading-4 text-muted-foreground">{ref}</span>
@@ -242,28 +240,40 @@
     {/each}
   </TabBar>
 
-  <div class="min-h-0 flex-1 overflow-y-auto">
+  <div class={cn('min-h-0 flex-1', tab === 'files' ? 'overflow-hidden' : 'overflow-y-auto')}>
     {#if loading && tab !== 'files' && tab !== 'commits'}
       <div class="flex justify-center py-10">
         <span class="size-6 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground"></span>
       </div>
     {:else if tab === 'files'}
-      {#if crumbs.length}
-        <ListRow onclick={up}>
-          <AppIcons.back class="size-4 text-muted-foreground" /> {crumbs.join(' / ')}
-        </ListRow>
-      {/if}
-      {#if entries.length === 0}
-        <EmptyState>{t('emptyRepo')}</EmptyState>
-      {:else}
-        {#each entries as e (e.path)}
-          <ListRow onclick={() => openEntry(e)}>
-            {#if e.type === 'dir'}<AppIcons.folder class="size-4 shrink-0 text-primary" />{:else}<AppIcons.file class="size-4 shrink-0 text-muted-foreground" />{/if}
-            <span class="min-w-0 flex-1 truncate text-meta">{e.name}</span>
-            {#if e.type === 'file'}<span class="shrink-0 text-[10px] text-muted-foreground">{formatBytes(e.size)}</span>{/if}
-          </ListRow>
-        {/each}
-      {/if}
+      <!-- Files: a full-pane VSCode-style tree (folders expand inline). The
+           file CONTENT is a sibling `repo_blob` page, so the Shell split shows
+           the tree | the content as two equal panes. -->
+      <div class="min-h-0 h-full overflow-y-auto">
+        {#if visibleRows.length === 0}
+          <EmptyState>{t('emptyRepo')}</EmptyState>
+        {:else}
+          {#each visibleRows as row (row.node.path)}
+            {@const e = row.node}
+            <button
+              type="button"
+              class={cn('flex w-full items-center gap-1.5 py-1 pr-2 text-left hover:bg-muted', activePath === e.path && 'bg-primary/10')}
+              style="padding-left: {0.5 + row.depth * 0.75}rem"
+              onclick={() => openEntry(e)}
+            >
+              {#if e.type === 'dir'}
+                {#if expanded.has(e.path)}<AppIcons.chevron_down class="size-3.5 shrink-0 text-muted-foreground" />{:else}<AppIcons.chevron_right class="size-3.5 shrink-0 text-muted-foreground" />{/if}
+                <AppIcons.folder class="size-4 shrink-0 text-primary" />
+              {:else}
+                <span class="size-3.5 shrink-0"></span>
+                <AppIcons.file class="size-4 shrink-0 text-muted-foreground" />
+              {/if}
+              <span class="min-w-0 flex-1 truncate text-meta">{e.name}</span>
+              {#if e.type === 'file'}<span class="shrink-0 text-[10px] text-muted-foreground">{formatBytes(e.size)}</span>{/if}
+            </button>
+          {/each}
+        {/if}
+      </div>
 
     {:else if tab === 'commits'}
       {#each commits as c (c.sha)}
@@ -281,7 +291,7 @@
         <EmptyState>{t('noTags')}</EmptyState>
       {:else}
         {#each tags as tg (tg.name)}
-          <ListRow active={tg.name === ref} onclick={() => onPickRef(tg.name)}>
+          <ListRow active={tg.name === ref} onclick={() => onPickTag(tg.name)}>
             <AppIcons.tag class="size-4 shrink-0 text-muted-foreground" />
             <span class="min-w-0 flex-1 truncate text-meta font-medium">{tg.name}</span>
             <span class="shrink-0 font-mono text-[10px] text-muted-foreground">{shortSha(tg.sha)}</span>
@@ -294,33 +304,18 @@
         <EmptyState>{t('noReleases')}</EmptyState>
       {:else}
         {#each releases as rel (rel.id)}
-          <div class="border-b border-border/40 px-4 py-3">
-            <div class="flex items-center gap-2">
-              <AppIcons.rocket class="size-4 shrink-0 text-primary" />
-              <span class="min-w-0 flex-1 truncate text-meta font-semibold">{rel.name || rel.tagName}</span>
-              {#if rel.prerelease}<span class="shrink-0 rounded-full bg-warning/15 px-1.5 py-px text-[10px] text-warning">{t('prerelease')}</span>{/if}
-              {#if rel.draft}<span class="shrink-0 rounded-full bg-muted px-1.5 py-px text-[10px] text-muted-foreground">{t('draft')}</span>{/if}
-            </div>
-            <div class="mt-0.5 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
-              <span class="rounded bg-muted px-1.5 py-px font-mono">{rel.tagName}</span>
-              <span>{rel.author || '—'}</span>
-              <span>{relTime(rel.publishedAt || rel.createdAt)}</span>
-            </div>
-            {#if rel.body}<div class="mt-1.5 line-clamp-4 text-micro whitespace-pre-wrap text-muted-foreground">{rel.body}</div>{/if}
-            {#if rel.assets.length}
-              <div class="mt-2 space-y-1 border-t border-border/40 pt-2">
-                {#each rel.assets as a (a.id)}
-                  <button type="button" class="flex w-full items-center gap-2 rounded px-1 py-1 text-left hover:bg-muted" onclick={() => void downloadAsset(a)}>
-                    <AppIcons.file_archive class="size-3.5 shrink-0 text-muted-foreground" />
-                    <span class="min-w-0 flex-1 truncate font-mono text-[11px]">{a.name}</span>
-                    {#if a.downloadCount}<span class="shrink-0 text-[10px] text-muted-foreground">↓{a.downloadCount}</span>{/if}
-                    <span class="shrink-0 text-[10px] text-muted-foreground">{formatBytes(a.size)}</span>
-                    <AppIcons.download class="size-3.5 shrink-0 text-muted-foreground" />
-                  </button>
-                {/each}
-              </div>
-            {/if}
-          </div>
+          <ListRow divided align="start" onclick={() => openRelease(rel)}>
+            <AppIcons.rocket class="mt-0.5 size-4 shrink-0 text-primary" />
+            <span class="min-w-0 flex-1">
+              <span class="block truncate text-meta font-semibold">{rel.name || rel.tagName}</span>
+              <span class="block truncate text-[10px] text-muted-foreground">
+                <span class="rounded bg-muted px-1.5 py-px font-mono">{rel.tagName}</span>
+                · {rel.author || '—'} · {relTime(rel.publishedAt || rel.createdAt)}
+              </span>
+            </span>
+            {#if rel.prerelease}<span class="shrink-0 rounded-full bg-warning/15 px-1.5 py-px text-[10px] text-warning">{t('prerelease')}</span>{/if}
+            {#if rel.draft}<span class="shrink-0 rounded-full bg-muted px-1.5 py-px text-[10px] text-muted-foreground">{t('draft')}</span>{/if}
+          </ListRow>
         {/each}
       {/if}
 
@@ -355,59 +350,3 @@
   </div>
 </div>
 
-<!-- commit detail overlay -->
-{#if commitSha}
-  <div class="fixed inset-0 z-[70] flex flex-col bg-card">
-    <PageHeader>
-      <IconButton icon={AppIcons.close} onclick={() => (commitSha = '')} />
-      <AppIcons.commit class="size-4 text-muted-foreground" />
-      <span class="min-w-0 flex-1 font-mono text-meta">{shortSha(commitSha)}</span>
-    </PageHeader>
-    <div class="min-h-0 flex-1 overflow-auto p-3">
-      {#if commitLoading}
-        <div class="flex justify-center py-10"><span class="size-6 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground"></span></div>
-      {:else}
-        <DiffView diff={commitDiff} name={shortSha(commitSha)} />
-      {/if}
-    </div>
-  </div>
-{/if}
-
-<!-- MR detail overlay -->
-{#if mrDetail}
-  <div class="fixed inset-0 z-[70] flex flex-col bg-card">
-    <PageHeader>
-      <IconButton icon={AppIcons.close} onclick={() => (mrDetail = null)} />
-      <AppIcons.merge class="size-4 text-muted-foreground" />
-      <span class="min-w-0 flex-1 truncate text-base font-semibold">#{mrDetail.index} {mrDetail.title}</span>
-      <span class={cn('shrink-0 rounded-full px-2 py-px text-[10px]', mrDetail.merged ? 'bg-violet-500/15 text-violet-500' : mrDetail.state === 'open' ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground')}>{mrDetail.merged ? t('merged') : mrDetail.state}</span>
-    </PageHeader>
-    <div class="min-h-0 flex-1 overflow-y-auto">
-      <div class="border-b border-border/50 px-4 py-3 text-micro text-muted-foreground">
-        <div><span class="font-mono">{mrDetail.head}</span> → <span class="font-mono">{mrDetail.base}</span></div>
-        <div class="mt-0.5">{mrDetail.author || '—'} · {relTime(mrDetail.createdAt)} · {mrDetail.changedFiles} {t('filesChanged')}</div>
-        {#if mrDetail.body}<div class="mt-2 rounded-md bg-muted/40 px-3 py-2 whitespace-pre-wrap text-meta text-foreground">{mrDetail.body}</div>{/if}
-      </div>
-      {#if mrLoading}
-        <div class="flex justify-center py-10"><span class="size-6 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground"></span></div>
-      {:else}
-        <div class="p-3"><DiffView diff={mrDiffText} /></div>
-        {#if mrComments.length}
-          <div class="border-t border-border/50 px-4 py-3">
-            <div class="mb-2 text-micro font-semibold tracking-wider text-muted-foreground uppercase">{t('comments')} · {mrComments.length}</div>
-            <div class="space-y-2">
-              {#each mrComments as c (c.id)}
-                <div class="rounded-md border border-border bg-muted/30 px-3 py-2">
-                  <div class="mb-1 flex items-center gap-2 text-[10px] text-muted-foreground">
-                    <span class="font-semibold text-foreground">{c.author || '—'}</span><span>{relTime(c.createdAt)}</span>
-                  </div>
-                  <div class="whitespace-pre-wrap text-meta">{c.body}</div>
-                </div>
-              {/each}
-            </div>
-          </div>
-        {/if}
-      {/if}
-    </div>
-  </div>
-{/if}

@@ -17,8 +17,8 @@ export default defineConfig({
         description:
           'Agent chat over the abc agent backend (agent.v1 via Connect)',
         // Launch chrome follows the app's own (dark) palette; the icon hue
-        // (AW violet) is used where the OS wants a brand colour.
-        theme_color: '#0a0a0a',
+        // (WorkSpace blue) is used where the OS wants a brand colour.
+        theme_color: '#2563eb',
         background_color: '#0a0a0a',
         display: 'standalone',
         start_url: '/',

@@ -20,4 +20,17 @@ export interface PageProps {
   modelId?: string | null
   /** Service tab drill-in param (sandbox name). */
   name?: string
+  /** Service tab job drill-in param (job id). */
+  jobId?: string
+  /** Code tab drill-in params (repo detail / blob / history / commit). */
+  org?: string
+  repo?: string
+  ref?: string
+  path?: string
+  /** Commit sha (repo_commit / repo_history_diff). */
+  sha?: string
+  /** Change-request index (repo_mr). */
+  index?: number
+  /** Release tag (repo_release). */
+  tag?: string
 }

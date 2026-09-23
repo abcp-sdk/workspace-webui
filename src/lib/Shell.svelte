@@ -17,8 +17,17 @@
   import ProviderForm from './pages/providers/ProviderForm.svelte'
   import ProviderModelForm from './pages/providers/ProviderModelForm.svelte'
   import CodeTab from './pages/CodeTab.svelte'
+  import RepoDetail from './pages/RepoDetail.svelte'
+  import RepoBlob from './pages/RepoBlob.svelte'
+  import RepoHistory from './pages/RepoHistory.svelte'
+  import RepoHistoryDiff from './pages/RepoHistoryDiff.svelte'
+  import RepoCommit from './pages/RepoCommit.svelte'
+  import RepoMR from './pages/RepoMR.svelte'
+  import RepoRelease from './pages/RepoRelease.svelte'
   import ServiceRoot from './pages/ServiceRoot.svelte'
   import SandboxDetail from './pages/SandboxDetail.svelte'
+  import SandboxJob from './pages/SandboxJob.svelte'
+  import ServiceDetail from './pages/ServiceDetail.svelte'
 
   let {
     store,
@@ -66,10 +75,30 @@
         return ProviderModelForm as Component<PageProps>
       case 'code_root':
         return CodeTab as Component<PageProps>
+      case 'repo_detail':
+        return RepoDetail as Component<PageProps>
+      case 'repo_blob':
+        return RepoBlob as Component<PageProps>
+      case 'repo_history':
+        return RepoHistory as Component<PageProps>
+      case 'repo_history_diff':
+        return RepoHistoryDiff as Component<PageProps>
+      case 'repo_commit':
+        return RepoCommit as Component<PageProps>
+      case 'repo_mr':
+        return RepoMR as Component<PageProps>
+      case 'repo_release':
+        return RepoRelease as Component<PageProps>
+      case 'repo_tag':
+        return RepoDetail as Component<PageProps>
       case 'service_root':
         return ServiceRoot as Component<PageProps>
       case 'sandbox_detail':
         return SandboxDetail as Component<PageProps>
+      case 'sandbox_job':
+        return SandboxJob as Component<PageProps>
+      case 'service_detail':
+        return ServiceDetail as Component<PageProps>
     }
   }
 
@@ -109,7 +138,7 @@
 
   <main class={cn('flex min-h-0 min-w-0 flex-1', isCompact && !hideBottomBar && 'pb-[60px]')}>
     {#each panes as p, i (p.page.key)}
-      <div class="flex min-h-0 min-w-0 flex-1 {i > 0 ? 'border-l border-border' : ''}">
+      <div class="relative flex min-h-0 min-w-0 flex-1 {i > 0 ? 'border-l border-border' : ''}">
         <p.C
           {store}
           {themeMode}
@@ -122,7 +151,15 @@
           initialId={p.page.kind === 'config_sub' ? p.page.id : undefined}
           overlay={p.page.kind === 'chat_overlay' ? p.page.overlay : undefined}
           modelId={p.page.kind === 'provider_models' ? p.page.modelId : undefined}
-          name={p.page.kind === 'sandbox_detail' ? p.page.name : undefined}
+          name={p.page.kind === 'sandbox_detail' || p.page.kind === 'sandbox_job' || p.page.kind === 'service_detail' ? p.page.name : undefined}
+          jobId={p.page.kind === 'sandbox_job' ? p.page.jobId : undefined}
+          org={'org' in p.page ? p.page.org : undefined}
+          repo={'repo' in p.page ? p.page.repo : undefined}
+          ref={'ref' in p.page ? p.page.ref : undefined}
+          path={'path' in p.page ? p.page.path : undefined}
+          sha={'sha' in p.page ? p.page.sha : undefined}
+          index={'index' in p.page ? p.page.index : undefined}
+          tag={'tag' in p.page ? p.page.tag : undefined}
         />
       </div>
     {/each}

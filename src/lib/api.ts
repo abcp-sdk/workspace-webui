@@ -122,8 +122,9 @@ export class AgentApi {
     return r.session ? sessionFromPb(r.session) : emptySession('')
   }
 
+  /** Delete a session (branch or free). Authorized + cascading server-side. */
   async deleteSession(id: string): Promise<void> {
-    await this._c.deleteSession({ id })
+    await this._c.deleteBranchSession({ session: id })
   }
 
   async prompt(
@@ -617,6 +618,11 @@ export class AgentApi {
     await this._guard(() => this._c.deleteBranch({ org, repo, branch }))
   }
 
+  /** Delete a repository AND all its branch sessions (admin). */
+  async deleteRepo(org: string, repo: string): Promise<void> {
+    await this._guard(() => this._c.deleteRepo({ org, repo }))
+  }
+
   async listRepos(): Promise<RepoInfo[]> {
     const r = await this._guard(() => this._c.listRepos({}))
     return (r.repos ?? []).map(x => ({
@@ -666,7 +672,7 @@ export class AgentApi {
         ref: params.ref ?? '',
         authUser: params.authUser ?? '',
         authToken: params.authToken ?? '',
-        private: params.private ?? true,
+        private: false,
         mirror: params.mirror ?? false,
         description: params.description ?? '',
       }),
@@ -822,6 +828,38 @@ export class AgentApi {
     return r.diff
   }
 
+  /** Unified diff of ONE file between two refs (gateway go-git; Forgejo's
+   *  compare `patch` is empty on 1.22). */
+  async fileDiff(
+    org: string,
+    repo: string,
+    base: string,
+    head: string,
+    path: string,
+  ): Promise<string> {
+    const r = await this._guard(() => this._c.fileDiff({ org, repo, base, head, path }))
+    return r.diff
+  }
+
+  /** Per-line authorship of one file at a ref (gateway go-git blame). */
+  async blame(
+    org: string,
+    repo: string,
+    ref: string,
+    path: string,
+  ): Promise<BlameLine[]> {
+    const r = await this._guard(() => this._c.blame({ org, repo, ref, path }))
+    return (r.lines ?? []).map(l => ({
+      line: Number(l.line),
+      sha: l.sha,
+      author: l.author,
+      authorEmail: l.authorEmail,
+      date: l.date,
+      // proto3 omits empty strings, so a blank line carries no `content`.
+      content: l.content ?? '',
+    }))
+  }
+
   async listMRs(org: string, repo: string, state = 'open'): Promise<MRInfo[]> {
     const r = await this._guard(() => this._c.listMRs({ org, repo, state }))
     return (r.mrs ?? []).map(mrFromPb)
@@ -957,9 +995,46 @@ export class AgentApi {
       ready: s.ready,
       replicas: s.replicas,
       url: s.url,
+      publicUrl: s.publicUrl,
+      ports: (s.ports ?? []).map(p => ({
+        name: p.name,
+        preset: p.preset,
+        port: p.port,
+        protocol: p.protocol,
+        targetPort: p.targetPort,
+        publicUrl: p.publicUrl,
+      })),
       creator: s.creator,
       session: s.session,
+      stage: s.stage,
+      podPhase: s.podPhase,
+      restarts: s.restarts,
+      message: s.message,
+      expiresAt: Number(s.expiresAt),
     }))
+  }
+
+  async getService(name: string): Promise<ServiceInfo | null> {
+    const all = await this.listServices()
+    return all.find(s => s.name === name) ?? null
+  }
+
+  /** Tail a service's container log (previous = the crashed instance). */
+  async serviceLogs(name: string, tailLines = 500, previous = false): Promise<string[]> {
+    const r = await this._guard(() => this._c.serviceLogs({ name, tailLines: BigInt(tailLines), previous }))
+    return r.lines ?? []
+  }
+
+  /** Follow a service's container log until the stream ends / aborted. */
+  async *watchServiceLogs(
+    name: string,
+    previous = false,
+    signal?: AbortSignal,
+  ): AsyncGenerator<{ output: string; done: boolean; error: string }> {
+    const opts = signal ? { signal } : undefined
+    for await (const ev of this._c.watchServiceLogs({ name, previous }, opts)) {
+      yield { output: ev.output, done: ev.done, error: ev.error }
+    }
   }
 }
 
@@ -1020,6 +1095,14 @@ export interface BranchInfo {
 export interface TagInfo {
   name: string
   sha: string
+}
+export interface BlameLine {
+  line: number
+  sha: string
+  author: string
+  authorEmail: string
+  date: string
+  content: string
 }
 export interface CommitDetail {
   sha: string
@@ -1099,6 +1182,15 @@ export interface JobOutput {
   endLine: number
   done: boolean
 }
+export interface ServicePortInfo {
+  name: string
+  preset: string
+  port: number
+  protocol: string
+  targetPort: number
+  publicUrl: string
+}
+
 export interface ServiceInfo {
   name: string
   image: string
@@ -1106,8 +1198,15 @@ export interface ServiceInfo {
   ready: boolean
   replicas: number
   url: string
+  publicUrl: string
+  ports: ServicePortInfo[]
   creator: string
   session: string
+  stage: string
+  podPhase: string
+  restarts: number
+  message: string
+  expiresAt: number
 }
 
 type PbBranchSession = {

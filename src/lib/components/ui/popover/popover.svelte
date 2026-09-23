@@ -6,12 +6,17 @@
 
   let {
     trigger,
+    triggerChild,
     children,
     side = 'bottom',
     align = 'end',
     class: className,
   }: {
-    trigger: Snippet
+    // A plain snippet is rendered INSIDE the primitive's own <button>.
+    trigger?: Snippet
+    // When provided, the trigger element is the caller's own (e.g. an
+    // IconButton), so no extra <button> is nested; receives the trigger props.
+    triggerChild?: Snippet<[{ props: Record<string, unknown> }]>
     children: Snippet
     side?: 'top' | 'bottom' | 'left' | 'right'
     align?: 'start' | 'center' | 'end'
@@ -20,7 +25,11 @@
 </script>
 
 <PopoverPrimitive.Root>
-  <PopoverPrimitive.Trigger>{@render trigger()}</PopoverPrimitive.Trigger>
+  {#if triggerChild}
+    <PopoverPrimitive.Trigger child={triggerChild} />
+  {:else}
+    <PopoverPrimitive.Trigger>{@render trigger?.()}</PopoverPrimitive.Trigger>
+  {/if}
   <PopoverPrimitive.Portal>
     <PopoverPrimitive.Content
       {side}

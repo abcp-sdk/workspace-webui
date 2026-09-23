@@ -124,7 +124,7 @@
         <EmptyState>{t('noServices')}</EmptyState>
       {:else}
         {#each services as sv (sv.name)}
-          <ListRow divided>
+          <ListRow divided onclick={() => store.pushChild({ kind: 'service_detail', key: `svc:${sv.name}`, name: sv.name })}>
             <span class={cn('flex size-8 shrink-0 items-center justify-center rounded-full', phaseTone(sv.phase))}><AppIcons.server class="size-4" /></span>
             <span class="min-w-0 flex-1">
               <span class="block truncate text-meta font-semibold">{sv.name}</span>
@@ -144,8 +144,30 @@
                 {:else}
                   <span class="min-w-0 truncate">{t('roleAdmin')}</span>
                 {/if}
-                <span class="shrink-0">· {sv.replicas}× · {sv.url}</span>
+                <span class="shrink-0">· {sv.replicas}×</span>
               </span>
+              {#if sv.ports.length}
+                <span class="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
+                  {#each sv.ports as p (p.name + p.protocol + p.port)}
+                    <span class="font-mono">{p.protocol}:{p.port}→{p.targetPort}{p.name ? ` (${p.name})` : ''}</span>
+                  {/each}
+                </span>
+              {/if}
+              {#if sv.publicUrl}
+                <span class="mt-0.5 flex min-w-0 flex-col gap-0.5 text-[10px]">
+                  {#each sv.ports.filter(p => p.publicUrl) as p (p.publicUrl)}
+                    <a
+                      href={p.publicUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="min-w-0 truncate text-primary hover:underline"
+                      onclick={e => e.stopPropagation()}
+                    >{p.publicUrl}</a>
+                  {/each}
+                </span>
+              {:else}
+                <span class="mt-0.5 block truncate text-[10px] text-muted-foreground">{sv.url}</span>
+              {/if}
             </span>
             <span class={cn('shrink-0 rounded-full px-2 py-px text-[10px]', phaseTone(sv.phase))}>{sv.ready ? 'Ready' : sv.phase}</span>
           </ListRow>
