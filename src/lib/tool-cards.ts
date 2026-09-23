@@ -44,7 +44,7 @@ export type CardBody =
   | { kind: 'terminal'; command?: string; text: string; state?: string; exitCode?: number }
   // Source with line numbers + Shiki (reuses CodeSurface).
   | { kind: 'code'; name: string; text: string }
-  // An indented tree (sandbox-ls).
+  // An indented tree (sandbox-file-ls).
   | { kind: 'tree'; rows: Array<{ path: string; depth: number; type: string; size: number }> }
   // A generic clickable list (services / sandboxes / orgs / repos).
   | { kind: 'list'; rows: Array<{ label: string; sub?: string; icon?: string; link?: AppPage; tone?: 'default' | 'success' | 'destructive' | 'muted' }> }
@@ -125,7 +125,7 @@ export function cardFor(rawTool: string, data: Data, input: Data, output = ''): 
 
   switch (tool) {
     // ---- repo: reads ----
-    case 'repo-read': {
+    case 'repo-file-read': {
       if (!org || !repo || !path) return null
       const total = n(data, 'total_lines')
       const start = n(data, 'start')
@@ -141,7 +141,7 @@ export function cardFor(rawTool: string, data: Data, input: Data, output = ''): 
         actions: [{ label: path, icon: 'file_code', page: P.repoBlob(org, repo, ref, path) }],
       }
     }
-    case 'repo-list': {
+    case 'repo-file-list': {
       if (!org || !repo) return null
       const entries = arr<{ path: string; type: string; size: number }>(data, 'entries')
       return {
@@ -204,14 +204,14 @@ export function cardFor(rawTool: string, data: Data, input: Data, output = ''): 
     }
 
     // ---- repo: writes ----
-    case 'repo-write':
-    case 'repo-edit':
-    case 'repo-delete': {
+    case 'repo-file-write':
+    case 'repo-file-edit':
+    case 'repo-file-delete': {
       if (!org || !repo) return null
       const added = n(data, 'added')
       const removed = n(data, 'removed')
       const fanned = n(data, 'fanned')
-      const action = tool === 'repo-write' ? 'write' : tool === 'repo-edit' ? 'edit' : 'delete'
+      const action = tool === 'repo-file-write' ? 'write' : tool === 'repo-file-edit' ? 'edit' : 'delete'
       const fields: CardField[] = [
         { icon: 'file_code', label: 'path', value: path, mono: true },
         { icon: 'commit', label: 'commit', value: short(sha), mono: true },
@@ -236,7 +236,7 @@ export function cardFor(rawTool: string, data: Data, input: Data, output = ''): 
         actions: sha ? [{ label: short(sha), icon: 'commit', page: P.repoCommit(org, repo, ref, sha) }] : [],
       }
     }
-    case 'repo-restore': {
+    case 'repo-file-restore': {
       if (!org || !repo) return null
       const from = pick(data, input, 'from')
       const binary = data['binary'] === true
@@ -545,7 +545,7 @@ export function cardFor(rawTool: string, data: Data, input: Data, output = ''): 
     }
 
     // ---- sandbox files ----
-    case 'sandbox-read': {
+    case 'sandbox-file-read': {
       const path = pick(data, input, 'path')
       const total = n(data, 'total_lines')
       const start = n(data, 'start')
@@ -560,8 +560,8 @@ export function cardFor(rawTool: string, data: Data, input: Data, output = ''): 
         body: { kind: 'code', name: path.split('/').pop() || path, text: stripLineNumbers(output) },
       }
     }
-    case 'sandbox-write':
-    case 'sandbox-edit': {
+    case 'sandbox-file-write':
+    case 'sandbox-file-edit': {
       const path = pick(data, input, 'path')
       const added = n(data, 'added')
       const removed = n(data, 'removed')
@@ -571,7 +571,7 @@ export function cardFor(rawTool: string, data: Data, input: Data, output = ''): 
       const d = s(data, 'diff')
       return { subtitle: path || tool, fields, body: d ? { kind: 'diff', diff: d } : undefined }
     }
-    case 'sandbox-ls': {
+    case 'sandbox-file-ls': {
       const path = pick(data, input, 'path')
       const entries = arr<{ path: string; depth: number; type: string; size: number }>(data, 'entries')
       return {
@@ -588,8 +588,8 @@ export function cardFor(rawTool: string, data: Data, input: Data, output = ''): 
       if (s(data, 'url')) fields.push({ icon: 'link', label: 'url', value: s(data, 'url'), mono: true, tone: 'muted' })
       return { subtitle: 'sandbox', fields }
     }
-    case 'sandbox-download':
-    case 'sandbox-upload': {
+    case 'sandbox-file-download':
+    case 'sandbox-file-upload': {
       const path = pick(data, input, 'path')
       const code = s(data, 'code')
       return {

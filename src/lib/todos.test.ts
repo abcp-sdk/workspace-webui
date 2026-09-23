@@ -37,7 +37,7 @@ describe('isTodoWrite', () => {
     expect(isTodoWrite('todo-write')).toBe(true)
     expect(isTodoWrite('todowrite')).toBe(true)
     expect(isTodoWrite('bundled.todo-write')).toBe(true)
-    expect(isTodoWrite('repo-write')).toBe(false)
+    expect(isTodoWrite('repo-file-write')).toBe(false)
     expect(isTodoWrite('')).toBe(false)
     expect(isTodoWrite(null)).toBe(false)
   })
@@ -99,7 +99,7 @@ describe('latestTodos', () => {
 
   it('ignores non-todo tools and empty history', () => {
     const m = msg([
-      toolPart('repo-write', { path: 'a' }),
+      toolPart('repo-file-write', { path: 'a' }),
       toolPart('todo-write', {
         todos: [{ content: 't', status: 'pending', priority: 'medium' }],
       }),

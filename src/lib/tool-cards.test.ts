@@ -4,23 +4,23 @@ import { bareToolName, cardFor } from './tool-cards'
 describe('bareToolName', () => {
   it('strips one extension qualifier', () => {
     expect(bareToolName('bundled.mail-send')).toBe('mail-send')
-    expect(bareToolName('workspace.repo-read')).toBe('repo-read')
-    expect(bareToolName('repo-read')).toBe('repo-read')
+    expect(bareToolName('workspace.repo-file-read')).toBe('repo-file-read')
+    expect(bareToolName('repo-file-read')).toBe('repo-file-read')
     expect(bareToolName('web-fetch')).toBe('web-fetch')
   })
 })
 
 describe('cardFor', () => {
-  it('repo-read: path + line range + blob sha + open-file action', () => {
-    const c = cardFor('repo-read', { org: 'acme', repo: 'web', ref: 'main', path: 'a.ts', sha: 'deadbeefcafe', total_lines: 100, start: 0, shown: 40 }, {})!
+  it('repo-file-read: path + line range + blob sha + open-file action', () => {
+    const c = cardFor('repo-file-read', { org: 'acme', repo: 'web', ref: 'main', path: 'a.ts', sha: 'deadbeefcafe', total_lines: 100, start: 0, shown: 40 }, {})!
     expect(c.subtitle).toBe('acme/web @ main')
     expect(c.fields.map(f => f.label)).toEqual(['path', 'lines', 'blob'])
     expect(c.fields[1]!.value).toBe('L1–L40 / 100')
     expect(c.actions![0]!.page).toMatchObject({ kind: 'repo_blob', path: 'a.ts' })
   })
 
-  it('repo-edit: changes + inline diff + commit/file actions', () => {
-    const c = cardFor('repo-edit', { org: 'a', repo: 'b', ref: 'dev', path: 'x', commit: 'abc123', added: 3, removed: 1, diff: '@@ -1 +1 @@' }, {})!
+  it('repo-file-edit: changes + inline diff + commit/file actions', () => {
+    const c = cardFor('repo-file-edit', { org: 'a', repo: 'b', ref: 'dev', path: 'x', commit: 'abc123', added: 3, removed: 1, diff: '@@ -1 +1 @@' }, {})!
     expect(c.fields.find(f => f.label === 'changes')!.value).toBe('+3 −1')
     expect(c.body).toEqual({ kind: 'diff', diff: '@@ -1 +1 @@' })
     expect(c.actions!.map(a => a.page.kind)).toEqual(['repo_commit', 'repo_blob'])
@@ -71,19 +71,19 @@ describe('cardFor', () => {
     expect(c.actions![0]!.page).toMatchObject({ kind: 'sandbox_job', name: 'sb', jobId: 'j1' })
   })
 
-  it('sandbox-read renders a code body (line-number gutter stripped)', () => {
-    const c = cardFor('sandbox-read', { total_lines: 2, start: 0, shown: 2 }, { 'worker-name': 'sb', path: 'src/a.ts' }, '1  const x = 1\n2  export {}')!
+  it('sandbox-file-read renders a code body (line-number gutter stripped)', () => {
+    const c = cardFor('sandbox-file-read', { total_lines: 2, start: 0, shown: 2 }, { 'worker-name': 'sb', path: 'src/a.ts' }, '1  const x = 1\n2  export {}')!
     expect(c.body).toMatchObject({ kind: 'code', name: 'a.ts' })
     expect((c.body as { text: string }).text).toBe('const x = 1\nexport {}')
   })
 
-  it('sandbox-edit renders a diff body', () => {
-    const c = cardFor('sandbox-edit', { path: 'a', added: 1, removed: 1, diff: '@@ x @@' }, { 'worker-name': 'sb' }, '')!
+  it('sandbox-file-edit renders a diff body', () => {
+    const c = cardFor('sandbox-file-edit', { path: 'a', added: 1, removed: 1, diff: '@@ x @@' }, { 'worker-name': 'sb' }, '')!
     expect(c.body).toEqual({ kind: 'diff', diff: '@@ x @@' })
   })
 
-  it('sandbox-ls renders a tree body', () => {
-    const c = cardFor('sandbox-ls', { rows: 2, entries: [{ path: 'a', depth: 1, type: 'dir', size: 0 }, { path: 'a/b', depth: 2, type: 'file', size: 3 }] }, { 'worker-name': 'sb' }, '')!
+  it('sandbox-file-ls renders a tree body', () => {
+    const c = cardFor('sandbox-file-ls', { rows: 2, entries: [{ path: 'a', depth: 1, type: 'dir', size: 0 }, { path: 'a/b', depth: 2, type: 'file', size: 3 }] }, { 'worker-name': 'sb' }, '')!
     expect(c.body!.kind).toBe('tree')
   })
 
@@ -120,9 +120,9 @@ describe('cardFor', () => {
   })
 
   it('falls back to input coordinates and returns null for unknown tools', () => {
-    const c = cardFor('repo-read', {}, { org: 'a', repo: 'b', ref: 'main', path: 'p' })!
+    const c = cardFor('repo-file-read', {}, { org: 'a', repo: 'b', ref: 'main', path: 'p' })!
     expect(c.actions![0]!.page).toMatchObject({ kind: 'repo_blob', path: 'p' })
     expect(cardFor('image-generate', {}, {})).not.toBeNull()
-    expect(cardFor('repo-read', { org: 'a' }, {})).toBeNull()
+    expect(cardFor('repo-file-read', { org: 'a' }, {})).toBeNull()
   })
 })
