@@ -49,6 +49,35 @@ describe('cardFor', () => {
     expect(c.actions![0]!.page).toMatchObject({ kind: 'sandbox_detail', name: 'sb' })
   })
 
+  it('sandbox-exec renders a terminal body with command + output', () => {
+    const c = cardFor(
+      'sandbox-exec',
+      { 'job-id': 'j1', state: 'done', exit_code: 0 },
+      { 'worker-name': 'sb', command: 'ls -la' },
+      'total 0\nfile.txt',
+    )!
+    expect(c.subtitle).toBe('sb')
+    expect(c.body).toEqual({ kind: 'terminal', command: 'ls -la', text: 'total 0\nfile.txt', state: 'done', exitCode: 0 })
+    expect(c.actions!.map(a => a.page.kind)).toEqual(['sandbox_job', 'sandbox_detail'])
+    expect(c.actions![0]!.page).toMatchObject({ kind: 'sandbox_job', name: 'sb', jobId: 'j1' })
+  })
+
+  it('sandbox-read renders a code body (line-number gutter stripped)', () => {
+    const c = cardFor('sandbox-read', { total_lines: 2, start: 0, shown: 2 }, { 'worker-name': 'sb', path: 'src/a.ts' }, '1  const x = 1\n2  export {}')!
+    expect(c.body).toMatchObject({ kind: 'code', name: 'a.ts' })
+    expect((c.body as { text: string }).text).toBe('const x = 1\nexport {}')
+  })
+
+  it('sandbox-edit renders a diff body', () => {
+    const c = cardFor('sandbox-edit', { path: 'a', added: 1, removed: 1, diff: '@@ x @@' }, { 'worker-name': 'sb' }, '')!
+    expect(c.body).toEqual({ kind: 'diff', diff: '@@ x @@' })
+  })
+
+  it('sandbox-ls renders a tree body', () => {
+    const c = cardFor('sandbox-ls', { rows: 2, entries: [{ path: 'a', depth: 1, type: 'dir', size: 0 }, { path: 'a/b', depth: 2, type: 'file', size: 3 }] }, { 'worker-name': 'sb' }, '')!
+    expect(c.body!.kind).toBe('tree')
+  })
+
   it('falls back to input coordinates and returns null for unknown tools', () => {
     const c = cardFor('repo-read', {}, { org: 'a', repo: 'b', ref: 'main', path: 'p' })!
     expect(c.actions![0]!.page).toMatchObject({ kind: 'repo_blob', path: 'p' })

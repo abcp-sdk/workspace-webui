@@ -7,6 +7,7 @@
   import { cn } from '$lib/utils'
   import { AppIcons } from '$lib/icons'
   import DiffView from './DiffView.svelte'
+  import CodeSurface from './CodeSurface.svelte'
 
   let { card, store }: { card: CardSpec; store?: AppStore } = $props()
 
@@ -168,6 +169,32 @@
       </div>
     {:else if b.kind === 'text'}
       <pre class={cn('max-h-52 min-w-0 overflow-auto rounded-sm bg-muted/40 p-1.5 font-mono text-[11px] whitespace-pre-wrap', b.tone === 'destructive' && 'text-destructive')}>{b.text}</pre>
+    {:else if b.kind === 'terminal'}
+      <div class="min-w-0 overflow-hidden rounded-sm border border-border/50 bg-black/90">
+        {#if b.command}<div class="border-b border-white/10 px-2 py-1 font-mono text-[11px] text-green-300"><span class="text-white/40 select-none">$ </span>{b.command}</div>{/if}
+        <pre class="max-h-72 min-w-0 overflow-auto p-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-green-200">{b.text || ' '}</pre>
+        {#if b.state || b.exitCode !== undefined}
+          <div class="border-t border-white/10 px-2 py-1 font-mono text-[10px]">
+            {#if b.state === 'running'}<span class="text-warning">running</span>
+            {:else if b.exitCode !== undefined}<span class={b.exitCode === 0 ? 'text-success' : 'text-destructive'}>exit {b.exitCode}</span>
+            {:else}<span class="text-white/40">{b.state}</span>{/if}
+          </div>
+        {/if}
+      </div>
+    {:else if b.kind === 'code'}
+      <div class="h-64 min-w-0 overflow-hidden rounded-sm border border-border/50">
+        <CodeSurface code={b.text} name={b.name} />
+      </div>
+    {:else if b.kind === 'tree'}
+      <div class="min-w-0 rounded-sm border border-border/40">
+        {#each b.rows.slice(0, 200) as r (r.path)}
+          <div class="flex min-w-0 items-center gap-1.5 border-b border-border/30 py-0.5 pr-1.5 text-micro last:border-b-0" style="padding-left: {0.375 + (r.depth - 1) * 0.75}rem">
+            {#if r.type === 'dir'}<AppIcons.folder class="size-3.5 shrink-0 text-primary" />{:else}<AppIcons.file class="size-3.5 shrink-0 text-muted-foreground" />{/if}
+            <span class="min-w-0 flex-1 truncate font-mono">{r.path.split('/').pop() || r.path}</span>
+            {#if r.type !== 'dir'}<span class="shrink-0 text-[10px] text-muted-foreground">{r.size}B</span>{/if}
+          </div>
+        {/each}
+      </div>
     {/if}
   {/if}
 

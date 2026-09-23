@@ -53,7 +53,7 @@
 
   // The registered card spec (null = no pretty view; raw JSON only).
   const card = $derived(
-    !running && Object.keys(input).length > 0 ? cardFor(tool, meta, input) : null,
+    !running && Object.keys(input).length > 0 ? cardFor(tool, meta, input, output) : null,
   )
   const hasPretty = $derived(card !== null || todoList !== null)
 

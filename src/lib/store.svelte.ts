@@ -393,13 +393,20 @@ export class AppStore {
   }
 
   /**
-   * Open a Code-tab page from ANYWHERE (chat tool cards, the ⋮ menu, …).
-   * Switches to the Code tab and pushes the page as a sibling of `code_root`,
-   * so the tree | page split is shown (and a repeated call replaces the page).
+   * Open a stack page from ANYWHERE (chat tool cards, the ⋮ menu, …). The page
+   * kind decides the tab: `repo_*` → Code; `sandbox_*` / `service_*` →
+   * Service. The page is pushed as a SIBLING of that tab's root, so the
+   * root | page split shows and a repeated call replaces the page.
    */
+  openPage(page: AppPage) {
+    const tab: SiderTab = page.kind.startsWith('repo_') ? 'code' : 'service'
+    this.siderTab = tab
+    this.stacks[tab] = pushSibling(this.stacks[tab], page)
+  }
+
+  /** Back-compat alias for {@link openPage}. */
   openCodePage(page: AppPage) {
-    this.siderTab = 'code'
-    this.stacks.code = pushSibling(this.stacks.code, page)
+    this.openPage(page)
   }
 
   /** Apply a settings/fork/rename result onto the live list. */

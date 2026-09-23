@@ -1,6 +1,6 @@
 // Page builders shared by the tool-card registry. Every builder returns an
-// `AppPage` that `store.openCodePage` can push, so a card can deep-link into
-// the Code / Service tabs from anywhere.
+// `AppPage` that `store.openPage` can push (it picks the Code or Service tab
+// from the page kind), so a card can deep-link from anywhere.
 import type { AppPage } from './nav'
 
 export function repoDetail(org: string, repo: string, ref: string): AppPage {
@@ -29,6 +29,9 @@ export function repoRelease(org: string, repo: string, tag: string): AppPage {
 }
 export function sandboxPage(name: string): AppPage {
   return { kind: 'sandbox_detail', key: `sbx:${name}`, name }
+}
+export function sandboxJobPage(name: string, jobId: string): AppPage {
+  return { kind: 'sandbox_job', key: `job:${name}:${jobId}`, name, jobId }
 }
 export function servicePage(name: string): AppPage {
   return { kind: 'service_detail', key: `svc:${name}`, name }

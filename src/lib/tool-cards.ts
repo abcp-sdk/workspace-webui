@@ -40,6 +40,12 @@ export type CardBody =
   | { kind: 'ports'; ports: Array<{ name: string; preset: string; port: number; protocol: string; targetPort: number; publicUrl?: string }> }
   | { kind: 'images'; images: Array<{ owner: string; name: string; tag: string; ref?: string }> }
   | { kind: 'text'; text: string; tone?: 'default' | 'destructive' }
+  // Terminal-style output: `$ command` prompt + monospace body + status line.
+  | { kind: 'terminal'; command?: string; text: string; state?: string; exitCode?: number }
+  // Source with line numbers + Shiki (reuses CodeSurface).
+  | { kind: 'code'; name: string; text: string }
+  // An indented tree (sandbox-ls).
+  | { kind: 'tree'; rows: Array<{ path: string; depth: number; type: string; size: number }> }
 
 export interface CardSpec {
   /** Header subtitle (replaces the redundant italic title). */
@@ -80,8 +86,12 @@ function loc(org: string, repo: string, ref: string): string {
 
 const diffTone = (a: number, d: number): CardField['tone'] => (d > 0 ? 'destructive' : a > 0 ? 'success' : 'muted')
 
-/** Build a card for a tool, or null to fall back to the raw JSON view. */
-export function cardFor(tool: string, data: Data, input: Data): CardSpec | null {
+/**
+ * Build a card for a tool, or null to fall back to the raw JSON view. `output`
+ * is the tool's result TEXT (needed by the terminal/code bodies, whose payload
+ * is not in `data`).
+ */
+export function cardFor(tool: string, data: Data, input: Data, output = ''): CardSpec | null {
   const org = pick(data, input, 'org')
   const repo = pick(data, input, 'repo')
   const ref = pick(data, input, 'ref') || pick(data, input, 'branch')
@@ -480,7 +490,109 @@ export function cardFor(tool: string, data: Data, input: Data): CardSpec | null 
       return { subtitle: name, fields: [{ icon: 'delete', label: 'deleted', value: name, mono: true, tone: 'destructive' }] }
     }
 
+    // ---- sandbox execution: terminal ----
+    case 'sandbox-exec':
+    case 'sandbox-job-start':
+    case 'sandbox-job-output':
+    case 'sandbox-job-wait': {
+      const name = pick(data, input, 'worker-name')
+      const jobId = s(data, 'job-id') || pick(data, input, 'job-id')
+      const command = pick(data, input, 'command')
+      const state = s(data, 'state')
+      const exit = data['exit_code']
+      const fields: CardField[] = []
+      if (name) fields.push({ icon: 'box', label: 'sandbox', value: name, mono: true })
+      if (jobId) fields.push({ icon: 'terminal', label: 'job', value: jobId, mono: true })
+      if (state) fields.push({ icon: state === 'running' ? 'more' : 'success', label: 'state', value: state, tone: state === 'running' ? 'muted' : 'success' })
+      const actions: CardSpec['actions'] = []
+      if (name && jobId) actions.push({ label: jobId, icon: 'terminal', page: P.sandboxJobPage(name, jobId) })
+      if (name) actions.push({ label: name, icon: 'box', page: P.sandboxPage(name) })
+      return {
+        subtitle: name || jobId || 'exec',
+        fields,
+        body: { kind: 'terminal', command, text: output, state, exitCode: typeof exit === 'number' ? exit : undefined },
+        actions,
+      }
+    }
+    case 'sandbox-job-list': {
+      const count = n(data, 'count')
+      return { subtitle: 'jobs', fields: [{ icon: 'terminal', label: 'jobs', value: String(count) }], body: output ? { kind: 'terminal', text: output } : undefined }
+    }
+    case 'sandbox-job-kill':
+    case 'sandbox-job-stdin': {
+      const jobId = pick(data, input, 'job-id')
+      return { subtitle: jobId, fields: [{ icon: 'terminal', label: 'job', value: jobId, mono: true }] }
+    }
+
+    // ---- sandbox files ----
+    case 'sandbox-read': {
+      const path = pick(data, input, 'path')
+      const total = n(data, 'total_lines')
+      const start = n(data, 'start')
+      const shown = n(data, 'shown')
+      const range = total > 0 ? `L${start + 1}–L${start + shown} / ${total}` : ''
+      return {
+        subtitle: path || 'read',
+        fields: [
+          { icon: 'file_code', label: 'path', value: path, mono: true },
+          ...(range ? [{ icon: 'list', label: 'lines', value: range, mono: true } as CardField] : []),
+        ],
+        body: { kind: 'code', name: path.split('/').pop() || path, text: stripLineNumbers(output) },
+      }
+    }
+    case 'sandbox-write':
+    case 'sandbox-edit': {
+      const path = pick(data, input, 'path')
+      const added = n(data, 'added')
+      const removed = n(data, 'removed')
+      const fields: CardField[] = [{ icon: 'file_code', label: 'path', value: path, mono: true }]
+      if (added || removed) fields.push({ icon: 'diff', label: 'changes', value: `+${added} −${removed}`, mono: true, tone: diffTone(added, removed) })
+      if (n(data, 'lines')) fields.push({ icon: 'list', label: 'lines', value: String(n(data, 'lines')), tone: 'muted' })
+      const d = s(data, 'diff')
+      return { subtitle: path || tool, fields, body: d ? { kind: 'diff', diff: d } : undefined }
+    }
+    case 'sandbox-ls': {
+      const path = pick(data, input, 'path')
+      const entries = arr<{ path: string; depth: number; type: string; size: number }>(data, 'entries')
+      return {
+        subtitle: path || '/',
+        fields: [{ icon: 'folder', label: 'entries', value: String(entries.length || n(data, 'rows')) }],
+        body: entries.length ? { kind: 'tree', rows: entries } : undefined,
+      }
+    }
+    case 'sandbox-info': {
+      const fields: CardField[] = []
+      if (s(data, 'os')) fields.push({ icon: 'server', label: 'os', value: `${s(data, 'os')}/${s(data, 'arch')}` })
+      if (s(data, 'shell')) fields.push({ icon: 'terminal', label: 'shell', value: s(data, 'shell'), mono: true })
+      if (s(data, 'workspace')) fields.push({ icon: 'folder', label: 'workspace', value: s(data, 'workspace'), mono: true })
+      if (s(data, 'url')) fields.push({ icon: 'link', label: 'url', value: s(data, 'url'), mono: true, tone: 'muted' })
+      return { subtitle: 'sandbox', fields }
+    }
+    case 'sandbox-list': {
+      return { subtitle: 'sandboxes', fields: [{ icon: 'box', label: 'count', value: String(n(data, 'count')) }] }
+    }
+    case 'sandbox-download':
+    case 'sandbox-upload': {
+      const path = pick(data, input, 'path')
+      const code = s(data, 'code')
+      return {
+        subtitle: path || code || tool,
+        fields: [
+          ...(path ? [{ icon: 'file_code', label: 'path', value: path, mono: true } as CardField] : []),
+          ...(code ? [{ icon: 'file', label: 'file', value: code, mono: true, tone: 'muted' } as CardField] : []),
+        ],
+      }
+    }
+
     default:
       return null
   }
+}
+
+/** Strip a leading `N\t` / `N  ` line-number gutter from read output. */
+function stripLineNumbers(text: string): string {
+  return text
+    .split('\n')
+    .map(l => l.replace(/^\s*\d+\s{2,}/, '').replace(/^\s*\d+\t/, ''))
+    .join('\n')
 }
