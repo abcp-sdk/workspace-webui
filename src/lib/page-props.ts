@@ -33,4 +33,7 @@ export interface PageProps {
   index?: number
   /** Release tag (repo_release). */
   tag?: string
+  /** Compare refs (repo_compare). */
+  base?: string
+  head?: string
 }

@@ -392,6 +392,16 @@ export class AppStore {
     this.siderTab = tab
   }
 
+  /**
+   * Open a Code-tab page from ANYWHERE (chat tool cards, the ⋮ menu, …).
+   * Switches to the Code tab and pushes the page as a sibling of `code_root`,
+   * so the tree | page split is shown (and a repeated call replaces the page).
+   */
+  openCodePage(page: AppPage) {
+    this.siderTab = 'code'
+    this.stacks.code = pushSibling(this.stacks.code, page)
+  }
+
   /** Apply a settings/fork/rename result onto the live list. */
   applySession(updated: Session) {
     this.setSessions(

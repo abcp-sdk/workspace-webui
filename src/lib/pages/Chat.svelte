@@ -563,6 +563,20 @@
 
   async function menuAction(v: string) {
     switch (v) {
+      case 'repo': {
+        // Jump to the session's repository in the Code tab (tree | detail).
+        const s = session
+        if (s?.org && s.repo) {
+          store.openCodePage({
+            kind: 'repo_detail',
+            key: `repo:${s.org}/${s.repo}@${s.branch || 'main'}`,
+            org: s.org,
+            repo: s.repo,
+            ref: s.branch || 'main',
+          })
+        }
+        break
+      }
       case 'compact': {
         const ok = await confirmDialog({ title: t('compactHistory'), body: t('compactConfirm'), confirmLabel: t('apply') })
         if (ok && sid) {
@@ -689,6 +703,9 @@
           {/if}
         </div>
         <DropdownMenu label={t('settingsTitle')}>
+          {#if session?.org}
+            <DropdownMenuItem onSelect={() => void menuAction('repo')}>{t('openRepository')}</DropdownMenuItem>
+          {/if}
           <DropdownMenuItem onSelect={() => void menuAction('compact')}>{t('compactHistory')}</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => void menuAction('fork')}>{t('fork')}</DropdownMenuItem>
           <DropdownMenuSeparator />
@@ -727,6 +744,7 @@
             onEdit={txt => void ctrl!.resendFrom(ctrl!.messages.find(m => m.id === msg.id)!, txt)}
             onOpenSession={name => store.pickSession(name)}
             sessionExists={name => store.sessionById(name) !== null}
+            {store}
           />
         {/each}
       {/if}

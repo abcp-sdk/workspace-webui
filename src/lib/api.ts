@@ -828,6 +828,24 @@ export class AgentApi {
     return r.diff
   }
 
+  /** Per-file diff between two refs (gateway go-git; Forgejo's compare
+   *  `patch` is empty on 1.22). */
+  async compare(
+    org: string,
+    repo: string,
+    base: string,
+    head: string,
+  ): Promise<CompareFile[]> {
+    const r = await this._guard(() => this._c.compare({ org, repo, base, head }))
+    return (r.files ?? []).map(f => ({
+      path: f.path,
+      status: f.status,
+      additions: Number(f.additions),
+      deletions: Number(f.deletions),
+      patch: f.patch,
+    }))
+  }
+
   /** Unified diff of ONE file between two refs (gateway go-git; Forgejo's
    *  compare `patch` is empty on 1.22). */
   async fileDiff(
@@ -1095,6 +1113,13 @@ export interface BranchInfo {
 export interface TagInfo {
   name: string
   sha: string
+}
+export interface CompareFile {
+  path: string
+  status: string
+  additions: number
+  deletions: number
+  patch: string
 }
 export interface BlameLine {
   line: number

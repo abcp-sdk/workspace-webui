@@ -10,16 +10,20 @@
   import MediaAttachment from './MediaAttachment.svelte'
   import TodosPanel from './TodosPanel.svelte'
   import { isTodoWrite, parseTodos } from '$lib/todos'
+  import { toolLinks } from '$lib/tool-links'
   import type { FileRef } from '$lib/models'
+  import type { AppStore } from '$lib/store.svelte'
 
   let {
     part,
     isStreaming = false,
     api,
+    store,
   }: {
     part: ChatPart
     isStreaming?: boolean
     api: AgentApi
+    store?: AppStore
   } = $props()
 
   let open = $state(true)
@@ -42,6 +46,15 @@
   // arguments have fully streamed (state.input is present); while streaming
   // (only inputText) the raw preview below is used.
   const todoList = $derived(isTodoWrite(tool) ? parseTodos(input) : null)
+
+  // Once the arguments have FULLY streamed, a card exposes deep links into the
+  // Code/Service tabs (a file's content, a commit's diff, a compare, a service
+  // log, …). Only when a store is present (chat renders pass one).
+  const links = $derived(
+    store && !running && Object.keys(input).length > 0
+      ? toolLinks(tool, meta, input)
+      : [],
+  )
 
   interface MediaRef {
     code: string
@@ -134,6 +147,24 @@
     {/if}
     {#if open}<AppIcons.chevron_down class="size-3.5 shrink-0 text-muted-foreground" />{:else}<AppIcons.chevron_right class="size-3.5 shrink-0 text-muted-foreground" />{/if}
   </button>
+
+  <!-- deep links into the Code/Service tabs (a file, a commit diff, …) -->
+  {#if links.length}
+    <div class="flex flex-wrap gap-1 px-2 pb-1.5">
+      {#each links as l, i (i)}
+        {@const Icon = AppIcons[l.icon as keyof typeof AppIcons] ?? AppIcons.tools}
+        <button
+          type="button"
+          class="flex min-w-0 max-w-full items-center gap-1 rounded border border-primary/40 bg-primary/8 px-1.5 py-0.5 text-[10px] text-primary hover:bg-primary/15"
+          title={l.label}
+          onclick={() => store?.openCodePage(l.page)}
+        >
+          <Icon class="size-3 shrink-0" />
+          <span class="min-w-0 truncate font-mono">{l.label}</span>
+        </button>
+      {/each}
+    </div>
+  {/if}
 
   {#if open}
     <div class="min-w-0 space-y-2 px-2.5 pb-2.5">

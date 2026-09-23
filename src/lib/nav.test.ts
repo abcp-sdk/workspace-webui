@@ -155,6 +155,11 @@ describe('pushChild', () => {
     expect(stack).toEqual([codeRoot, detail, blobA, history, histDiff])
   })
 
+  it('opens a repo_compare page from a tool card', () => {
+    const cmp: AppPage = { kind: 'repo_compare', key: 'cmp:acme/web:main...feat', org: 'acme', repo: 'web', base: 'main', head: 'feat' }
+    expect(pushChild([codeRoot, detail], cmp)).toEqual([codeRoot, detail, cmp])
+  })
+
   it('opens a commit and a change request as their own pages', () => {
     const commit: AppPage = { kind: 'repo_commit', key: 'commit:acme/web@abc', org: 'acme', repo: 'web', ref: 'main', sha: 'abc' }
     const mr: AppPage = { kind: 'repo_mr', key: 'mr:acme/web:1', org: 'acme', repo: 'web', index: 1 }

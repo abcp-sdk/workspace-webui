@@ -24,6 +24,7 @@
   import RepoCommit from './pages/RepoCommit.svelte'
   import RepoMR from './pages/RepoMR.svelte'
   import RepoRelease from './pages/RepoRelease.svelte'
+  import RepoCompare from './pages/RepoCompare.svelte'
   import ServiceRoot from './pages/ServiceRoot.svelte'
   import SandboxDetail from './pages/SandboxDetail.svelte'
   import SandboxJob from './pages/SandboxJob.svelte'
@@ -91,6 +92,8 @@
         return RepoRelease as Component<PageProps>
       case 'repo_tag':
         return RepoDetail as Component<PageProps>
+      case 'repo_compare':
+        return RepoCompare as Component<PageProps>
       case 'service_root':
         return ServiceRoot as Component<PageProps>
       case 'sandbox_detail':
@@ -160,6 +163,8 @@
           sha={'sha' in p.page ? p.page.sha : undefined}
           index={'index' in p.page ? p.page.index : undefined}
           tag={'tag' in p.page ? p.page.tag : undefined}
+          base={'base' in p.page ? p.page.base : undefined}
+          head={'head' in p.page ? p.page.head : undefined}
         />
       </div>
     {/each}

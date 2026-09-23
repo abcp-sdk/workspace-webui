@@ -27,6 +27,7 @@
     onOpenSession,
     sessionExists,
     sessionId = '',
+    store,
   }: {
     msg: ChatMessage
     api: AgentApi
@@ -39,6 +40,8 @@
     sessionExists?: ((sessionId: string) => boolean) | null
     /** Id of the OPEN session, used to seed the assistant avatar on the left. */
     sessionId?: string
+    /** App store, so tool cards can deep-link into the Code/Service tabs. */
+    store?: import('$lib/store.svelte').AppStore
   } = $props()
 
   const isUser = $derived(msg.role === 'user')
@@ -296,7 +299,7 @@
             </div>
           {:else if part.type === 'tool' && part.state}
             <div class="w-full">
-              <ToolPartView {part} {isStreaming} {api} />
+              <ToolPartView {part} {isStreaming} {api} {store} />
             </div>
           {/if}
         {/each}

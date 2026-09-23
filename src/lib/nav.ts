@@ -52,6 +52,8 @@ export type AppPage =
   | { kind: 'repo_release'; key: string; org: string; repo: string; tag: string }
   // Browse a repository at a tag (opened from the Tags sub-tab).
   | { kind: 'repo_tag'; key: string; org: string; repo: string; ref: string }
+  // Diff between two refs (multi-file), opened from the `repo-diff` tool card.
+  | { kind: 'repo_compare'; key: string; org: string; repo: string; base: string; head: string }
   // service tab (read-only sandboxes + services)
   | { kind: 'service_root'; key: 'service_root' }
   | { kind: 'sandbox_detail'; key: string; name: string }
