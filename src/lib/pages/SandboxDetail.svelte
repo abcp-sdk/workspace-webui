@@ -11,12 +11,19 @@
   import { AppIcons } from '$lib/icons'
   import { usePoll } from '$lib/poll.svelte'
   import PageHeader from '$lib/components/layout/PageHeader.svelte'
+  import TabBar from '$lib/components/layout/TabBar.svelte'
+  import TabItem from '$lib/components/layout/TabItem.svelte'
   import ListRow from '$lib/components/layout/ListRow.svelte'
   import SectionLabel from '$lib/components/layout/SectionLabel.svelte'
   import EmptyState from '$lib/components/layout/EmptyState.svelte'
   import IconButton from '$lib/components/layout/IconButton.svelte'
 
   let { store, name, showBack = false }: PageProps & { name: string } = $props()
+
+  /** Open the sandbox file browser at the workspace root. */
+  function openFiles() {
+    store.open({ kind: 'sandbox_files', key: `files:${name}:`, name, path: '' })
+  }
 
   let sandbox = $state<SandboxInfo | null>(null)
   let jobs = $state<SandboxJob[]>([])
@@ -117,6 +124,15 @@
       {/if}
     </div>
   {/if}
+
+  <TabBar>
+    <TabItem active onclick={() => {}}>
+      <AppIcons.terminal class="size-3.5" />{t('jobs')}
+    </TabItem>
+    <TabItem onclick={openFiles}>
+      <AppIcons.folder class="size-3.5" />{t('files')}
+    </TabItem>
+  </TabBar>
 
   <!-- job list (full pane) -->
   <div class="min-h-0 flex-1 overflow-y-auto">

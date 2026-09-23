@@ -106,6 +106,9 @@ export type AppPage =
   | { kind: 'service_root'; key: 'service_root' }
   | { kind: 'sandbox_detail'; key: string; name: string }
   | { kind: 'sandbox_job'; key: string; name: string; jobId: string }
+  // Read-only file browser over the sandbox filesystem. `path` may be a
+  // directory (browse it) or a file (open it directly); '' = workspace root.
+  | { kind: 'sandbox_files'; key: string; name: string; path: string }
   | { kind: 'service_detail'; key: string; name: string }
 
 export function rootPageFor(lane: SiderTab): AppPage {
@@ -148,6 +151,7 @@ export function laneOf(page: AppPage): SiderTab {
     case 'service_root':
     case 'sandbox_detail':
     case 'sandbox_job':
+    case 'sandbox_files':
     case 'service_detail':
       return 'service'
   }
@@ -244,6 +248,7 @@ export function parentOf(page: AppPage): AppPage | null {
     case 'service_detail':
       return { kind: 'service_root', key: 'service_root' }
     case 'sandbox_job':
+    case 'sandbox_files':
       return {
         kind: 'sandbox_detail',
         key: `sbx:${page.name}`,

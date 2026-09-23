@@ -924,36 +924,59 @@ export class AgentApi {
 
   async listSandboxes(): Promise<SandboxInfo[]> {
     const r = await this._guard(() => this._c.listSandboxes({}))
-    return (r.sandboxes ?? []).map(s => ({
-      name: s.name,
-      image: s.image,
-      phase: s.phase,
-      ready: s.ready,
-      url: s.url,
-      creator: s.creator,
-      session: s.session,
-      createdAt: Number(s.createdAt),
-    }))
+    return (r.sandboxes ?? []).map(sandboxFromPb)
   }
 
   async getSandbox(name: string): Promise<SandboxInfo | null> {
     try {
       const r = await this._guard(() => this._c.getSandbox({ name }))
-      const s = r.sandbox
-      return s
-        ? {
-            name: s.name,
-            image: s.image,
-            phase: s.phase,
-            ready: s.ready,
-            url: s.url,
-            creator: s.creator,
-            session: s.session,
-            createdAt: Number(s.createdAt),
-          }
-        : null
+      return r.sandbox ? sandboxFromPb(r.sandbox) : null
     } catch {
       return null
+    }
+  }
+
+  /** List a sandbox directory (or a single file). `path` is passed to the
+   *  worker verbatim (relative = workspace, absolute = as-is). */
+  async listSandboxFiles(
+    name: string,
+    path: string,
+    depth = 1,
+    limit = 1000,
+  ): Promise<{ isDir: boolean; files: SandboxFileEntry[] }> {
+    const r = await this._guard(() =>
+      this._c.listSandboxFiles({ name, path, depth, limit }),
+    )
+    return {
+      isDir: r.isDir,
+      files: (r.files ?? []).map(f => ({
+        path: f.path,
+        size: Number(f.size),
+        isDir: f.isDir,
+      })),
+    }
+  }
+
+  /** Read a sandbox file's raw bytes (optionally a line window). */
+  async readSandboxFile(
+    name: string,
+    path: string,
+    startLine = 0,
+    endLine = 0,
+  ): Promise<{
+    data: Uint8Array
+    totalLines: number
+    startLine: number
+    endLine: number
+  }> {
+    const r = await this._guard(() =>
+      this._c.readSandboxFile({ name, path, startLine, endLine }),
+    )
+    return {
+      data: r.content,
+      totalLines: r.totalLines,
+      startLine: r.startLine,
+      endLine: r.endLine,
     }
   }
 
@@ -1196,6 +1219,17 @@ export interface SandboxInfo {
   creator: string
   session: string
   createdAt: number
+  /** Worker workspace root (relative paths resolve here); '' until reachable. */
+  workspace: string
+  /** Worker user's home dir (the OS `~`); '' when unknown. */
+  home: string
+  os: string
+  arch: string
+}
+export interface SandboxFileEntry {
+  path: string
+  size: number
+  isDir: boolean
 }
 export interface SandboxJob {
   id: string
@@ -1239,6 +1273,37 @@ export interface ServiceInfo {
   expiresAt: number
   /** Scaled to zero by PauseService (resume restores the prior count). */
   paused: boolean
+}
+
+type PbSandboxInfo = {
+  name: string
+  image: string
+  phase: string
+  ready: boolean
+  url: string
+  creator: string
+  session: string
+  createdAt: bigint
+  workspace: string
+  home: string
+  os: string
+  arch: string
+}
+function sandboxFromPb(s: PbSandboxInfo): SandboxInfo {
+  return {
+    name: s.name,
+    image: s.image,
+    phase: s.phase,
+    ready: s.ready,
+    url: s.url,
+    creator: s.creator,
+    session: s.session,
+    createdAt: Number(s.createdAt),
+    workspace: s.workspace,
+    home: s.home,
+    os: s.os,
+    arch: s.arch,
+  }
 }
 
 type PbServiceInfo = {

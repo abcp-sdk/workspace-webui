@@ -123,6 +123,7 @@ describe('parentOf / ancestry (the forest)', () => {
       },
       { kind: 'sandbox_detail', key: 'k', name: 'sb' },
       { kind: 'sandbox_job', key: 'k', name: 'sb', jobId: 'j' },
+      { kind: 'sandbox_files', key: 'k', name: 'sb', path: '' },
       { kind: 'service_detail', key: 'k', name: 'sv' },
     ]
     for (const leaf of samples) {
@@ -206,6 +207,14 @@ describe('parentOf / ancestry (the forest)', () => {
         p => p.kind,
       ),
     ).toEqual(['service_root', 'sandbox_detail', 'sandbox_job'])
+  })
+
+  it('sandbox files nests under sandbox detail under service root', () => {
+    expect(
+      ancestry({ kind: 'sandbox_files', key: 'f', name: 'n', path: '' }).map(
+        p => p.kind,
+      ),
+    ).toEqual(['service_root', 'sandbox_detail', 'sandbox_files'])
   })
 
   it('stackFor is an alias of ancestry', () => {

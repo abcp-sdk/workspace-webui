@@ -28,6 +28,7 @@
   import ServiceRoot from './pages/ServiceRoot.svelte'
   import SandboxDetail from './pages/SandboxDetail.svelte'
   import SandboxJob from './pages/SandboxJob.svelte'
+  import SandboxFiles from './pages/SandboxFiles.svelte'
   import ServiceDetail from './pages/ServiceDetail.svelte'
 
   let {
@@ -82,6 +83,7 @@
       name:
         page.kind === 'sandbox_detail' ||
         page.kind === 'sandbox_job' ||
+        page.kind === 'sandbox_files' ||
         page.kind === 'service_detail'
           ? page.name
           : undefined,
@@ -141,6 +143,8 @@
         return SandboxDetail as Component<PageProps>
       case 'sandbox_job':
         return SandboxJob as Component<PageProps>
+      case 'sandbox_files':
+        return SandboxFiles as Component<PageProps>
       case 'service_detail':
         return ServiceDetail as Component<PageProps>
     }

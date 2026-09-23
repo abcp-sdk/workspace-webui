@@ -246,6 +246,26 @@ describe('cardFor', () => {
     expect(c.input.fields.map(f => f.label)).toEqual(['sandbox', 'path'])
     expect(c.result.fields[0]!.label).toBe('deleted')
     expect(c.result.fields[0]!.tone).toBe('destructive')
+    // The file is gone: the action links to its PARENT directory.
+    expect(c.result.actions![0]!.page).toMatchObject({
+      kind: 'sandbox_files',
+      name: 'sb',
+      path: '',
+    })
+  })
+
+  it('sandbox-file-read links into the sandbox file browser at the file', () => {
+    const c = cardFor(
+      'sandbox-file-read',
+      { total_lines: 2, start: 0, shown: 2 },
+      { 'worker-name': 'sb', path: 'hello/main.go' },
+      '1  package main',
+    )!
+    expect(c.result.actions![0]!.page).toMatchObject({
+      kind: 'sandbox_files',
+      name: 'sb',
+      path: 'hello/main.go',
+    })
   })
 
   it('matches an extension-qualified tool name', () => {

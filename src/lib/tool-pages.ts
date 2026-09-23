@@ -99,6 +99,11 @@ export function sandboxPage(name: string): AppPage {
 export function sandboxJobPage(name: string, jobId: string): AppPage {
   return { kind: 'sandbox_job', key: `job:${name}:${jobId}`, name, jobId }
 }
+/** Open the sandbox file browser at `path` (a dir to browse, or a file to
+ *  view); '' = the workspace root. */
+export function sandboxFilesPage(name: string, path: string): AppPage {
+  return { kind: 'sandbox_files', key: `files:${name}:${path}`, name, path }
+}
 export function servicePage(name: string): AppPage {
   return { kind: 'service_detail', key: `svc:${name}`, name }
 }

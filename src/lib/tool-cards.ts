@@ -201,6 +201,16 @@ function pick(data: Data, input: Data, k: string): string {
 function short(sha: string): string {
   return sha.length > 8 ? sha.slice(0, 8) : sha
 }
+/** The parent directory of a worker path (slash form). '' when already at a
+ *  root (or the input is empty). Preserves a leading '/'. */
+function parentOfPath(p: string): string {
+  const s = (p || '').replace(/\/+$/, '')
+  if (s === '' || s === '/' || /^[A-Za-z]:$/.test(s)) return s
+  const i = s.lastIndexOf('/')
+  if (i === -1) return ''
+  if (i === 0) return '/'
+  return s.slice(0, i)
+}
 function loc(org: string, repo: string, ref: string): string {
   return `${org}/${repo}${ref ? ` @ ${ref}` : ''}`
 }
@@ -1465,6 +1475,7 @@ export function cardFor(
     // ---- sandbox files ----
     case 'sandbox-file-read': {
       const path = pick(data, input, 'path')
+      const sandbox = pick(data, input, 'worker-name')
       const total = n(data, 'total_lines')
       const start = n(data, 'start')
       const shown = n(data, 'shown')
@@ -1491,12 +1502,23 @@ export function cardFor(
             name: path.split('/').pop() || path,
             text: stripLineNumbers(output),
           },
+          actions:
+            sandbox && path
+              ? [
+                  {
+                    label: path,
+                    icon: 'folder',
+                    page: P.sandboxFilesPage(sandbox, path),
+                  },
+                ]
+              : [],
         },
       }
     }
     case 'sandbox-file-write':
     case 'sandbox-file-edit': {
       const path = pick(data, input, 'path')
+      const sandbox = pick(data, input, 'worker-name')
       const added = n(data, 'added')
       const removed = n(data, 'removed')
       const content = pick(data, input, 'content')
@@ -1537,11 +1559,22 @@ export function cardFor(
               : null,
           ),
           body: d ? { kind: 'diff', diff: d } : undefined,
+          actions:
+            sandbox && path
+              ? [
+                  {
+                    label: path,
+                    icon: 'folder',
+                    page: P.sandboxFilesPage(sandbox, path),
+                  },
+                ]
+              : [],
         },
       }
     }
     case 'sandbox-file-ls': {
       const path = pick(data, input, 'path')
+      const sandbox = pick(data, input, 'worker-name')
       const entries = arr<{
         path: string
         depth: number
@@ -1567,11 +1600,23 @@ export function cardFor(
             },
           ],
           body: entries.length ? { kind: 'tree', rows: entries } : undefined,
+          actions: sandbox
+            ? [
+                {
+                  label: path || '/',
+                  icon: 'folder',
+                  page: P.sandboxFilesPage(sandbox, path),
+                },
+              ]
+            : [],
         },
       }
     }
     case 'sandbox-file-rm': {
       const path = pick(data, input, 'path')
+      const sandbox = pick(data, input, 'worker-name')
+      // The file is gone: link to its PARENT directory instead.
+      const parent = parentOfPath(path)
       return {
         subtitle: path || 'rm',
         input: {
@@ -1592,6 +1637,15 @@ export function cardFor(
                 }
               : null,
           ),
+          actions: sandbox
+            ? [
+                {
+                  label: parent || '/',
+                  icon: 'folder',
+                  page: P.sandboxFilesPage(sandbox, parent),
+                },
+              ]
+            : [],
         },
       }
     }
