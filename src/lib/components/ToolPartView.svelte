@@ -1,7 +1,9 @@
 <script lang="ts">
-  // ToolPartView — web port of flutter widgets/tool_part.dart: a foldable tool
-  // card (header icon+name+status, sections for input / content / metadata,
-  // first-class file refs from data.files).
+  // ToolPartView — a foldable tool card. Once a call's arguments have fully
+  // streamed, a tool with a registered card (see $lib/tool-cards) renders a
+  // PRETTY view (fields + body + actions) instead of raw JSON; a toggle
+  // switches between the pretty render and the raw JSON. Tools without a card,
+  // and calls still streaming, fall back to the raw JSON + output sections.
   import type { ChatPart, ToolState } from '$lib/models'
   import type { AgentApi } from '$lib/api'
   import { t } from '$lib/i18n.svelte'
@@ -9,8 +11,9 @@
   import { AppIcons } from '$lib/icons'
   import MediaAttachment from './MediaAttachment.svelte'
   import TodosPanel from './TodosPanel.svelte'
+  import ToolCard from './ToolCard.svelte'
   import { isTodoWrite, parseTodos } from '$lib/todos'
-  import { toolLinks } from '$lib/tool-links'
+  import { cardFor } from '$lib/tool-cards'
   import type { FileRef } from '$lib/models'
   import type { AppStore } from '$lib/store.svelte'
 
@@ -30,6 +33,8 @@
   let inputOpen = $state(true)
   let contentOpen = $state(true)
   let metaOpen = $state(true)
+  // Pretty (structured card) vs raw JSON for the input section.
+  let pretty = $state(true)
 
   const toolState: ToolState | null = $derived(part.state ?? null)
   const tool = $derived(part.tool)
@@ -40,21 +45,17 @@
 
   const output = $derived(toolState?.output ?? '')
   const meta = $derived((toolState?.data ?? {}) as Record<string, unknown>)
-  const metaEntries = $derived(Object.entries(meta).filter(([k]) => k !== 'files'))
 
   // A `todo-write` card renders the checklist instead of raw JSON once its
   // arguments have fully streamed (state.input is present); while streaming
   // (only inputText) the raw preview below is used.
   const todoList = $derived(isTodoWrite(tool) ? parseTodos(input) : null)
 
-  // Once the arguments have FULLY streamed, a card exposes deep links into the
-  // Code/Service tabs (a file's content, a commit's diff, a compare, a service
-  // log, …). Only when a store is present (chat renders pass one).
-  const links = $derived(
-    store && !running && Object.keys(input).length > 0
-      ? toolLinks(tool, meta, input)
-      : [],
+  // The registered card spec (null = no pretty view; raw JSON only).
+  const card = $derived(
+    !running && Object.keys(input).length > 0 ? cardFor(tool, meta, input) : null,
   )
+  const hasPretty = $derived(card !== null || todoList !== null)
 
   interface MediaRef {
     code: string
@@ -109,7 +110,6 @@
     return isTodoWrite(name) ? 'todo' : name
   }
 
-
   function prettyJson(o: unknown): string {
     try {
       return JSON.stringify(o, null, 2)
@@ -117,6 +117,8 @@
       return String(o)
     }
   }
+
+  const subtitle = $derived(card?.subtitle ?? toolState?.title ?? '')
 </script>
 
 <div
@@ -125,7 +127,7 @@
     hasError ? 'bg-destructive/5' : 'bg-muted/35',
   )}
 >
-  <!-- header: status icon → ONE fixed glyph → name → italic title → chevron -->
+  <!-- header: status icon → tool glyph → name → subtitle → chevron -->
   <button
     type="button"
     class="flex w-full items-center gap-1 px-2 py-1 text-left"
@@ -139,41 +141,24 @@
       <AppIcons.success class="size-3.5 shrink-0 text-success" />
     {/if}
     <AppIcons.tools class="size-3.5 shrink-0 text-primary" />
-    <span class="min-w-0 truncate font-semibold text-muted-foreground">{toolDisplayName(tool || toolState?.title || 'tool')}</span>
-    {#if toolState?.title}
-      <span class="min-w-0 flex-1 truncate text-micro text-muted-foreground italic">{toolState.title}</span>
+    <span class="min-w-0 shrink-0 truncate font-semibold text-muted-foreground">{toolDisplayName(tool || toolState?.title || 'tool')}</span>
+    {#if subtitle}
+      <span class="min-w-0 flex-1 truncate text-micro text-muted-foreground italic">{subtitle}</span>
     {:else}
       <span class="flex-1"></span>
     {/if}
     {#if open}<AppIcons.chevron_down class="size-3.5 shrink-0 text-muted-foreground" />{:else}<AppIcons.chevron_right class="size-3.5 shrink-0 text-muted-foreground" />{/if}
   </button>
 
-  <!-- deep links into the Code/Service tabs (a file, a commit diff, …) -->
-  {#if links.length}
-    <div class="flex flex-wrap gap-1 px-2 pb-1.5">
-      {#each links as l, i (i)}
-        {@const Icon = AppIcons[l.icon as keyof typeof AppIcons] ?? AppIcons.tools}
-        <button
-          type="button"
-          class="flex min-w-0 max-w-full items-center gap-1 rounded border border-primary/40 bg-primary/8 px-1.5 py-0.5 text-[10px] text-primary hover:bg-primary/15"
-          title={l.label}
-          onclick={() => store?.openCodePage(l.page)}
-        >
-          <Icon class="size-3 shrink-0" />
-          <span class="min-w-0 truncate font-mono">{l.label}</span>
-        </button>
-      {/each}
-    </div>
-  {/if}
-
   {#if open}
     <div class="min-w-0 space-y-2 px-2.5 pb-2.5">
-      <!-- input section -->
-      {#if todoList !== null}
-        <!-- todo-write with fully-streamed arguments: render the checklist. -->
+      <!-- params section: pretty card / todo checklist / raw JSON -->
+      {#if todoList !== null && pretty}
         <div class="min-w-0 rounded-sm border border-border/50 bg-background/50 p-2">
           <TodosPanel todos={todoList} />
         </div>
+      {:else if card !== null && pretty}
+        <ToolCard {card} {store} />
       {:else if Object.keys(input).length}
         <div class="min-w-0 rounded-sm border border-border/50 bg-background/50">
           <button
@@ -204,6 +189,26 @@
           {#if inputOpen}
             <pre class="max-h-52 min-w-0 overflow-auto px-2 pb-2 font-mono text-[11px] wrap-anywhere whitespace-pre-wrap">{toolState.inputText}</pre>
           {/if}
+        </div>
+      {/if}
+
+      <!-- pretty / raw JSON toggle (only when a pretty view exists) -->
+      {#if hasPretty}
+        <div class="flex items-center justify-end">
+          <div class="flex items-center gap-0.5 rounded-full border border-border p-0.5">
+            <button
+              type="button"
+              class={cn('rounded-full px-2 py-0.5 text-[10px]', pretty ? 'bg-primary/15 text-primary' : 'text-muted-foreground')}
+              title={t('prettyView')}
+              onclick={() => (pretty = true)}
+            >{t('prettyView')}</button>
+            <button
+              type="button"
+              class={cn('rounded-full px-2 py-0.5 text-[10px]', !pretty ? 'bg-primary/15 text-primary' : 'text-muted-foreground')}
+              title={t('rawJson')}
+              onclick={() => (pretty = false)}
+            >{t('rawJson')}</button>
+          </div>
         </div>
       {/if}
 
