@@ -60,23 +60,34 @@ export class AppStore {
   /** session → last read message_seq (client-local). */
   readSeqs: Record<string, number> = $state({})
 
-  /** session → sandbox phase (Running/Pending/…), refreshed from ListWorkspaces. */
-  phases: Record<string, string> = $state({})
+  /** session → its representative sandbox (name + phase), from
+   *  ListBranchSessions. A session may own several sandboxes; the gateway
+   *  returns the best one. */
+  sandboxes: Record<string, { name: string; phase: string }> = $state({})
 
-  /** Refresh the sandbox-phase map (best effort; the workspace gateway owns it). */
+  /** Refresh the sandbox map (best effort; the workspace gateway owns it). */
   async refreshPhases(): Promise<void> {
     try {
       const ws = await this.api.listBranchSessions()
-      const out: Record<string, string> = {}
-      for (const w of ws) if (w.session && w.phase) out[w.session] = w.phase
-      this.phases = out
+      const out: Record<string, { name: string; phase: string }> = {}
+      for (const w of ws) {
+        if (w.session && w.sandbox) {
+          out[w.session] = { name: w.sandbox, phase: w.phase }
+        }
+      }
+      this.sandboxes = out
     } catch {
       /* phases are best effort */
     }
   }
 
   phaseFor(id: string): string {
-    return this.phases[id] ?? ''
+    return this.sandboxes[id]?.phase ?? ''
+  }
+
+  /** The session's representative sandbox name ('' when none). */
+  sandboxFor(id: string): string {
+    return this.sandboxes[id]?.name ?? ''
   }
 
   /** Per-session composer drafts, surviving navigation. */

@@ -679,14 +679,17 @@
         <Marquee text={session?.id ?? ''} class="min-w-0 flex-1 text-center" />
       </button>
       <div class="flex items-center justify-end gap-0.5">
-        {#if store.phaseFor(sid)}
-          <!-- The sandbox name IS the session id: the phase chip jumps to the
-               sandbox's job list in the Service tab. -->
+        {#if store.phaseFor(sid) && store.sandboxFor(sid)}
+          <!-- The phase chip jumps to the session's representative sandbox
+               (its real name, NOT the session id) in the Service tab. -->
           <button
             type="button"
             class="rounded-full bg-muted px-2 py-px text-[10px] leading-4 text-muted-foreground hover:bg-muted/70"
-            title={t('tabService')}
-            onclick={() => store.navigate({ kind: 'sandbox_detail', key: `sbx:${sid}`, name: sid })}
+            title={store.sandboxFor(sid)}
+            onclick={() => {
+              const sbx = store.sandboxFor(sid)
+              if (sbx) store.navigate({ kind: 'sandbox_detail', key: `sbx:${sbx}`, name: sbx })
+            }}
           >{store.phaseFor(sid)}</button>
         {/if}
         <!-- Todos: the session's current checklist (from the last todo-write).
@@ -980,6 +983,7 @@
     bind:open={infoOpen}
     {session}
     role={role ? t(roleLabelKey(role)) : ''}
+    sandbox={store.sandboxFor(sid)}
     phase={store.phaseFor(sid)}
     onEdit={() => void showSettings()}
   />

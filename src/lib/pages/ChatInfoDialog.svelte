@@ -11,6 +11,7 @@
     open = $bindable(false),
     session,
     role = '',
+    sandbox = '',
     phase = '',
     onEdit,
   }: {
@@ -18,11 +19,18 @@
     session: Session | null
     /** Workspace role label key ('' when not a workspace session). */
     role?: string
-    /** Sandbox phase ('' when none). */
+    /** The session's representative sandbox name ('' when none). */
+    sandbox?: string
+    /** The sandbox phase ('' when none). */
     phase?: string
     /** "Edit": close this sheet and open the settings dialog. */
     onEdit: () => void
   } = $props()
+
+  // Only show the sandbox row when the session actually owns one.
+  const sandboxValue = $derived(
+    sandbox ? `${sandbox}${phase ? ` · ${phase}` : ''}` : '',
+  )
 </script>
 
 <Dialog bind:open title={t('sessionInfo')}>
@@ -37,7 +45,7 @@
         [t('variantLabel'), session?.variant || t('variantNone')],
         [t('presetLabel'), session?.preset || t('none')],
         [t('role'), role || t('none')],
-        [t('sandboxPhase'), phase || t('none')],
+        ...(sandboxValue ? [[t('sandboxPhase'), sandboxValue] as [string, string]] : []),
         [t('agentLocale'), session?.locale || Prefs.loadAgentLocale()],
       ] as [label, value] (label)}
         <div class="flex items-start gap-3 border-t border-border/40 pt-2 first:border-t-0 first:pt-0">
