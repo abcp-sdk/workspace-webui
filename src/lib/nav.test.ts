@@ -12,6 +12,7 @@ import {
   rootPageFor,
   stackFor,
   tabForPage,
+  visibleWindow,
 } from './nav'
 
 const root = rootPageFor('chat')
@@ -309,5 +310,48 @@ describe('popPage', () => {
   it('never pops below the root', () => {
     expect(popPage([root])).toEqual([root])
     expect(popPage([])).toEqual([])
+  })
+})
+
+describe('visibleWindow', () => {
+  const a: AppPage = {
+    kind: 'repo_detail',
+    key: 'r',
+    org: 'o',
+    repo: 'p',
+    ref: 'main',
+  }
+  const b: AppPage = {
+    kind: 'repo_blob',
+    key: 'b',
+    org: 'o',
+    repo: 'p',
+    ref: 'main',
+    path: 'x',
+  }
+  const c: AppPage = {
+    kind: 'repo_commit',
+    key: 'c',
+    org: 'o',
+    repo: 'p',
+    ref: 'main',
+    sha: 's',
+  }
+
+  it('shows the last two pages when the drawer is closed', () => {
+    expect(visibleWindow([root, a, b, c], false)).toEqual([b, c])
+    expect(visibleWindow([root, a], false)).toEqual([root, a])
+    expect(visibleWindow([root], false)).toEqual([root])
+  })
+
+  it('shows only the top page while the drawer is open (2 columns total)', () => {
+    // The drawer supplies the second column, so the main path contributes one.
+    expect(visibleWindow([root, a, b, c], true)).toEqual([c])
+    expect(visibleWindow([root, a], true)).toEqual([a])
+  })
+
+  it('never returns more than two pages', () => {
+    expect(visibleWindow([root, a, b, c], false).length).toBeLessThanOrEqual(2)
+    expect(visibleWindow([root, a, b, c], true).length).toBeLessThanOrEqual(1)
   })
 })

@@ -6,6 +6,7 @@
   import type { Component } from 'svelte'
   import type { AppPage, AppStore } from './store.svelte'
   import type { PageProps } from './page-props'
+  import { visibleWindow } from './nav'
   import { t } from './i18n.svelte'
   import { cn } from './utils'
   import { AppIcons } from '$lib/icons'
@@ -150,14 +151,14 @@
     }
   }
 
-  // The last two pages of the MAIN path (oldest → newest). The non-top pane
-  // auto-hides via the panes' own container query when that region is too
-  // narrow — so docking the drawer simply narrows the region and the split
-  // adapts, without ever disturbing the main path itself.
+  // The visible window of the MAIN path (oldest → newest): at most TWO columns
+  // (list + detail). While the drawer is open the main region shows only its
+  // TOP page, because the drawer supplies the second column — the total stays
+  // at two, so opening a cross-lane reference SLIDES the window (`1|2 → 2|3`)
+  // instead of growing to three columns.
   const panes = $derived.by(() => {
-    const stack = store.primaryStack
-    const start = Math.max(0, stack.length - 2)
-    return stack.slice(start).map((page, i, arr) => ({
+    const win = visibleWindow(store.primaryStack, store.drawerOpen)
+    return win.map((page, i, arr) => ({
       page,
       isTop: i === arr.length - 1,
       C: componentFor(page),

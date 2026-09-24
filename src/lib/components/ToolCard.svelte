@@ -200,7 +200,7 @@
       </div>
     {:else if b.kind === 'code'}
       <div class="h-64 min-w-0 overflow-hidden rounded-sm border border-border/50">
-        <CodeSurface code={b.text} name={b.name} />
+        <CodeSurface code={b.text} name={b.name} startLine={b.startLine ?? 1} />
       </div>
     {:else if b.kind === 'tree'}
       <div class="min-w-0 rounded-sm border border-border/40">

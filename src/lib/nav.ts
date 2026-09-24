@@ -287,3 +287,18 @@ export function pushPath(stack: AppPage[], page: AppPage): AppPage[] {
 export function popPage(stack: AppPage[]): AppPage[] {
   return stack.length > 1 ? stack.slice(0, -1) : [...stack]
 }
+
+/**
+ * The tail of a path that should be visible as columns. The UI shows at most
+ * TWO columns: a list column + a detail column. While the DRAWER is open it
+ * supplies the detail column, so the main path contributes only its top page.
+ * This keeps the total at two, so navigating deeper SLIDES the window
+ * (`1|2 → 2|3`) instead of growing to three columns.
+ */
+export function visibleWindow(
+  stack: AppPage[],
+  drawerOpen: boolean,
+): AppPage[] {
+  const width = drawerOpen ? 1 : 2
+  return stack.slice(Math.max(0, stack.length - width))
+}

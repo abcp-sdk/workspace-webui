@@ -25,6 +25,7 @@ describe('cardFor', () => {
         shown: 40,
       },
       { path: 'a.ts', offset: 0, limit: 40 },
+      '1  const x = 1\n2  export {}',
     )!
     expect(c.subtitle).toBe('acme/web @ main')
     // INPUT: the call's arguments.
@@ -33,13 +34,37 @@ describe('cardFor', () => {
       'offset',
       'limit',
     ])
-    // RESULT: line range + blob sha.
+    // RESULT: line range + blob sha + the read content with its line numbers.
     expect(c.result.fields.map(f => f.label)).toEqual(['lines', 'blob'])
     expect(c.result.fields[0]!.value).toBe('L1–L40 / 100')
+    expect(c.result.body).toMatchObject({
+      kind: 'code',
+      name: 'a.ts',
+      text: 'const x = 1\nexport {}',
+      startLine: 1,
+    })
     expect(c.result.actions![0]!.page).toMatchObject({
       kind: 'repo_blob',
       path: 'a.ts',
     })
+  })
+
+  it('repo-file-read: a windowed read keeps the absolute start line', () => {
+    const c = cardFor(
+      'repo-file-read',
+      {
+        org: 'a',
+        repo: 'b',
+        ref: 'main',
+        path: 'x',
+        total_lines: 100,
+        start: 19,
+        shown: 2,
+      },
+      { path: 'x', offset: 19, limit: 2 },
+      '20  a\n21  b',
+    )!
+    expect(c.result.body).toMatchObject({ kind: 'code', startLine: 20 })
   })
 
   it('repo-file-edit: input payload + result diff + commit/file actions', () => {
@@ -57,8 +82,13 @@ describe('cardFor', () => {
       },
       { path: 'x', 'start-line': 1, 'end-line': 2, content: 'new' },
     )!
-    // The inserted content belongs to the INPUT.
-    expect(c.input.body).toEqual({ kind: 'text', text: 'new' })
+    // The inserted content belongs to the INPUT, shown with its target line.
+    expect(c.input.body).toEqual({
+      kind: 'code',
+      name: 'x',
+      text: 'new',
+      startLine: 1,
+    })
     expect(c.input.fields.map(f => f.label)).toEqual(['path', 'start', 'end'])
     // The diff/changes belong to the RESULT.
     expect(c.result.fields.find(f => f.label === 'changes')!.value).toBe(
@@ -199,26 +229,35 @@ describe('cardFor', () => {
       '1  const x = 1\n2  export {}',
     )!
     expect(c.input.fields.map(f => f.label)).toEqual(['sandbox', 'path'])
-    expect(c.result.body).toMatchObject({ kind: 'code', name: 'a.ts' })
+    expect(c.result.body).toMatchObject({
+      kind: 'code',
+      name: 'a.ts',
+      startLine: 1,
+    })
     expect((c.result.body as { text: string }).text).toBe(
       'const x = 1\nexport {}',
     )
   })
 
-  it('sandbox-file-edit: content in INPUT, diff in RESULT', () => {
+  it('sandbox-file-edit: numbered content in INPUT, diff in RESULT', () => {
     const c = cardFor(
       'sandbox-file-edit',
       { path: 'a', added: 1, removed: 1, diff: '@@ x @@' },
       {
         'worker-name': 'sb',
         path: 'a',
-        'start-line': 1,
-        'end-line': 1,
+        'start-line': 3,
+        'end-line': 3,
         content: 'z',
       },
       '',
     )!
-    expect(c.input.body).toEqual({ kind: 'text', text: 'z' })
+    expect(c.input.body).toEqual({
+      kind: 'code',
+      name: 'a',
+      text: 'z',
+      startLine: 3,
+    })
     expect(c.result.body).toEqual({ kind: 'diff', diff: '@@ x @@' })
   })
 
@@ -330,7 +369,54 @@ describe('cardFor', () => {
       { code: 'abc' },
       '1  package main\n2  func main(){}',
     )!
-    expect(c.result.body).toMatchObject({ kind: 'code', name: 'a.go' })
+    expect(c.result.body).toMatchObject({
+      kind: 'code',
+      name: 'a.go',
+      startLine: 1,
+    })
+  })
+
+  it('service-logs renders the log text as a terminal body', () => {
+    const c = cardFor(
+      'service-logs',
+      { name: 'mariadb', lines: 4 },
+      { name: 'mariadb', 'tail-lines': 20 },
+      'logs for mariadb (4 lines)\nline1\nline2',
+    )!
+    expect(c.result.fields[0]!.value).toBe('4')
+    expect(c.result.body).toEqual({
+      kind: 'terminal',
+      text: 'logs for mariadb (4 lines)\nline1\nline2',
+    })
+  })
+
+  it('repo-show renders the commit patch as a terminal body', () => {
+    const c = cardFor(
+      'repo-show',
+      {
+        org: 'a',
+        repo: 'b',
+        ref: 'main',
+        sha: 'abc123',
+        commit: { author: 'me', date: 'now' },
+      },
+      { sha: 'abc123' },
+      'abc123  now  me\n\nfix thing\n\ndiff --git a/x b/x',
+    )!
+    expect(c.result.body).toMatchObject({ kind: 'terminal' })
+  })
+
+  it('repo-build-image renders the build log as a terminal body', () => {
+    const c = cardFor(
+      'repo-build-image',
+      { image_ref: 'reg/o/img:1' },
+      { org: 'o', image: 'img', tag: '1' },
+      'built reg/o/img:1\n\n#1 DONE',
+    )!
+    expect(c.result.body).toEqual({
+      kind: 'terminal',
+      text: 'built reg/o/img:1\n\n#1 DONE',
+    })
   })
 
   it('web-fetch renders markdown; file-info renders kv', () => {

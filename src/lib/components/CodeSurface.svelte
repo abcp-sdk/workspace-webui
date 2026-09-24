@@ -11,14 +11,22 @@
   import { highlightLines, langForName, themeFor, type Token } from '$lib/highlight'
   import { gutterWidth } from '$lib/line-gutter'
 
-  let { code, name }: { code: string; name: string } = $props()
+  let {
+    code,
+    name,
+    startLine = 1,
+  }: { code: string; name: string; startLine?: number } = $props()
 
   let dark = $state(false)
   let tokens = $state<Token[][] | null>(null)
   let tokenizing = $state(true)
 
   const rawLines = $derived(code.length ? code.split('\n') : [''])
-  const gutterW = $derived(gutterWidth(rawLines.length, 1.25))
+  // The gutter must fit the LARGEST absolute line number, which is
+  // `startLine + count - 1` for a windowed read (startLine > 1).
+  const gutterW = $derived(
+    gutterWidth(startLine + rawLines.length - 1, 1.25),
+  )
 
   function isDark(): boolean {
     return typeof document !== 'undefined' && document.documentElement.dataset.theme === 'dark'
@@ -82,7 +90,7 @@
       <span
         class="shrink-0 border-r border-border/40 px-2 text-right text-muted-foreground/50 select-none"
         style="width: {gutterW}; min-width: {gutterW}"
-      >{i + 1}</span>
+      >{startLine + i}</span>
       <span class="min-w-0 flex-1 px-3 whitespace-pre-wrap wrap-anywhere">{@html html || '\u200b'}</span>
     </div>
   {/each}
