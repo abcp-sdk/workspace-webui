@@ -295,10 +295,17 @@ export function bareToolName(tool: string): string {
   return m ? m[1]! : tool
 }
 
-/** Strip a leading `N\t` / `N  ` line-number gutter from read output. */
+/**
+ * Strip a leading `N  ` (or `N\t`) line-number gutter from read output.
+ *
+ * The producer emits `${padStart(width, ' ')}  ${line}` — the number, then
+ * EXACTLY two spaces, then the content. Only that fixed separator may be
+ * removed: the content's own leading indentation must survive. A greedy
+ * `\s{2,}` ate it too (e.g. `195      # …` → `# …` instead of `    # …`).
+ */
 export function stripLineNumbers(text: string): string {
   return text
     .split('\n')
-    .map(l => l.replace(/^\s*\d+\s{2,}/, '').replace(/^\s*\d+\t/, ''))
+    .map(l => l.replace(/^ *\d+ {2}/, '').replace(/^ *\d+\t/, ''))
     .join('\n')
 }

@@ -251,6 +251,33 @@ describe('cardFor', () => {
     )
   })
 
+  it('sandbox-file-read KEEPS the content indentation (only the gutter goes)', () => {
+    // The producer writes `<number>` + EXACTLY two spaces + content. A greedy
+    // separator regex ate the content's own leading spaces too.
+    const c = cardFor(
+      'sandbox-file-read',
+      { total_lines: 2, start: 0, shown: 2 },
+      { 'worker-name': 'sb', path: 'x.yaml' },
+      '1  def foo():\n2      return 42',
+    )!
+    expect((c.result.body as { text: string }).text).toBe(
+      'def foo():\n    return 42',
+    )
+  })
+
+  it('sandbox-file-read strips a padded number but keeps deep indentation', () => {
+    // A windowed read pads the number (`padStart(width)`), and YAML nests deep.
+    const c = cardFor(
+      'sandbox-file-read',
+      { total_lines: 300, start: 199, shown: 1 },
+      { 'worker-name': 'sb', path: 'a.yaml' },
+      '200            descriptions:',
+    )!
+    expect((c.result.body as { text: string }).text).toBe(
+      '          descriptions:',
+    )
+  })
+
   it('sandbox-file-edit: numbered content in INPUT, diff in RESULT', () => {
     const c = cardFor(
       'sandbox-file-edit',

@@ -235,6 +235,10 @@ export interface ChatMessage {
    *  the optimistic bubble and its persisted copy can coexist until the
    *  backend `message-added` event lets `mergeServer` drop the former. */
   serverId?: string
+  /** Set while a transient provider failure is being retried (the server
+   *  announced a `retry` for this streaming step). Drives a subtle "retrying"
+   *  indicator; cleared by the next delta or the step's terminal event. */
+  retrying?: { attempt: number; delayMs: number }
 }
 
 // ---- mailbox ----

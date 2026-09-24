@@ -315,6 +315,60 @@ describe('MessagesController (server-driven state machine)', () => {
     expect(ctrl.messages.filter(m => m.id === 'a1')).toHaveLength(1)
   })
 
+  it('retry resets the streaming bubble and does NOT concatenate attempts', async () => {
+    const { ctrl, server } = boot()
+    await flush()
+    server.chan.push(
+      ev('message-added', {
+        message_id: 'a1',
+        prev_id: '',
+        role: 'assistant',
+        streaming: true,
+      }),
+    )
+    // First attempt streams partial text, then the provider drops.
+    server.chan.push(
+      ev('text-delta', { id: 't0', text: 'onetwo-partial', message_id: 'a1' }),
+    )
+    await flush(2)
+    expect(
+      ctrl.messages
+        .find(m => m.id === 'a1')
+        ?.parts.map(p => p.text)
+        .join(''),
+    ).toBe('onetwo-partial')
+
+    // The server announces a retry for the SAME step id, then the recovered
+    // attempt streams its (fresh id) text. The reset must have cleared the
+    // partial so the final text is ONLY the second attempt's.
+    server.chan.push(
+      ev('retry', {
+        message_id: 'a1',
+        attempt: 1,
+        delay_ms: 2000,
+        reason: 'ECONNRESET',
+      }),
+    )
+    await flush(1)
+    const mid = ctrl.messages.find(m => m.id === 'a1')!
+    expect(mid.parts).toHaveLength(0)
+    expect(mid.retrying?.attempt).toBe(1)
+
+    server.chan.push(
+      ev('text-start', { id: 't1', message_id: 'a1', prev_id: '' }),
+    )
+    server.chan.push(
+      ev('text-delta', { id: 't1', text: 'recovered', message_id: 'a1' }),
+    )
+    await flush(2)
+    const m = ctrl.messages.find(x => x.id === 'a1')!
+    expect(m.parts.map(p => p.text).join('')).toBe('recovered')
+    // The indicator is cleared once fresh output arrives.
+    expect(m.retrying).toBeUndefined()
+    // Still ONE bubble — the step kept its identity.
+    expect(ctrl.messages.filter(x => x.id === 'a1')).toHaveLength(1)
+  })
+
   it('replay reorder: a delta arriving before message-added does not duplicate the bubble', async () => {
     const { ctrl, server } = boot()
     await flush()

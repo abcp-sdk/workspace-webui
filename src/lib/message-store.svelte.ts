@@ -230,7 +230,9 @@ export class MessageStore {
    *  nothing: the controller triggers reconcile/mailbox refresh afterwards. */
   finishStreaming() {
     this.messages = this.messages.map(m =>
-      m.status === 'streaming' ? { ...m, status: 'complete' as const } : m,
+      m.status === 'streaming'
+        ? { ...m, status: 'complete' as const, retrying: undefined }
+        : m,
     )
     this.streamingId = null
     this.sending = false
@@ -263,7 +265,25 @@ export class MessageStore {
   ) {
     this.setMsg(msgId, m => ({
       ...m,
+      // New output means the retry produced content: drop the indicator.
+      retrying: undefined,
       parts: appendDeltaTo(m.parts, partId, delta, reasoning),
+    }))
+  }
+
+  /**
+   * A transient provider failure is being retried for this step: CLEAR the
+   * streaming bubble's partial parts (the failed attempt's output is
+   * superseded — the server re-runs the step and persists only the recovered
+   * attempt) and mark it `retrying` so the UI shows a subtle indicator. The
+   * message id is unchanged (same step), so this is an in-place reset, not a
+   * new bubble.
+   */
+  markRetrying(msgId: string, attempt: number, delayMs: number) {
+    this.setMsg(msgId, m => ({
+      ...m,
+      parts: [],
+      retrying: { attempt, delayMs },
     }))
   }
 

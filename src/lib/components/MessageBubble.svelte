@@ -200,7 +200,11 @@
 {:else if isStreaming && ordered.length === 0}
   <div class="mb-3 flex items-center gap-2 text-micro text-muted-foreground">
     <span class="size-3 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground"></span>
-    {t('thinking')}
+    {#if msg.retrying}
+      {t('retrying')} (#{msg.retrying.attempt})
+    {:else}
+      {t('thinking')}
+    {/if}
   </div>
 {:else}
   <div class={cn('mb-3 flex flex-col', isSystem ? 'items-center' : isOwn ? 'items-end' : 'items-start')}>
