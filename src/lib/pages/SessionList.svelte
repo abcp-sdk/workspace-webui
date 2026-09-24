@@ -327,9 +327,14 @@
   }
 
   async function deleteFlow(sid: string | null) {
+    const s = sid ? store.sessionById(sid) : null
     const ok = await confirmDialog({
       title: t('deleteSession'),
-      body: sid ? t('deleteSessionBody', { arg1: sessionName(store.sessionById(sid)!) }) : '',
+      body: s
+        ? isBranchRole(roleOfSession(s))
+          ? t('deleteBranchSessionBody', { arg1: sessionName(s) })
+          : t('deleteSessionBody', { arg1: sessionName(s) })
+        : '',
       confirmLabel: t('delete'),
       destructive: true,
     })

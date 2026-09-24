@@ -7,7 +7,7 @@
   import type { PageProps } from '$lib/page-props'
   import { MessagesController } from '$lib/messages.svelte'
   import { untrack } from 'svelte'
-  import { roleOfSession, roleIcon, roleLabelKey, roleTone } from '$lib/roles'
+  import { roleOfSession, isBranchRole, roleIcon, roleLabelKey, roleTone } from '$lib/roles'
   import { t } from '$lib/i18n.svelte'
   import { confirmDialog, promptDialog } from '$lib/dialogs'
   import { showErrorToast, showToast } from '$lib/toast.svelte'
@@ -610,7 +610,12 @@
         break
       }
       case 'delete': {
-        const ok = await confirmDialog({ title: t('deleteSession'), body: session ? t('deleteSessionBody', { arg1: sessionName(session) }) : '', confirmLabel: t('delete'), destructive: true })
+        const body = session
+          ? isBranchRole(roleOfSession(session))
+            ? t('deleteBranchSessionBody', { arg1: sessionName(session) })
+            : t('deleteSessionBody', { arg1: sessionName(session) })
+          : ''
+        const ok = await confirmDialog({ title: t('deleteSession'), body, confirmLabel: t('delete'), destructive: true })
         if (ok && sid) {
           try {
             await store.deleteSession(sid)
