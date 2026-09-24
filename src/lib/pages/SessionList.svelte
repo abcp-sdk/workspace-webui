@@ -226,13 +226,13 @@
     dBrParent = parentChoices(dBrRepo)[0]?.value ?? ''
   }
 
-  /** The repo's sessions usable as fork parents (all branches incl. main). */
+  /** The repo's session usable as a fork parent: the MAIN session only (a
+   *  feature branch must not spawn more branches). */
   function parentChoices(repoRef: string): { value: string; label: string }[] {
     if (!repoRef) return []
     const [org, repo] = repoRef.split('/')
     return store.sessions
-      .filter(s => s.org === org && s.repo === repo && s.branch)
-      .sort((a, b) => (a.branch === 'main' ? -1 : b.branch === 'main' ? 1 : recency(b) - recency(a)))
+      .filter(s => s.org === org && s.repo === repo && s.branch === 'main')
       .map(s => ({ value: s.id, label: s.branch }))
   }
 
@@ -289,8 +289,9 @@
     if (!rowMenu) return []
     const s = store.sessionById(rowMenu.sid)
     const items: ContextMenuItem[] = []
-    // A branch session can fork a new branch (with its chat context).
-    if (s && isBranchRole(roleOfSession(s))) items.push({ value: 'fork', label: t('createBranchTitle') })
+    // Only a MAIN session (maintainer) can fork a new branch (with its chat
+    // context); a feature-branch session must not spawn more branches.
+    if (s && roleOfSession(s) === 'maintainer') items.push({ value: 'fork', label: t('createBranchTitle') })
     if (s && store.isUnread(s)) items.push({ value: 'read', label: t('markRead') })
     items.push({ value: 'delete', label: t('deleteSession'), destructive: true })
     return items
