@@ -2,7 +2,7 @@
 // Owns: the session list (watchSessions live stream + reconnect backoff),
 // unread read-watermarks, per-session chat drafts, provider draft, and the
 // per-tab navigation stacks.
-import type { AgentApi } from './api'
+import type { AgentApi, SandboxRef } from './api'
 import { connection } from './connection.svelte'
 import type { LocalStore } from './db'
 import { t } from './i18n.svelte'
@@ -60,20 +60,17 @@ export class AppStore {
   /** session → last read message_seq (client-local). */
   readSeqs: Record<string, number> = $state({})
 
-  /** session → its representative sandbox (name + phase), from
-   *  ListBranchSessions. A session may own several sandboxes; the gateway
-   *  returns the best one. */
-  sandboxes: Record<string, { name: string; phase: string }> = $state({})
+  /** session → ALL its sandboxes (representative first), from
+   *  ListBranchSessions. A session may own several sandboxes. */
+  sandboxes: Record<string, SandboxRef[]> = $state({})
 
   /** Refresh the sandbox map (best effort; the workspace gateway owns it). */
   async refreshPhases(): Promise<void> {
     try {
       const ws = await this.api.listBranchSessions()
-      const out: Record<string, { name: string; phase: string }> = {}
+      const out: Record<string, SandboxRef[]> = {}
       for (const w of ws) {
-        if (w.session && w.sandbox) {
-          out[w.session] = { name: w.sandbox, phase: w.phase }
-        }
+        if (w.session && w.sandboxes.length) out[w.session] = w.sandboxes
       }
       this.sandboxes = out
     } catch {
@@ -81,13 +78,18 @@ export class AppStore {
     }
   }
 
+  /** Every sandbox the session owns (representative first; [] when none). */
+  sandboxesFor(id: string): SandboxRef[] {
+    return this.sandboxes[id] ?? []
+  }
+
   phaseFor(id: string): string {
-    return this.sandboxes[id]?.phase ?? ''
+    return this.sandboxes[id]?.[0]?.phase ?? ''
   }
 
   /** The session's representative sandbox name ('' when none). */
   sandboxFor(id: string): string {
-    return this.sandboxes[id]?.name ?? ''
+    return this.sandboxes[id]?.[0]?.name ?? ''
   }
 
   /** Per-session composer drafts, surviving navigation. */

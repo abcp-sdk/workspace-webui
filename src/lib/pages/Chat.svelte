@@ -567,6 +567,11 @@
 
   // ---- menu actions ----
 
+  /** Jump to one of the session's sandboxes (Service lane, sandbox detail). */
+  function openSandbox(name: string) {
+    if (name) store.navigate({ kind: 'sandbox_detail', key: `sbx:${name}`, name })
+  }
+
   async function menuAction(v: string) {
     switch (v) {
       case 'repo': {
@@ -679,18 +684,37 @@
         <Marquee text={session?.id ?? ''} class="min-w-0 flex-1 text-center" />
       </button>
       <div class="flex items-center justify-end gap-0.5">
-        {#if store.phaseFor(sid) && store.sandboxFor(sid)}
-          <!-- The phase chip jumps to the session's representative sandbox
-               (its real name, NOT the session id) in the Service tab. -->
+        {#if store.sandboxesFor(sid).length === 1}
+          {@const one = store.sandboxesFor(sid)[0]!}
+          <!-- One sandbox: the phase chip jumps straight to it. -->
           <button
             type="button"
             class="rounded-full bg-muted px-2 py-px text-[10px] leading-4 text-muted-foreground hover:bg-muted/70"
-            title={store.sandboxFor(sid)}
-            onclick={() => {
-              const sbx = store.sandboxFor(sid)
-              if (sbx) store.navigate({ kind: 'sandbox_detail', key: `sbx:${sbx}`, name: sbx })
-            }}
-          >{store.phaseFor(sid)}</button>
+            title={one.name}
+            onclick={() => openSandbox(one.name)}
+          >{one.phase}</button>
+        {:else if store.sandboxesFor(sid).length > 1}
+          {@const sbxs = store.sandboxesFor(sid)}
+          <!-- Several sandboxes: the chip shows the representative phase + a
+               count; clicking opens a menu to pick one. -->
+          <DropdownMenu label={t('sandboxes')}>
+            {#snippet trigger()}
+              <span
+                class="flex items-center gap-1 rounded-full bg-muted px-2 py-px text-[10px] leading-4 text-muted-foreground hover:bg-muted/70"
+                title={t('sandboxes')}
+              >
+                {sbxs[0]!.phase}
+                <span class="rounded-full bg-background/70 px-1 font-semibold tabular-nums">{sbxs.length}</span>
+              </span>
+            {/snippet}
+            {#each sbxs as s (s.name)}
+              <DropdownMenuItem onSelect={() => openSandbox(s.name)}>
+                <AppIcons.box class="size-3.5 shrink-0 text-primary" />
+                <span class="min-w-0 flex-1 truncate font-mono text-micro">{s.name}</span>
+                <span class="shrink-0 text-[10px] text-muted-foreground">{s.phase}</span>
+              </DropdownMenuItem>
+            {/each}
+          </DropdownMenu>
         {/if}
         <!-- Todos: the session's current checklist (from the last todo-write).
              Badge = remaining (not completed/cancelled). -->
@@ -983,8 +1007,7 @@
     bind:open={infoOpen}
     {session}
     role={role ? t(roleLabelKey(role)) : ''}
-    sandbox={store.sandboxFor(sid)}
-    phase={store.phaseFor(sid)}
+    sandboxes={store.sandboxesFor(sid)}
     onEdit={() => void showSettings()}
   />
 

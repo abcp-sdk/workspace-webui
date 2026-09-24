@@ -1107,6 +1107,11 @@ export type { ToolState }
 export { modelRefOf }
 // ---- workspace-gateway view models ----
 
+export interface SandboxRef {
+  name: string
+  phase: string
+  ready: boolean
+}
 export interface BranchSession {
   session: string
   org: string
@@ -1114,8 +1119,11 @@ export interface BranchSession {
   branch: string
   role: string
   preset: string
+  /** Representative sandbox (prefer Running/Ready, else newest). */
   sandbox: string
   phase: string
+  /** Every sandbox the session owns, representative first then newest-first. */
+  sandboxes: SandboxRef[]
 }
 export interface RepoInfo {
   org: string
@@ -1368,6 +1376,7 @@ type PbBranchSession = {
   preset: string
   sandbox: string
   phase: string
+  sandboxes: Array<{ name: string; phase: string; ready: boolean }>
 }
 function branchSessionFromPb(w: PbBranchSession): BranchSession {
   return {
@@ -1379,6 +1388,11 @@ function branchSessionFromPb(w: PbBranchSession): BranchSession {
     preset: w.preset,
     sandbox: w.sandbox,
     phase: w.phase,
+    sandboxes: (w.sandboxes ?? []).map(s => ({
+      name: s.name,
+      phase: s.phase,
+      ready: s.ready,
+    })),
   }
 }
 
