@@ -133,8 +133,12 @@ export class AppStore {
   })
 
   async refreshProviderCatalog(): Promise<void> {
+    // The matrix is static for the deployment: cache-first so re-entering the
+    // provider form is a cache HIT (it was refetched on every mount).
     try {
-      const c = await this.api.providerCatalog()
+      const c = await this.dataLoad('provider-catalog', () =>
+        this.api.providerCatalog(),
+      )
       if (Object.keys(c).length > 0) this.providerCatalog = c
     } catch {
       /* keep the fallback */

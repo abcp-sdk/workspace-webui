@@ -13,7 +13,7 @@
   import { showErrorToast, showToast } from '$lib/toast.svelte'
   import { Prefs } from '$lib/prefs'
   import { guessMime, mimeToKind } from '$lib/media'
-  import type { ModelInfo, Preset, ProviderInfo, Session, UploadedFile } from '$lib/models'
+  import type { ModelInfo, ProviderInfo, Session, UploadedFile } from '$lib/models'
   import { modelRefOf, sessionName } from '$lib/models'
   import { buildModelOptions, fmtContext, fmtElapsed, variantsFor } from '$lib/chat-helpers'
   import { composerAction } from '$lib/composer-action'
@@ -41,8 +41,11 @@
   // is exactly the "switch chat, content does not refresh" bug. Disposal reads
   // it through `untrack` so the effect does not depend on it.
   let ctrl = $state<MessagesController | null>(null)
+  // Loaded LAZILY when the settings dialog opens (cache-first via the store),
+  // never on session boot: providers/presets are session-INDEPENDENT, so
+  // fetching them on every Chat mount re-ran them on each session swap / tab
+  // return for no reason (they queued behind the heavy message stream).
   let providers = $state<Record<string, ProviderInfo>>({})
-  let presets: Preset[] = $state([])
   let localUrls = $state<Record<string, string>>({})
 
   // settings dialog state
@@ -106,7 +109,6 @@
     ctrl = c
     prev?.dispose()
     c.init()
-    void loadMeta()
     return () => {
       c.dispose()
     }
@@ -135,16 +137,9 @@
   })
 
   async function loadMeta() {
-    try {
-      providers = await store.api.providers()
-    } catch (e) {
-      showErrorToast(t('loadError', { e: String(e) }))
-    }
-    try {
-      presets = await store.api.presets()
-    } catch (e) {
-      showErrorToast(t('loadError', { e: String(e) }))
-    }
+    // Cache-first (shared `providers` key with the Config pages): a re-open of
+    // the dialog, or a session swap, is a cache HIT — no refetch.
+    providers = await store.dataLoad('providers', () => store.api.providers())
   }
 
   // ---- scroll behaviour ----
@@ -523,19 +518,26 @@
     settingsOpen = true
     if (!modelsLoaded) {
       loadingModels = true
-      const out: ModelInfo[] = []
-      for (const pid of Object.keys(providers)) {
-        try {
-          out.push(...(await store.api.models(pid)))
-        } catch {
-          /* provider skipped */
-        }
+      // Providers are session-independent: load them cache-first HERE (not on
+      // session boot) so opening the dialog never blocks on them, and a second
+      // open is a cache HIT. The per-provider model lists are fetched in
+      // PARALLEL — a sequential loop made N round-trips over the same HTTP/1.1
+      // connection and looked like a hang.
+      try {
+        await loadMeta()
+      } catch (e) {
+        showErrorToast(t('loadError', { e: String(e) }))
       }
-      allModels = out
+      const lists = await Promise.all(
+        Object.keys(providers).map(pid =>
+          store.api.models(pid).catch(() => [] as ModelInfo[]),
+        ),
+      )
+      allModels = lists.flat()
       loadingModels = false
       modelsLoaded = true
-      if (out.length && !out.some(m => modelRefOf(m) === selectedRef)) {
-        selectedRef = modelRefOf(out[0]!)
+      if (allModels.length && !allModels.some(m => modelRefOf(m) === selectedRef)) {
+        selectedRef = modelRefOf(allModels[0]!)
       }
     }
   }
@@ -629,10 +631,6 @@
   }
 
   const ctxLabel = $derived(fmtContext((session?.lastInputTokens ?? 0) + (session?.lastOutputTokens ?? 0)))
-  const presetOptions = $derived([
-    ...presets.map(p => p.id),
-    ...(preset && !presets.some(p => p.id === preset) ? [preset] : []),
-  ])
   const tileDim = 56
 
   function isLocalPreview(a: UploadedFile): string {
@@ -989,7 +987,6 @@
     {loadingModels}
     {modelOptions}
     variants={variantsForModel}
-    {presetOptions}
     onSave={() => void applySettings()}
   />
 {/if}

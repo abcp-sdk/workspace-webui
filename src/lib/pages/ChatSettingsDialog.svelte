@@ -15,7 +15,6 @@
     loadingModels,
     modelOptions,
     variants,
-    presetOptions,
     onSave,
   }: {
     open: boolean
@@ -26,7 +25,6 @@
     loadingModels: boolean
     modelOptions: Array<{ value: string; label: string }>
     variants: ModelVariantInfo[]
-    presetOptions: string[]
     onSave: () => void
   } = $props()
 </script>
