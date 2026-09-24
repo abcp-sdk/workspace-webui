@@ -24,19 +24,43 @@
   let services = $state<ServiceInfo[]>([])
   let loading = $state(true)
 
+  async function fetchLists() {
+    const [s, sv] = await Promise.all([store.api.listSandboxes(), store.api.listServices()])
+    return { sandboxes: s, services: sv }
+  }
+
+  // Initial load is CACHE-FIRST (a pane SLIDE re-runs the effect but must not
+  // refetch). The poll bypasses the cache and writes it back.
   async function load() {
+    const key = 'service-lists'
+    loading = !store.hasData(key)
     try {
-      const [s, sv] = await Promise.all([store.api.listSandboxes(), store.api.listServices()])
-      sandboxes = s
-      services = sv
+      const v = await store.dataLoad(key, fetchLists)
+      sandboxes = v.sandboxes
+      services = v.services
     } catch (e) {
       showErrorToast(String(e))
     }
     loading = false
   }
 
+  async function refresh() {
+    try {
+      const v = await fetchLists()
+      store.dataSet('service-lists', v)
+      sandboxes = v.sandboxes
+      services = v.services
+    } catch (e) {
+      showErrorToast(String(e))
+    }
+  }
+
+  $effect(() => {
+    void load()
+  })
+
   // Poll only while the tab is visible; refresh immediately on return.
-  usePoll(() => void load(), 15000)
+  usePoll(() => void refresh(), 15000, { immediate: false })
 
   function relTime(ms: number): string {
     if (!ms) return ''
@@ -72,6 +96,7 @@
     try {
       await store.api.deleteSandbox(s.name)
       showToast(t('deleted'))
+      store.dropData('service-lists')
       await load()
     } catch (e) {
       showErrorToast(String(e))
@@ -89,6 +114,7 @@
     try {
       await store.api.deleteService(sv.name)
       showToast(t('deleted'))
+      store.dropData('service-lists')
       await load()
     } catch (e) {
       showErrorToast(String(e))
@@ -99,6 +125,7 @@
     try {
       if (sv.paused) await store.api.resumeService(sv.name)
       else await store.api.pauseService(sv.name)
+      store.dropData('service-lists')
       await load()
     } catch (e) {
       showErrorToast(String(e))

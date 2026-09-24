@@ -22,19 +22,22 @@
   const drafts = $state<Record<string, string>>({})
 
   $effect(() => {
+    // Cache-first: a pane SLIDE re-runs this effect but must not refetch.
     void (async () => {
+      const locale = Prefs.loadAgentLocale()
+      loading = !store.hasData(`tools:${locale}`)
       try {
-        tools = await store.api.tools(Prefs.loadAgentLocale())
+        tools = await store.dataLoad(`tools:${locale}`, () => store.api.tools(locale))
       } catch (e) {
         showErrorToast(t('loadError', { e: String(e) }))
       }
       try {
-        config = await store.api.toolConfig()
+        config = await store.dataLoad('toolconfig', () => store.api.toolConfig())
       } catch {
         /* no config yet */
       }
       try {
-        providers = await store.api.providers()
+        providers = await store.dataLoad('providers', () => store.api.providers())
       } catch {
         /* providers optional */
       }
@@ -100,6 +103,7 @@
       if (value === '') delete vals[knob.name]
       else vals[knob.name] = value
       config = { ...config, [tl.name]: vals }
+      store.dataSet('toolconfig', config)
       delete drafts[`${tl.name}.${knob.name}`]
       showToast(t('saved'))
     } catch (e) {

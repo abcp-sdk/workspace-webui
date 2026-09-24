@@ -31,9 +31,21 @@
     previous = next.previous ?? previous
   }
 
+  // Initial load is CACHE-FIRST (a pane SLIDE re-runs the effect but must not
+  // refetch). The poll bypasses the cache and writes it back.
   async function load() {
+    const key = `service:${name}`
     try {
-      svc = await store.api.getService(name)
+      svc = await store.dataLoad(key, () => store.api.getService(name))
+    } catch (e) {
+      showErrorToast(String(e))
+    }
+  }
+  async function refresh() {
+    try {
+      const v = await store.api.getService(name)
+      store.dataSet(`service:${name}`, v)
+      svc = v
     } catch (e) {
       showErrorToast(String(e))
     }
@@ -43,7 +55,7 @@
     void name
     void load()
   })
-  usePoll(() => void load(), 10000, { immediate: false })
+  usePoll(() => void refresh(), 10000, { immediate: false })
 
   async function deleteService() {
     const ok = await confirmDialog({

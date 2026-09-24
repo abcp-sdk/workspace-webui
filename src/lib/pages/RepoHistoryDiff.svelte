@@ -38,9 +38,11 @@
   })
 
   async function load() {
-    loading = true
+    // Cache-first: a pane SLIDE re-runs this effect but must not refetch.
+    const key = `histdiff:${org}/${repo}@${ref}:${path}:${sha}`
+    loading = !store.hasData(key)
     try {
-      diff = await api.fileDiff(org, repo, sha, ref, path)
+      diff = await store.dataLoad(key, () => api.fileDiff(org, repo, sha, ref, path))
     } catch (e) {
       showErrorToast(String(e))
       diff = ''

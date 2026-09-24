@@ -87,7 +87,9 @@
   async function init() {
     ready = false
     try {
-      sandbox = await store.api.getSandbox(name)
+      // Cache-first (shared key with the anchors): a pane SLIDE re-runs this
+      // effect but must not refetch the sandbox's info.
+      sandbox = await store.dataLoad(`sandboxinfo:${name}`, () => store.api.getSandbox(name))
     } catch (e) {
       showErrorToast(String(e))
     }

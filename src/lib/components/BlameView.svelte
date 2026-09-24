@@ -31,11 +31,13 @@
     void r
     void rf
     void p
-    loading = true
+    // Cache-first: a pane SLIDE re-runs this effect but must not refetch.
+    const key = `blame:${o}/${r}@${rf}:${p}`
+    loading = !store.hasData(key)
     error = false
     void (async () => {
       try {
-        const l = await api.blame(o, r, rf, p)
+        const l = await store.dataLoad(key, () => api.blame(o, r, rf, p))
         if (!cancelled) lines = l
       } catch (e) {
         if (!cancelled) {

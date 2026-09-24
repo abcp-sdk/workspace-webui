@@ -33,9 +33,11 @@
   })
 
   async function load() {
-    loading = true
+    // Cache-first: remounting the list (a slide back) must not refetch.
+    const key = 'repos'
+    loading = !store.hasData(key)
     try {
-      repos = await store.api.listRepos()
+      repos = await store.dataLoad(key, () => store.api.listRepos())
       // Auto-expand a single org.
       const orgs = [...new Set(repos.map(r => r.org))]
       if (orgs.length === 1) expandedOrgs = new Set(orgs)
@@ -74,7 +76,8 @@
     expandedRepos = next
     if (!branchesByRepo[key]) {
       try {
-        branchesByRepo = { ...branchesByRepo, [key]: await store.api.branches(org, repo) }
+        const bs = await store.dataLoad(`branches:${key}`, () => store.api.branches(org, repo))
+        branchesByRepo = { ...branchesByRepo, [key]: bs }
       } catch (e) {
         showErrorToast(String(e))
       }
@@ -105,7 +108,8 @@
     try {
       await store.api.deleteBranch(org, repo, branch)
       showToast(t('deleted'))
-      branchesByRepo = { ...branchesByRepo, [`${org}/${repo}`]: await store.api.branches(org, repo) }
+      store.dropData(`branches:${org}/${repo}`)
+      branchesByRepo = { ...branchesByRepo, [`${org}/${repo}`]: await store.dataLoad(`branches:${org}/${repo}`, () => store.api.branches(org, repo)) }
       await store.refreshSessions()
     } catch (e) {
       showErrorToast(String(e))
@@ -125,6 +129,8 @@
     try {
       await store.api.deleteRepo(org, repo)
       showToast(t('deleted'))
+      store.dropData('repos')
+      store.dropData(`branches:${org}/${repo}`)
       await load()
       await store.refreshSessions()
     } catch (e) {
@@ -165,6 +171,7 @@
       })
       showToast(t('imported'))
       importOpen = false
+      store.dropData('repos')
       await load()
       expandedOrgs = new Set([...expandedOrgs, impOrg.trim()])
     } catch (e) {
@@ -178,7 +185,7 @@
   <PageHeader title={t('tabCode')}>
     {#snippet right()}
       <IconButton icon={AppIcons.download} label={t('importRepo')} variant="primary" onclick={openImport} />
-      <IconButton icon={AppIcons.refresh} label={t('refresh')} onclick={() => void load()} />
+      <IconButton icon={AppIcons.refresh} label={t('refresh')} onclick={() => { store.dropData('repos'); void load() }} />
     {/snippet}
   </PageHeader>
   <div class="min-h-0 flex-1 overflow-y-auto">

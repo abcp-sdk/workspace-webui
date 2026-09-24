@@ -35,16 +35,21 @@
   })
 
   async function load() {
-    loading = true
+    // Cache-first: a pane SLIDE re-runs this effect but must not refetch.
+    const key = `mr:${org}/${repo}:${index}`
+    loading = !store.hasData(key)
     try {
-      const [m, d, c] = await Promise.all([
-        api.getMR(org, repo, index),
-        api.mrDiff(org, repo, index),
-        api.listMRComments(org, repo, index),
-      ])
-      mr = m
-      diff = d
-      comments = c
+      const v = await store.dataLoad(key, async () => {
+        const [m, d, c] = await Promise.all([
+          api.getMR(org, repo, index),
+          api.mrDiff(org, repo, index),
+          api.listMRComments(org, repo, index),
+        ])
+        return { m, d, c }
+      })
+      mr = v.m
+      diff = v.d
+      comments = v.c
     } catch (e) {
       showErrorToast(String(e))
     }

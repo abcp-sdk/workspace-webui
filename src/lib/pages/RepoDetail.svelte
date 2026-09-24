@@ -67,7 +67,8 @@
     { id: 'changes', label: 'changes', icon: AppIcons.merge },
   ]
 
-  // Reload when the repo or the selected ref changes.
+  // Reload when the repo or the selected ref changes. Cache-first: a pane
+  // SLIDE re-runs these effects but a cache HIT makes them a no-op.
   $effect(() => {
     const o = org, r = repo
     void o
@@ -80,23 +81,27 @@
     expanded = new Set()
     void Promise.all([loadTree(), loadCommits()])
   })
-  // Reload the MR list when its filter (URL-backed) changes.
+  // Reload the MR list when its filter changes.
   $effect(() => {
     void mrState
     void loadMRs()
   })
 
   async function initLists() {
-    loading = true
+    const key = `repo-lists:${org}/${repo}`
+    loading = !store.hasData(key)
     try {
-      const [bs, ts, rs] = await Promise.all([
-        api.branches(org, repo),
-        api.tags(org, repo),
-        api.listReleases(org, repo),
-      ])
-      branches = bs
-      tags = ts
-      releases = rs
+      const v = await store.dataLoad(key, async () => {
+        const [bs, ts, rs] = await Promise.all([
+          api.branches(org, repo),
+          api.tags(org, repo),
+          api.listReleases(org, repo),
+        ])
+        return { bs, ts, rs }
+      })
+      branches = v.bs
+      tags = v.ts
+      releases = v.rs
     } catch (e) {
       showErrorToast(String(e))
     }
@@ -104,24 +109,27 @@
   }
 
   async function loadTree() {
+    const key = `repo-tree:${org}/${repo}@${ref}`
     try {
       // One recursive fetch for the whole ref; the tree below is derived.
-      tree = await api.tree(org, repo, ref, '')
+      tree = await store.dataLoad(key, () => api.tree(org, repo, ref, ''))
     } catch (e) {
       showErrorToast(String(e))
       tree = []
     }
   }
   async function loadCommits() {
+    const key = `repo-commits:${org}/${repo}@${ref}`
     try {
-      commits = await api.log(org, repo, ref, '', 50)
+      commits = await store.dataLoad(key, () => api.log(org, repo, ref, '', 50))
     } catch {
       commits = []
     }
   }
   async function loadMRs() {
+    const key = `repo-mrs:${org}/${repo}:${mrState}`
     try {
-      mrs = await api.listMRs(org, repo, mrState)
+      mrs = await store.dataLoad(key, () => api.listMRs(org, repo, mrState))
     } catch {
       mrs = []
     }

@@ -33,9 +33,11 @@
   })
 
   async function load() {
-    loading = true
+    // Cache-first: a pane SLIDE re-runs this effect but must not refetch.
+    const key = `releases:${org}/${repo}`
+    loading = !store.hasData(key)
     try {
-      const all = await api.listReleases(org, repo)
+      const all = await store.dataLoad(key, () => api.listReleases(org, repo))
       release = all.find(x => x.tagName === tag) ?? null
     } catch (e) {
       showErrorToast(String(e))

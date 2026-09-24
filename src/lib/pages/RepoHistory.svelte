@@ -37,9 +37,11 @@
   })
 
   async function load() {
-    loading = true
+    // Cache-first: a pane SLIDE re-runs this effect but must not refetch.
+    const key = `filehist:${org}/${repo}@${ref}:${path}`
+    loading = !store.hasData(key)
     try {
-      commits = await api.log(org, repo, ref, path, 100)
+      commits = await store.dataLoad(key, () => api.log(org, repo, ref, path, 100))
     } catch (e) {
       showErrorToast(String(e))
       commits = []

@@ -35,14 +35,19 @@
   })
 
   async function load() {
-    loading = true
+    // Cache-first: a pane SLIDE re-runs this effect but must not refetch.
+    const key = `commit:${org}/${repo}@${sha}`
+    loading = !store.hasData(key)
     try {
-      const [d, df] = await Promise.all([
-        api.getCommit(org, repo, sha),
-        api.commitDiff(org, repo, sha),
-      ])
-      detail = d
-      diff = df
+      const v = await store.dataLoad(key, async () => {
+        const [d, df] = await Promise.all([
+          api.getCommit(org, repo, sha),
+          api.commitDiff(org, repo, sha),
+        ])
+        return { d, df }
+      })
+      detail = v.d
+      diff = v.df
     } catch (e) {
       showErrorToast(String(e))
     }

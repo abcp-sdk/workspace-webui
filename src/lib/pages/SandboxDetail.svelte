@@ -37,16 +37,40 @@
     return top.kind === 'sandbox_job' && top.name === name ? top.jobId : ''
   })
 
+  async function fetchSandbox() {
+    const [sb, js] = await Promise.all([
+      store.api.getSandbox(name),
+      store.api.listSandboxJobs(name),
+    ])
+    return { sandbox: sb, jobs: js }
+  }
+
+  // Initial load is CACHE-FIRST (a pane SLIDE re-runs the effect but must not
+  // refetch). The poll bypasses the cache and writes it back.
   async function load() {
-    loading = true
+    const key = `sandbox:${name}`
+    loading = !store.hasData(key)
     try {
-      sandbox = await store.api.getSandbox(name)
-      jobs = await store.api.listSandboxJobs(name)
+      const v = await store.dataLoad(key, fetchSandbox)
+      sandbox = v.sandbox
+      jobs = v.jobs
       jobsError = ''
     } catch (e) {
       jobsError = String(e)
     }
     loading = false
+  }
+
+  async function refresh() {
+    try {
+      const v = await fetchSandbox()
+      store.dataSet(`sandbox:${name}`, v)
+      sandbox = v.sandbox
+      jobs = v.jobs
+      jobsError = ''
+    } catch (e) {
+      jobsError = String(e)
+    }
   }
 
   // Reload when the sandbox changes; poll only while visible (the $effect does
@@ -55,7 +79,7 @@
     void name
     void load()
   })
-  usePoll(() => void load(), 15000, { immediate: false })
+  usePoll(() => void refresh(), 15000, { immediate: false })
 
   function openJob(job: SandboxJob) {
     store.navigate({ kind: 'sandbox_job', key: `job:${name}:${job.id}`, name, jobId: job.id })

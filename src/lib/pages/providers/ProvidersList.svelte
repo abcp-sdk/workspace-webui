@@ -34,23 +34,34 @@
     }
   })
 
+  function setProviders(p: Record<string, ProviderInfo>) {
+    Object.keys(providers).forEach(k => delete providers[k])
+    for (const [k, v] of Object.entries(p)) providers[k] = v
+  }
+
   async function reload() {
     try {
-      Object.keys(providers).forEach(k => delete providers[k])
-      const p = await store.api.providers()
-      for (const [k, v] of Object.entries(p)) providers[k] = v
+      store.dropData('providers')
+      const p = await store.dataLoad('providers', () => store.api.providers())
+      setProviders(p)
     } catch (e) {
       showErrorToast(t('loadError', { e: String(e) }))
     }
   }
 
   async function load() {
+    // Cache-first: a pane SLIDE re-runs this effect but must not refetch.
+    loading = !store.hasData('providers')
     try {
-      defaultModel = await store.api.config('default_model')
+      defaultModel = await store.dataLoad('default_model', () => store.api.config('default_model'))
     } catch {
       /* unset */
     }
-    await reload()
+    try {
+      setProviders(await store.dataLoad('providers', () => store.api.providers()))
+    } catch (e) {
+      showErrorToast(t('loadError', { e: String(e) }))
+    }
     loading = false
   }
 

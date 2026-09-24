@@ -35,9 +35,11 @@
   })
 
   async function load(o: string, r: string, b: string, h: string) {
-    loading = true
+    // Cache-first: a pane SLIDE re-runs this effect but must not refetch.
+    const key = `compare:${o}/${r}:${b}...${h}`
+    loading = !store.hasData(key)
     try {
-      const files = await api.compare(o, r, b, h)
+      const files = await store.dataLoad(key, () => api.compare(o, r, b, h))
       // Concatenate per-file patches into one unified diff.
       diff = files
         .map(f => `diff --git a/${f.path} b/${f.path}\n--- a/${f.path}\n+++ b/${f.path}\n${f.patch}`)

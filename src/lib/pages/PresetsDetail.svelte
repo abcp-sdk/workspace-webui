@@ -24,11 +24,12 @@
   })
 
   async function load() {
-    loading = true
+    // Cache-first: a pane SLIDE re-runs this effect but must not refetch.
+    const locale = Prefs.loadAgentLocale()
+    const key = `presets:${locale}`
+    loading = !store.hasData(key)
     try {
-      presets = await store.api.presets(
-        Prefs.loadAgentLocale(),
-      )
+      presets = await store.dataLoad(key, () => store.api.presets(locale))
     } catch (e) {
       showErrorToast(String(e))
     }

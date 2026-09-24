@@ -21,6 +21,7 @@ import {
   type SessionOverlay,
   type SiderTab,
 } from './nav'
+import { PageDataCache } from './page-cache'
 import { Prefs } from './prefs'
 import { sortSessionsByRecency } from './session-order'
 import { showErrorToast } from './toast.svelte'
@@ -55,6 +56,32 @@ export class AppStore {
     code: rootPageFor('code'),
     service: rootPageFor('service'),
     config: rootPageFor('config'),
+  }
+
+  // ---- read-through page-data cache (see lib/page-cache.ts) ----
+  // A page's data effect re-runs whenever its pane SLIDES in the forest window;
+  // this cache makes that re-run a no-op. Thin delegating wrappers so pages
+  // call `store.dataLoad(...)` etc.
+  private cache = new PageDataCache()
+
+  hasData(key: string): boolean {
+    return this.cache.has(key)
+  }
+
+  dataLoad<T>(key: string, load: () => Promise<T>): Promise<T> {
+    return this.cache.load(key, load)
+  }
+
+  dataSet(key: string, value: unknown): void {
+    this.cache.set(key, value)
+  }
+
+  dropData(key: string): void {
+    this.cache.drop(key)
+  }
+
+  dropDataPrefix(prefix: string): void {
+    this.cache.dropPrefix(prefix)
   }
 
   /** session → last read message_seq (client-local). */
@@ -378,6 +405,8 @@ export class AppStore {
   // ---- provider draft ----
 
   bumpProvidersRevision() {
+    // A provider was registered/removed: the cached list is stale.
+    this.dropData('providers')
     this.providersRevision++
   }
 

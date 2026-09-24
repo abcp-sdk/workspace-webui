@@ -35,11 +35,15 @@
     let cancelled = false
     let made = ''
     const o = org, r = repo, rf = ref, p = path
-    loading = true
+    // Cache-first by page identity: a pane SLIDE re-runs this effect but must
+    // not refetch. The object URL is per-mount (revoked on teardown); only the
+    // raw bytes are cached.
+    const key = `blob:${o}/${r}@${rf}:${p}`
+    loading = !store.hasData(key)
     error = false
     void (async () => {
       try {
-        const res = await api.readRaw(o, r, rf, p)
+        const res = await store.dataLoad(key, () => api.readRaw(o, r, rf, p))
         if (cancelled) return
         const blob = new Blob([new Uint8Array(res.data)], { type: res.mime || 'application/octet-stream' })
         made = URL.createObjectURL(blob)
