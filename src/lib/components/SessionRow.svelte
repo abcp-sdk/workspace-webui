@@ -15,6 +15,7 @@
   import { cn } from '$lib/utils'
   import { AppIcons } from '$lib/icons'
   import ChatAvatar from '$lib/components/ChatAvatar.svelte'
+  import Marquee from '$lib/components/Marquee.svelte'
 
   let {
     session,
@@ -174,9 +175,14 @@
       {#if isChild}
         <AppIcons.branch class="mr-1 size-3.5 shrink-0 text-muted-foreground/70" />
       {/if}
-      <span class="min-w-0 flex-1 truncate text-meta font-semibold" class:text-primary={isActive}
-        >{title}</span
-      >
+      <!-- FIXED-width name slot: a long name auto-scrolls (marquee) instead of
+           being truncated, matching the chat header's session bubble. -->
+      <Marquee
+        text={title}
+        class={cn('w-[clamp(8rem,40vw,20rem)] text-meta font-semibold', isActive && 'text-primary')}
+      />
+      <!-- Absorb the remaining width so the trailing chips stay right-aligned. -->
+      <span class="flex-1"></span>
       {#if role}
         <span class={cn('ml-1 flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-px text-[9px] leading-none', roleTone(role))}>
           {#if RoleIcon}<RoleIcon class="size-[11px]" />{/if}

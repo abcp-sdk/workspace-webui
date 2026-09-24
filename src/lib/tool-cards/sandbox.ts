@@ -269,16 +269,22 @@ const sandboxExec: CardHandler = ({ tool, data, input, output }) => {
   return {
     subtitle: name || jobId || 'exec',
     input: {
+      // The command reads like a terminal invocation; the other args stay fields.
       fields: fs(
         fin(input, 'worker-name', 'box', 'sandbox', { mono: true }),
-        fin(input, 'command', 'terminal', 'command', { mono: true }),
-        fin(input, 'workdir', 'folder', 'workdir', { mono: true }),
-        fin(input, 'timeout', 'clock', 'timeout', { mono: true }),
         fin(input, 'job-id', 'terminal', 'job', { mono: true }),
         fin(input, 'offset', 'list', 'offset', { mono: true }),
         fin(input, 'limit', 'list', 'limit', { mono: true }),
         fin(input, 'stream', 'list', 'stream', { mono: true }),
       ),
+      body: command
+        ? {
+            kind: 'command',
+            command,
+            workdir: pick(data, input, 'workdir') || undefined,
+            timeout: s(input, 'timeout') || undefined,
+          }
+        : undefined,
     },
     result: {
       fields: fs(

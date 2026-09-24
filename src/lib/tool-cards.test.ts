@@ -194,15 +194,27 @@ describe('cardFor', () => {
     })
   })
 
-  it('sandbox-exec: command in INPUT, terminal body in RESULT', () => {
+  it('sandbox-exec: command reads as a terminal in INPUT, output in RESULT', () => {
     const c = cardFor(
       'sandbox-exec',
       { 'job-id': 'j1', state: 'done', exit_code: 0 },
-      { 'worker-name': 'sb', command: 'ls -la' },
+      {
+        'worker-name': 'sb',
+        command: 'ls -la',
+        workdir: '/workspace',
+        timeout: '30',
+      },
       'total 0\nfile.txt',
     )!
     expect(c.subtitle).toBe('sb')
-    expect(c.input.fields.map(f => f.label)).toEqual(['sandbox', 'command'])
+    // The command is a terminal-style body, not a field.
+    expect(c.input.fields.map(f => f.label)).toEqual(['sandbox'])
+    expect(c.input.body).toEqual({
+      kind: 'command',
+      command: 'ls -la',
+      workdir: '/workspace',
+      timeout: '30',
+    })
     expect(c.result.body).toEqual({
       kind: 'terminal',
       command: 'ls -la',

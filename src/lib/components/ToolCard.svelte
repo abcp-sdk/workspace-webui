@@ -198,6 +198,19 @@
           </div>
         {/if}
       </div>
+    {:else if b.kind === 'command'}
+      <div class="min-w-0 overflow-hidden rounded-sm border border-border/50 bg-black/90">
+        <div class="flex items-start gap-1 px-2 py-1.5 font-mono text-[11px] leading-relaxed text-green-300">
+          <span class="shrink-0 text-white/40 select-none">$</span>
+          <span class="min-w-0 flex-1 wrap-anywhere whitespace-pre-wrap">{b.command}</span>
+        </div>
+        {#if b.workdir || b.timeout}
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5 border-t border-white/10 px-2 py-1 font-mono text-[10px] text-white/40">
+            {#if b.workdir}<span>cwd: <span class="text-white/70">{b.workdir}</span></span>{/if}
+            {#if b.timeout}<span>timeout: <span class="text-white/70">{b.timeout}s</span></span>{/if}
+          </div>
+        {/if}
+      </div>
     {:else if b.kind === 'code'}
       <div class="h-64 min-w-0 overflow-hidden rounded-sm border border-border/50">
         <CodeSurface code={b.text} name={b.name} startLine={b.startLine ?? 1} />

@@ -108,6 +108,9 @@ export type CardBody =
       state?: string
       exitCode?: number
     }
+  // Terminal-style INPUT: a `$ command` line (workdir/timeout shown as chrome).
+  // Used by the job/exec tools so their arguments read like a shell invocation.
+  | { kind: 'command'; command: string; workdir?: string; timeout?: string }
   // Source with line numbers + Shiki (reuses CodeSurface). `startLine` is the
   // ABSOLUTE number of the first line (1 for a whole file, `offset+1` for a
   // windowed read) so the gutter shows the true line numbers.
