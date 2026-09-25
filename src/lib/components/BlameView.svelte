@@ -1,7 +1,8 @@
 <script lang="ts">
-  // BlameView — per-line authorship of one file (gateway go-git blame). A fixed
-  // left gutter shows the short sha + author + relative time; the right column
-  // is the file text. Clicking a gutter jumps to that commit's page.
+  // BlameView — per-line authorship of one file (gateway go-git blame). Code
+  // uses the FULL width; a line-number gutter sits on the left and the blame
+  // annotation (sha · time · author) TRAILS the line inline, shown once per
+  // commit run. Clicking the annotation jumps to that commit's page.
   import type { AppStore } from '$lib/store.svelte'
   import type { BlameLine } from '$lib/api'
   import { t } from '$lib/i18n.svelte'
@@ -67,6 +68,19 @@
   function openCommit(sha: string) {
     store.pushChild({ kind: 'repo_commit', key: `commit:${org}/${repo}@${sha}`, org, repo, ref, sha })
   }
+
+  // Group consecutive lines sharing a commit: only the FIRST line of a run
+  // carries the trailing annotation (GitHub/VSCode style), so repeated
+  // author/sha/time never clutters every row.
+  const rows = $derived.by(() => {
+    const out: Array<BlameLine & { firstOfGroup: boolean }> = []
+    let prev = ''
+    for (const l of lines) {
+      out.push({ ...l, firstOfGroup: l.sha !== prev })
+      prev = l.sha
+    }
+    return out
+  })
 </script>
 
 {#if loading}
@@ -77,21 +91,19 @@
   <EmptyState center>{t('loadError', { e: '' })}</EmptyState>
 {:else}
   <div class="h-full overflow-auto bg-card font-mono text-[11.5px] leading-[1.55]">
-    {#each lines as l (l.line)}
-      <div class="flex min-w-0">
-        <button
-          type="button"
-          class="flex w-56 shrink-0 items-center gap-1.5 border-r border-border/40 px-2 text-left text-[10px] text-muted-foreground hover:bg-muted"
-          title="{l.author} · {l.date}"
-          onclick={() => openCommit(l.sha)}
-        >
-          <span class="shrink-0 font-semibold text-foreground/80">{l.author || '—'}</span>
-          <span class="shrink-0 font-mono">{shortSha(l.sha)}</span>
-          <span class="ml-auto shrink-0">{relTime(l.date)}</span>
-        </button>
+    {#each rows as l (l.line)}
+      <div class="flex min-w-0 hover:bg-muted/30">
         <span class="shrink-0 px-1 text-right text-muted-foreground/60 select-none" style="width: {gutterW}; min-width: {gutterW}">{l.line}</span>
-        <span class="min-w-0 flex-1 px-1 break-all whitespace-pre-wrap">{l.content}</span>
+        <!-- Code uses the FULL width; the blame annotation trails the line
+             inline (never a fixed left column that squeezes the code). -->
+        <span class="min-w-0 flex-1 px-1 break-all whitespace-pre-wrap">{l.content}{#if l.firstOfGroup}<button
+            type="button"
+            class="ml-3 inline whitespace-nowrap text-[10px] text-muted-foreground/50 select-none hover:text-primary hover:underline"
+            title="{l.author}{l.authorEmail ? ` <${l.authorEmail}>` : ''} · {l.date}"
+            onclick={() => openCommit(l.sha)}
+          >{shortSha(l.sha)} · {relTime(l.date)} · {l.author || '—'}</button>{/if}</span>
       </div>
     {/each}
   </div>
 {/if}
+
