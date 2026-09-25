@@ -16,6 +16,7 @@ import {
   type ToolResultExtra,
 } from './message-parts'
 import type { ChatMessage, Message } from './models'
+import { isTodoWrite, parseTodos, type Todo } from './todos'
 
 export class MessageStore {
   messages = $state<ChatMessage[]>([])
@@ -43,6 +44,14 @@ export class MessageStore {
    *  delta router reads this; `message-added{streaming:true}` sets it, and a
    *  new step (or turn end) replaces/clears it. */
   streamingId: string | null = null
+
+  /**
+   * The session's CURRENT todo list — DURABLE, not derived from the loaded
+   * window. The list is owned by the store and only ever moves FORWARD (the
+   * newest `todo-write` seen), so scrolling back / sliding the history window
+   * can never roll the checklist back to an older state.
+   */
+  todos = $state<Todo[]>([])
 
   /** Local ERROR bubbles are not server chain members; keep them across
    *  authoritative refreshes instead of dropping them. */
@@ -77,6 +86,9 @@ export class MessageStore {
   /** Reset per-session local state (error bubbles). */
   reset() {
     this.localErrors = []
+    // Todos belong to the session being opened; clear so a previous session's
+    // checklist never flashes before the new window/hydrate seeds it.
+    this.todos = []
   }
 
   /** Drop every local error bubble. Called when the user sends a new prompt:
@@ -114,6 +126,44 @@ export class MessageStore {
   renumber() {
     this.messages = orderMessages(this.messages)
     this.bumpSeqAfter(this.messages)
+  }
+
+  /** The newest `todo-write` in the loaded window, or null when it holds none. */
+  private newestTodoWrite(): { id: string; todos: Todo[] } | null {
+    for (let i = this.messages.length - 1; i >= 0; i--) {
+      const m = this.messages[i]!
+      for (let j = m.parts.length - 1; j >= 0; j--) {
+        const p = m.parts[j]!
+        if (p.type !== 'tool' || !isTodoWrite(p.tool)) continue
+        const todos = parseTodos(p.state?.input)
+        if (todos !== null) return { id: m.id, todos }
+      }
+    }
+    return null
+  }
+
+  /** Adopt the newest todo-write from a batch KNOWN to be newer than the
+   *  window (a live `tool-call` or an incremental server delta). */
+  adoptTodosFrom(msgs: readonly ChatMessage[]) {
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const m = msgs[i]!
+      for (let j = m.parts.length - 1; j >= 0; j--) {
+        const p = m.parts[j]!
+        if (p.type !== 'tool' || !isTodoWrite(p.tool)) continue
+        const todos = parseTodos(p.state?.input)
+        if (todos !== null) this.todos = todos
+      }
+    }
+  }
+
+  /**
+   * Seed the durable todo list from the whole window. Only valid for a
+   * TAIL-consistent load (baseline / cached hydrate): the window then holds the
+   * newest history. Never call after an older-page prepend.
+   */
+  refreshTodosFromWindow() {
+    const found = this.newestTodoWrite()
+    if (found !== null) this.todos = found.todos
   }
 
   /** The newest NON-local (server) row id, or '' when none. Used as the local
@@ -362,6 +412,14 @@ export class MessageStore {
       ...m,
       parts: addToolPartIn(m.parts, partId, name, input),
     }))
+    // A LIVE todo-write is the newest state: adopt it immediately so the
+    // checklist updates as the agent streams, independent of the window. Guard
+    // against a reconnect REPLAY of an older step when the reader has scrolled
+    // away (it must not roll the checklist back).
+    if (isTodoWrite(name) && (msgId === this.streamingId || !this.hasNewer)) {
+      const todos = parseTodos(input)
+      if (todos !== null) this.todos = todos
+    }
   }
 
   updateToolResult(

@@ -12,6 +12,7 @@
   import { AppStore } from './lib/store.svelte'
   import { showErrorToast } from './lib/toast.svelte'
   import { setAuthExpiredHandler } from './lib/events'
+  import { navDepthOf } from './lib/nav'
   import { confirmDialog } from './lib/dialogs'
   import type { BackendCfg } from './lib/models'
   import { backendNameFor } from './lib/models'
@@ -102,6 +103,60 @@
     systemDark = mq?.matches ?? false
     mq?.addEventListener('change', e => (systemDark = e.matches))
     void boot()
+  })
+
+  // ---- browser Back / swipe-back drives the in-app navigation stack ----
+  // The Android edge-swipe / system Back is a browser history back. This SPA
+  // keeps its navigation in memory (a forest path + a drawer), so without a
+  // bridge the gesture would leave the app instead of popping one in-app level.
+  //
+  // `navDepth` mirrors the CURRENT in-app depth (primary path + open drawer)
+  // onto history entries. An in-app forward PUSHES a matching entry; a Back
+  // pops one in-app level (no re-arm — depth and entries stay equal). A drop of
+  // MORE than one level (a lane switch / openMain collapsing the stack)
+  // consumes the surplus entries with a single `history.go(-n)`, guarded by
+  // `suppressPop` so those popstates are ignored.
+  let navDepth = 0
+  let suppressPop = 0
+
+  function inAppDepth(): number {
+    if (phase !== 'app' || !store) return 0
+    return navDepthOf(store.primaryStack, store.drawer)
+  }
+
+  if (typeof window !== 'undefined') {
+    window.history.replaceState(null, '')
+    window.addEventListener('popstate', () => {
+      // A programmatic `go(-n)` from the effect below: consume and ignore.
+      if (suppressPop > 0) {
+        suppressPop--
+        return
+      }
+      if (phase !== 'app' || !store) return
+      if (store.canPopPage) {
+        store.popPage()
+        // The browser consumed one entry and we popped one level: equal again.
+        navDepth = inAppDepth()
+      }
+    })
+  }
+
+  // Mirror in-app depth onto history so Back / swipe always has an entry to
+  // consume while a pop is possible.
+  $effect(() => {
+    const target = inAppDepth()
+    if (typeof window === 'undefined') return
+    if (target < navDepth) {
+      const back = navDepth - target
+      suppressPop += back
+      navDepth = target
+      window.history.go(-back)
+      return
+    }
+    for (let i = navDepth; i < target; i++) {
+      window.history.pushState(null, '')
+    }
+    navDepth = target
   })
 
   // The webui is served SAME-ORIGIN with the agent: the aggregating proxy in

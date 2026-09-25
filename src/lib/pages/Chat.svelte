@@ -30,7 +30,7 @@
   import ReconnectBanner from '$lib/components/ReconnectBanner.svelte'
   import { Popover } from '$lib/components/ui/popover'
   import TodosPanel from '$lib/components/TodosPanel.svelte'
-  import { latestTodos, todoCounts } from '$lib/todos'
+  import { todoCounts } from '$lib/todos'
 
   let { store, session: sessionId = '' }: PageProps & { session?: string } = $props()
 
@@ -89,9 +89,10 @@
   const sid = $derived(session?.id ?? sessionId)
   const role = $derived(session ? roleOfSession(session) : '')
 
-  // The session's current todos, derived from the LAST `todo-write` call in the
-  // loaded history (reactive: updates live as the agent streams a new list).
-  const todos = $derived(latestTodos(ctrl?.sorted ?? []))
+  // The session's CURRENT todos: DURABLE store state, not derived from the
+  // loaded window (scrolling back must never roll the checklist back). It moves
+  // forward on a live `todo-write` and on newer server deltas.
+  const todos = $derived(ctrl?.todos ?? [])
   const todoRemaining = $derived(todoCounts(todos).remaining)
 
   // (Re)boot the controller whenever the open session changes.

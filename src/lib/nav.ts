@@ -302,3 +302,14 @@ export function visibleWindow(
   const width = drawerOpen ? 1 : 2
   return stack.slice(Math.max(0, stack.length - width))
 }
+
+/**
+ * The in-app navigation DEPTH: how many `popPage()` calls can be consumed
+ * before the app would leave (its root). The main path contributes its extra
+ * levels (`length - 1`); the drawer contributes one per level. This is what the
+ * history bridge mirrors onto browser history entries so the Android
+ * edge-swipe / Back pops exactly one in-app level per gesture.
+ */
+export function navDepthOf(stack: AppPage[], drawer: AppPage[]): number {
+  return Math.max(0, stack.length - 1) + drawer.length
+}

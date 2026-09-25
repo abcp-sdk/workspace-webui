@@ -54,6 +54,9 @@ export class MessageSync {
         // Restore the server's "older history exists" flag so IM scroll-up
         // works immediately, before the first network sync lands.
         this.store.hasMore = await l.hasMore(sid)
+        // Seed the durable todo list from the cached window (a fresh hydrate
+        // is at the tail, so its newest todo-write is authoritative).
+        this.store.refreshTodosFromWindow()
         this.store.notify()
       }
     } catch {
@@ -82,6 +85,10 @@ export class MessageSync {
         ) {
           await this.baseline(sid)
         } else {
+          // Adopt todos from the DELTA only (these rows are newer than the
+          // window), before the merge/trim — so a scrolled-up reader still gets
+          // the newest checklist without the window rolling it back.
+          this.store.adoptTodosFrom(mapMessagesToChat(r.messages))
           this.store.mergeServer(r.messages)
           this.syncedTipId = r.tipId
           // A scrolled-up reader stays where they are: newer rows are tracked
@@ -114,6 +121,8 @@ export class MessageSync {
       this.store.hasMore = more
       // A fresh tail load: we are following the newest again.
       this.store.hasNewer = false
+      // The window is tail-consistent: its newest todo-write is authoritative.
+      this.store.refreshTodosFromWindow()
       const l = this.local
       if (l) {
         this.syncedTipId = chat.length ? chat[chat.length - 1]!.id : ''
@@ -191,6 +200,7 @@ export class MessageSync {
         await this.baseline(sid)
         return
       }
+      this.store.adoptTodosFrom(mapMessagesToChat(r.messages))
       this.store.mergeServer(r.messages)
       this.syncedTipId = r.tipId
       this.store.trimHistory(!this.store.hasNewer)

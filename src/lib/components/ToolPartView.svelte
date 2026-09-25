@@ -61,6 +61,19 @@
       resultOpen = true
     }
   })
+
+  // Expanding the card shows its detail by DEFAULT: the Input / Result / Meta
+  // sections open together with the card. (They can still be collapsed
+  // individually afterwards; collapsing the card and re-opening resets them.)
+  function toggleOpen() {
+    const next = !open
+    open = next
+    if (next) {
+      inputOpen = true
+      resultOpen = true
+      metaOpen = true
+    }
+  }
   const input = $derived((toolState?.input ?? {}) as Record<string, unknown>)
 
   const output = $derived(toolState?.output ?? '')
@@ -177,7 +190,7 @@
   <button
     type="button"
     class="flex w-full items-center gap-1 px-2 py-1 text-left"
-    onclick={() => (open = !open)}
+    onclick={toggleOpen}
   >
     {#if running}
       <AppIcons.more class="size-3.5 shrink-0 text-warning" />

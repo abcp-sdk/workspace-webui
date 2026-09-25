@@ -24,6 +24,7 @@ import { MessageSync } from './message-sync'
 import type { ChatMessage, UploadedFile } from './models'
 import { SessionStream } from './session-stream'
 import { showToast } from './toast.svelte'
+import type { Todo } from './todos'
 
 export { mapMessagesToChat } from './message-mapping'
 export { compareMessages, orderMessages }
@@ -97,6 +98,9 @@ export class MessagesController {
   }
   get hasNewer(): boolean {
     return this.store.hasNewer
+  }
+  get todos(): Todo[] {
+    return this.store.todos
   }
   get pendingMailbox(): number {
     return this.store.pendingMailbox

@@ -6,6 +6,7 @@ import {
   type AppPage,
   ancestry,
   laneOf,
+  navDepthOf,
   parentOf,
   popPage,
   pushPath,
@@ -353,5 +354,63 @@ describe('visibleWindow', () => {
   it('never returns more than two pages', () => {
     expect(visibleWindow([root, a, b, c], false).length).toBeLessThanOrEqual(2)
     expect(visibleWindow([root, a, b, c], true).length).toBeLessThanOrEqual(1)
+  })
+})
+
+describe('navDepthOf (history-bridge depth)', () => {
+  const root: AppPage = { kind: 'code_root', key: 'code_root' }
+  const a: AppPage = {
+    kind: 'repo_detail',
+    key: 'r',
+    org: 'o',
+    repo: 'p',
+    ref: 'main',
+  }
+  const b: AppPage = {
+    kind: 'repo_blob',
+    key: 'b',
+    org: 'o',
+    repo: 'p',
+    ref: 'main',
+    path: 'x',
+  }
+  const drawerPage: AppPage = {
+    kind: 'repo_commit',
+    key: 'c',
+    org: 'o',
+    repo: 'p',
+    ref: 'main',
+    sha: 's',
+  }
+
+  it('is 0 at a lane root with no drawer', () => {
+    expect(navDepthOf([root], [])).toBe(0)
+  })
+
+  it('counts extra main-path levels', () => {
+    expect(navDepthOf([root, a], [])).toBe(1)
+    expect(navDepthOf([root, a, b], [])).toBe(2)
+  })
+
+  it('counts drawer levels', () => {
+    expect(navDepthOf([root], [drawerPage])).toBe(1)
+    expect(navDepthOf([root, a], [drawerPage])).toBe(2)
+  })
+
+  it('equals the number of popPage() calls until canPop is false', () => {
+    // The invariant the history bridge relies on: depth == consumable pops.
+    let stack: AppPage[] = [root, a, b]
+    let drawer: AppPage[] = [drawerPage]
+    let pops = 0
+    const canPop = () => drawer.length > 0 || stack.length > 1
+    while (canPop()) {
+      if (drawer.length > 0) {
+        drawer = drawer.length > 1 ? drawer.slice(0, -1) : []
+      } else {
+        stack = popPage(stack)
+      }
+      pops++
+    }
+    expect(pops).toBe(navDepthOf([root, a, b], [drawerPage]))
   })
 })

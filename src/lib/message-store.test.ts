@@ -72,3 +72,89 @@ describe('MessageStore.sorted cache', () => {
     expect(s.sorted).not.toBe(a)
   })
 })
+
+// ---- durable todos ----
+
+/** A message carrying a `todo-write` tool part with the given statuses. */
+function todoMsg(
+  i: number,
+  statuses: string[],
+  over: Partial<ChatMessage> = {},
+): ChatMessage {
+  return msg(i, {
+    role: 'assistant',
+    parts: [
+      {
+        id: `t${i}`,
+        type: 'tool',
+        text: '',
+        tool: 'todo-write',
+        state: {
+          status: 'complete',
+          title: 'todo-write',
+          input: {
+            todos: statuses.map((st, k) => ({
+              content: `task ${k}`,
+              status: st,
+              priority: 'medium',
+            })),
+          },
+        },
+      },
+    ],
+    ...over,
+  })
+}
+
+const statusesOf = (s: MessageStore) => s.todos.map(t => t.status)
+
+describe('MessageStore durable todos', () => {
+  it('adopts the newest todo-write from a newer batch (live/delta)', () => {
+    const s = new MessageStore()
+    s.messages = [todoMsg(0, ['pending', 'pending'])]
+    s.refreshTodosFromWindow()
+    expect(statusesOf(s)).toEqual(['pending', 'pending'])
+    // A later delta carries an updated list.
+    s.adoptTodosFrom([todoMsg(5, ['completed', 'pending'])])
+    expect(statusesOf(s)).toEqual(['completed', 'pending'])
+  })
+
+  it('adopts a LIVE todo-write immediately via addToolPart', () => {
+    const s = new MessageStore()
+    s.addToolPart('a1', 'tc1', 'todo-write', {
+      todos: [{ content: 'x', status: 'in_progress', priority: 'high' }],
+    })
+    expect(statusesOf(s)).toEqual(['in_progress'])
+  })
+
+  it('does NOT roll back when the window slides to OLDER history', () => {
+    const s = new MessageStore()
+    // Window currently at the tail with a completed list.
+    s.messages = [todoMsg(0, ['pending']), todoMsg(1, ['completed'])]
+    s.refreshTodosFromWindow()
+    expect(statusesOf(s)).toEqual(['completed'])
+    // The reader scrolls up: the window slides, dropping the NEWEST row (the
+    // one that carried the completed list). Todos must stay completed.
+    s.hasNewer = true
+    s.messages = [todoMsg(0, ['pending'])] // only the older todo-write remains
+    s.trimHistory(false)
+    // (trim is a no-op at 1 row, but the point stands: no re-derivation)
+    expect(statusesOf(s)).toEqual(['completed'])
+  })
+
+  it('keeps the last list when a prepended batch has no todo-write', () => {
+    const s = new MessageStore()
+    s.messages = [todoMsg(1, ['completed'])]
+    s.refreshTodosFromWindow()
+    // Prepend older plain messages: adopting from them must not clear todos.
+    s.adoptTodosFrom([msg(0), msg(0, { id: 'x' })])
+    expect(statusesOf(s)).toEqual(['completed'])
+  })
+
+  it('reset() clears todos for a new session', () => {
+    const s = new MessageStore()
+    s.todos = [{ content: 'x', status: 'pending', priority: 'low' }]
+    s.reset()
+    expect(s.todos).toEqual([])
+  })
+})

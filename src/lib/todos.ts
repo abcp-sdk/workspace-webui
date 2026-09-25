@@ -69,9 +69,12 @@ export function parseTodos(input: unknown): Todo[] | null {
 
 /**
  * The session's current todos: scan the messages NEWEST-first and return the
- * first `todo-write` whose input parses. Empty when the session has none.
+ * first `todo-write` whose input parses. `null` when the batch holds NO
+ * todo-write at all (so callers can tell "no change" from "cleared to empty").
  */
-export function latestTodos(messages: readonly ChatMessage[]): Todo[] {
+export function latestTodosOrNull(
+  messages: readonly ChatMessage[],
+): Todo[] | null {
   for (let i = messages.length - 1; i >= 0; i--) {
     const parts = messages[i]!.parts
     for (let j = parts.length - 1; j >= 0; j--) {
@@ -81,7 +84,16 @@ export function latestTodos(messages: readonly ChatMessage[]): Todo[] {
       if (todos !== null) return todos
     }
   }
-  return []
+  return null
+}
+
+/**
+ * The session's current todos, or `[]` when it has none. Prefer the durable
+ * `store.todos` for the UI: this scans only the batch it is given, and a
+ * sliding history window can drop the newest `todo-write`.
+ */
+export function latestTodos(messages: readonly ChatMessage[]): Todo[] {
+  return latestTodosOrNull(messages) ?? []
 }
 
 /** Counts for the button badge: `remaining` = not completed and not cancelled. */
