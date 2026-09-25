@@ -167,7 +167,25 @@
       {/if}
     </span>
   {:else}
-    <ChatAvatar seed={session.id} size={40} />
+    <span class="relative shrink-0">
+      <ChatAvatar seed={session.id} size={40} />
+      <!-- Runtime status from the server's run lease: a top-right badge on the
+           avatar. Running (incl. mid-retry) = pulsing green; idle = gray; a
+           reply that did not read the lease (undefined) = no badge. -->
+      {#if session.status === 'busy'}
+        <span
+          class="absolute -top-0.5 -right-0.5 size-2.5 animate-pulse rounded-full bg-success ring-2 ring-background"
+          title={t('running')}
+          aria-label={t('running')}
+        ></span>
+      {:else if session.status === 'idle'}
+        <span
+          class="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-muted-foreground ring-2 ring-background"
+          title={t('idle')}
+          aria-label={t('idle')}
+        ></span>
+      {/if}
+    </span>
   {/if}
   <span class="w-3 shrink-0"></span>
   <span class="min-w-0 flex-1">
@@ -181,15 +199,6 @@
         text={title}
         class={cn('w-[clamp(8rem,40vw,20rem)] text-meta font-semibold', isActive && 'text-primary')}
       />
-      {#if session.status === 'busy'}
-        <!-- Runtime status from the server's run lease: a turn is running
-             (including mid-retry). Animated so a list scan finds it. -->
-        <span
-          class="ml-1 size-2 shrink-0 animate-pulse rounded-full bg-primary"
-          title={t('running')}
-          aria-label={t('running')}
-        ></span>
-      {/if}
       <!-- Absorb the remaining width so the trailing chips stay right-aligned. -->
       <span class="flex-1"></span>
       {#if role}

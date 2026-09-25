@@ -703,7 +703,7 @@
     <header class="grid h-12 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-border px-2">
       <div class="flex min-w-0 items-center gap-2">
         <IconButton icon={AppIcons.back} label={t('back')} onclick={() => store.popPage()} />
-        <span class={cn('size-2 rounded-full', ctrl.sending ? 'bg-warning' : 'bg-success')}></span>
+        <span class={cn('size-2 rounded-full', ctrl.sending ? 'bg-success' : 'bg-muted-foreground')}></span>
         {#if ctxLabel}
           <span class="text-micro text-muted-foreground tabular-nums">{ctxLabel}</span>
         {/if}
