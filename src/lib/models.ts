@@ -71,6 +71,10 @@ export interface Session {
   /** Generic grouping key (empty = ungrouped). A subsession records its
    *  parent's session name here. */
   group: string
+  /** Runtime status from the server's run lease: 'busy' while a turn holds it
+   *  (including mid-retry), 'idle' otherwise. Empty on a reply that did not
+   *  read the lease. */
+  status?: 'busy' | 'idle'
 }
 
 export function sessionName(s: Session): string {

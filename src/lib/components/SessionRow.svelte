@@ -181,6 +181,15 @@
         text={title}
         class={cn('w-[clamp(8rem,40vw,20rem)] text-meta font-semibold', isActive && 'text-primary')}
       />
+      {#if session.status === 'busy'}
+        <!-- Runtime status from the server's run lease: a turn is running
+             (including mid-retry). Animated so a list scan finds it. -->
+        <span
+          class="ml-1 size-2 shrink-0 animate-pulse rounded-full bg-primary"
+          title={t('running')}
+          aria-label={t('running')}
+        ></span>
+      {/if}
       <!-- Absorb the remaining width so the trailing chips stay right-aligned. -->
       <span class="flex-1"></span>
       {#if role}
