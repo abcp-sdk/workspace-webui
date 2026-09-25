@@ -31,10 +31,14 @@
     store?: AppStore
   } = $props()
 
-  let open = $state(true)
-  let inputOpen = $state(true)
-  let resultOpen = $state(true)
-  let metaOpen = $state(true)
+  // Cards start COLLAPSED for history and AUTO-OPEN only while their call is
+  // still running (the live step). Rendering every historical card expanded
+  // mounted hundreds of Shiki code surfaces and froze chat switches; the user
+  // expands what they care about.
+  let open = $state(false)
+  let inputOpen = $state(false)
+  let resultOpen = $state(false)
+  let metaOpen = $state(false)
   // Pretty (structured card) vs raw (JSON for input, text for result).
   let inputPretty = $state(true)
   let resultPretty = $state(true)
@@ -44,6 +48,19 @@
   const status = $derived(toolState?.status ?? 'complete')
   const hasError = $derived(status === 'error')
   const running = $derived(isStreaming && status === 'running')
+
+  // Auto-expand exactly ONCE when the call starts running (mount-time for a
+  // live step, or a transition). Never force-collapse afterwards, and never
+  // override a manual toggle.
+  let autoOpened = false
+  $effect(() => {
+    if (running && !autoOpened) {
+      autoOpened = true
+      open = true
+      inputOpen = true
+      resultOpen = true
+    }
+  })
   const input = $derived((toolState?.input ?? {}) as Record<string, unknown>)
 
   const output = $derived(toolState?.output ?? '')

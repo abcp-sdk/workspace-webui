@@ -13,6 +13,7 @@ import {
   messagePartToJson,
   partToJson,
 } from './local-codecs'
+import { HISTORY_CAP } from './message-order'
 import type {
   ChatDraft,
   ChatMessage,
@@ -227,10 +228,15 @@ export class LocalStore {
   }
 
   async loadMessages(sessionId: string): Promise<ChatMessage[]> {
+    // Newest CAP rows only: read DESC (so the LIMIT keeps the newest) then
+    // reverse to ascending order. An unbounded SELECT * grew with the session
+    // and made every chat switch re-hydrate + re-render the whole chain.
     const rows = this.all(
-      `SELECT * FROM local_messages WHERE session_id = ? ORDER BY order_key ASC`,
-      [sessionId],
+      `SELECT * FROM local_messages WHERE session_id = ?
+         ORDER BY order_key DESC LIMIT ?`,
+      [sessionId, HISTORY_CAP],
     )
+    rows.reverse()
     return rows.map(r => this.chatFromRow(r))
   }
 
@@ -247,16 +253,26 @@ export class LocalStore {
       'SELECT id FROM local_messages WHERE session_id = ? ORDER BY order_key ASC LIMIT 1',
       [sessionId],
     )
-    return r.length ? String(r[0]['id']) : ''
+    return r.length ? String(r[0]!['id']) : ''
+  }
+
+  /** Whether older history exists on the SERVER (drives IM scroll-up). Stored
+   *  with the mirror so a cached hydrate can offer "load earlier" immediately. */
+  async hasMore(sessionId: string): Promise<boolean> {
+    const r = this.all(
+      'SELECT has_more FROM local_sync_state WHERE session_id = ?',
+      [sessionId],
+    )
+    return r.length ? Number(r[0]!['has_more']) === 1 : false
   }
 
   /** Upsert server messages (baseline or delta) with a stable local order. */
   async applyServerMessages(
     sessionId: string,
     msgs: Message[],
-    opts: { replace: boolean; tipId: string },
+    opts: { replace: boolean; tipId: string; hasMore: boolean },
   ): Promise<void> {
-    const { replace, tipId } = opts
+    const { replace, tipId, hasMore } = opts
     this.db.exec('BEGIN')
     try {
       if (replace) {
@@ -288,7 +304,7 @@ export class LocalStore {
           ],
         )
       }
-      await this.upsertSyncState(sessionId, tipId)
+      await this.upsertSyncState(sessionId, tipId, hasMore)
       this.db.exec('COMMIT')
     } catch (e) {
       this.db.exec('ROLLBACK')
@@ -301,13 +317,17 @@ export class LocalStore {
     sessionId: string,
     msgs: ChatMessage[],
     tipId: string,
+    hasMore: boolean,
   ): Promise<void> {
+    // Only the newest HISTORY_CAP history rows are kept (local-only rows are
+    // never persisted). Ordering is preserved within the retained window.
+    const history = msgs.filter(m => !m.isLocal)
+    const keep = history.slice(-HISTORY_CAP)
     this.db.exec('BEGIN')
     try {
       this.run('DELETE FROM local_messages WHERE session_id = ?', [sessionId])
       let order = 0
-      for (const m of msgs) {
-        if (m.isLocal) continue // optimistic/streaming rows are not history
+      for (const m of keep) {
         this.run(
           `INSERT OR REPLACE INTO local_messages
              (session_id, id, role, prev_id, source, created_at, order_key, status, parts_json)
@@ -325,7 +345,7 @@ export class LocalStore {
           ],
         )
       }
-      await this.upsertSyncState(sessionId, tipId)
+      await this.upsertSyncState(sessionId, tipId, hasMore)
       this.db.exec('COMMIT')
     } catch (e) {
       this.db.exec('ROLLBACK')
@@ -336,19 +356,19 @@ export class LocalStore {
   private async upsertSyncState(
     sessionId: string,
     tipId: string,
+    hasMore: boolean,
   ): Promise<void> {
     const oldest = this.all(
       'SELECT id FROM local_messages WHERE session_id = ? ORDER BY order_key ASC LIMIT 1',
       [sessionId],
     )
     const oldestId = oldest.length ? String(oldest[0]!['id']) : ''
-    const hasMore = oldest.length ? 1 : 0
     this.run(
       `INSERT INTO local_sync_state (session_id, oldest_id, has_more, tip_id)
        VALUES (?,?,?,?)
        ON CONFLICT(session_id) DO UPDATE SET oldest_id=excluded.oldest_id,
          has_more=excluded.has_more, tip_id=excluded.tip_id`,
-      [sessionId, oldestId, hasMore, tipId],
+      [sessionId, oldestId, hasMore ? 1 : 0, tipId],
     )
   }
 

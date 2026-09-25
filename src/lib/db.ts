@@ -24,15 +24,17 @@ export interface LocalStore {
   loadMessages(sessionId: string): Promise<ChatMessage[]>
   serverTipId(sessionId: string): Promise<string>
   oldestCachedId(sessionId: string): Promise<string>
+  hasMore(sessionId: string): Promise<boolean>
   applyServerMessages(
     sessionId: string,
     msgs: Message[],
-    opts: { replace: boolean; tipId: string },
+    opts: { replace: boolean; tipId: string; hasMore: boolean },
   ): Promise<void>
   persistMessages(
     sessionId: string,
     msgs: ChatMessage[],
     tipId: string,
+    hasMore: boolean,
   ): Promise<void>
   clearMessages(sessionId: string): Promise<void>
   saveDraft(
@@ -115,16 +117,22 @@ class WorkerLocalStore implements LocalStore {
     this.call('serverTipId', [sid]) as Promise<string>
   oldestCachedId = (sid: string) =>
     this.call('oldestCachedId', [sid]) as Promise<string>
+  hasMore = (sid: string) => this.call('hasMore', [sid]) as Promise<boolean>
   applyServerMessages = (
     sid: string,
     msgs: Message[],
-    opts: { replace: boolean; tipId: string },
+    opts: { replace: boolean; tipId: string; hasMore: boolean },
   ) =>
     this.call('applyServerMessages', [sid, msgs, opts]).then(
       () => {},
     ) as Promise<void>
-  persistMessages = (sid: string, msgs: ChatMessage[], tipId: string) =>
-    this.call('persistMessages', [sid, msgs, tipId]).then(
+  persistMessages = (
+    sid: string,
+    msgs: ChatMessage[],
+    tipId: string,
+    hasMore: boolean,
+  ) =>
+    this.call('persistMessages', [sid, msgs, tipId, hasMore]).then(
       () => {},
     ) as Promise<void>
   clearMessages = (sid: string) =>

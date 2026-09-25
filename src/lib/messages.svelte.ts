@@ -95,6 +95,9 @@ export class MessagesController {
   get hasMore(): boolean {
     return this.store.hasMore
   }
+  get hasNewer(): boolean {
+    return this.store.hasNewer
+  }
   get pendingMailbox(): number {
     return this.store.pendingMailbox
   }
@@ -295,6 +298,13 @@ export class MessagesController {
     const first = this.store.sorted[0]
     if (!first) return
     await this.sync.fetch(first.id)
+  }
+
+  /** IM "jump to latest": drop the scrolled-up window and reload the newest
+   *  page (the reader had slid away from the tail). */
+  async jumpToLatest(): Promise<void> {
+    this.store.hasNewer = false
+    await this.sync.fetch()
   }
 
   dispose() {

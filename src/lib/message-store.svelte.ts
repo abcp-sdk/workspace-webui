@@ -5,7 +5,7 @@
 // controller file stays about connection, sync and mailbox concerns.
 
 import { mapMessagesToChat } from './message-mapping'
-import { compareMessages, orderMessages } from './message-order'
+import { compareMessages, HISTORY_CAP, orderMessages } from './message-order'
 import {
   addToolPartIn,
   appendDeltaTo,
@@ -22,6 +22,10 @@ export class MessageStore {
   sending = $state(false)
   loading = $state(false)
   hasMore = $state(false)
+  /** True when the retained window has been TRIMMED at the new end (the user
+   *  scrolled back past HISTORY_CAP): newer history exists on the server and
+   *  is reachable by jumping to the latest. */
+  hasNewer = $state(false)
 
   /** PENDING (unconsumed) mailbox entries for the open session — drives the
    *  red badge on the top-bar mailbox button. */
@@ -45,8 +49,21 @@ export class MessageStore {
   private localErrors: ChatMessage[] = []
   private nextSeq = 1_000_000
 
+  // `sorted` is read MULTIPLE times per render (the template AND the todos
+  // derived). Re-sorting the whole list on every read was measurable on long
+  // sessions, so cache it and recompute only when the list or its revision
+  // changes.
+  private sortedSrc: ChatMessage[] | null = null
+  private sortedRev = -1
+  private sortedCache: ChatMessage[] = []
+
   get sorted(): ChatMessage[] {
-    return [...this.messages].sort(compareMessages)
+    if (this.sortedSrc !== this.messages || this.sortedRev !== this.revision) {
+      this.sortedCache = [...this.messages].sort(compareMessages)
+      this.sortedSrc = this.messages
+      this.sortedRev = this.revision
+    }
+    return this.sortedCache
   }
 
   allocSeq(): number {
@@ -97,6 +114,41 @@ export class MessageStore {
   renumber() {
     this.messages = orderMessages(this.messages)
     this.bumpSeqAfter(this.messages)
+  }
+
+  /** The newest NON-local (server) row id, or '' when none. Used as the local
+   *  mirror's anchor when the window has slid away from the server tip. */
+  newestHistoryId(): string {
+    let id = ''
+    let best = -1
+    for (const m of this.messages) {
+      if (m.isLocal) continue
+      if ((m.seq ?? -1) > best) {
+        best = m.seq ?? -1
+        id = m.id
+      }
+    }
+    return id
+  }
+
+  /**
+   * Bound the in-memory list to HISTORY_CAP history rows (local-only rows are
+   * never dropped). `keepNewest` = the streaming / tail-following case: drop
+   * the OLDEST (older history stays on the server, reachable by scrolling up).
+   * `false` = the user scrolled UP and loaded older: drop the NEWEST and flag
+   * `hasNewer`, so the retained window follows the reader instead of growing.
+   * Returns which end was trimmed (null = nothing trimmed).
+   */
+  trimHistory(keepNewest: boolean): 'oldest' | 'newest' | null {
+    const history = this.messages.filter(m => !m.isLocal)
+    if (history.length <= HISTORY_CAP) return null
+    const kept = keepNewest
+      ? history.slice(-HISTORY_CAP)
+      : history.slice(0, HISTORY_CAP)
+    const keepIds = new Set(kept.map(m => m.id))
+    this.messages = this.messages.filter(m => m.isLocal || keepIds.has(m.id))
+    this.renumber()
+    return keepNewest ? 'oldest' : 'newest'
   }
 
   /** Merge a server delta into memory. ASSISTANT messages are server-authored

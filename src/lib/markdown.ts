@@ -25,12 +25,28 @@ DOMPurify.addHook('afterSanitizeAttributes', node => {
   }
 })
 
+/** Bounded memo of rendered markdown, keyed by the source text. */
+const MD_CACHE_MAX = 500
+const mdCache = new Map<string, string>()
+
 export function renderMarkdown(src: string): string {
-  const raw = marked.parse(src ?? '', { async: false }) as string
+  const key = src ?? ''
+  const hit = mdCache.get(key)
+  if (hit !== undefined) return hit
+  const raw = marked.parse(key, { async: false }) as string
   const clean = DOMPurify.sanitize(raw, {
     ADD_ATTR: ['target'],
   })
-  return highlightCodeBlocks(clean)
+  const html = highlightCodeBlocks(clean)
+  // Bounded LRU: a long chat re-renders the SAME message text on every stream
+  // event, so memoizing by source avoids re-parsing markdown + re-running
+  // highlight.js per bubble per delta.
+  if (mdCache.size >= MD_CACHE_MAX) {
+    const oldest = mdCache.keys().next().value
+    if (oldest !== undefined) mdCache.delete(oldest)
+  }
+  mdCache.set(key, html)
+  return html
 }
 
 function highlightCodeBlocks(html: string): string {

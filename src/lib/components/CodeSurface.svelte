@@ -7,6 +7,11 @@
   //
   // It NEVER renders the content (markdown stays markdown source, html stays
   // markup); only syntax coloring is applied.
+  //
+  // LAZY HIGHLIGHT: Shiki (pure-JS regex engine) is expensive, and a long chat
+  // can hold hundreds of code surfaces. Coloring is deferred until the surface
+  // is actually IN THE VIEWPORT (IntersectionObserver); off-screen and
+  // collapsed cards render as fast escaped plain text and are never tokenized.
   import { onMount } from 'svelte'
   import { highlightLines, langForName, themeFor, type Token } from '$lib/highlight'
   import { gutterWidth } from '$lib/line-gutter'
@@ -19,7 +24,10 @@
 
   let dark = $state(false)
   let tokens = $state<Token[][] | null>(null)
-  let tokenizing = $state(true)
+  let tokenizing = $state(false)
+  /** True once the surface has scrolled into view (arms highlighting). */
+  let visible = $state(false)
+  let rootEl: HTMLElement | null = $state(null)
 
   const rawLines = $derived(code.length ? code.split('\n') : [''])
   // The gutter must fit the LARGEST absolute line number, which is
@@ -33,6 +41,8 @@
   }
 
   async function run() {
+    if (!visible) return
+    tokenizing = true
     const lang = langForName(name)
     try {
       tokens = await highlightLines(code, lang, themeFor(dark))
@@ -69,22 +79,40 @@
 
   onMount(() => {
     dark = isDark()
-    void run()
+    // Arm highlighting when the surface first enters the viewport. A 200px
+    // root margin warms it just before it becomes visible.
+    const io = new IntersectionObserver(
+      entries => {
+        if (entries.some(e => e.isIntersecting)) {
+          visible = true
+          io.disconnect()
+          void run()
+        }
+      },
+      { rootMargin: '200px' },
+    )
+    if (rootEl) io.observe(rootEl)
 
     const mo = new MutationObserver(() => {
       const d = isDark()
       if (d !== dark) {
         dark = d
-        tokenizing = true
-        void run()
+        // Re-highlight with the new theme, but only if already tokenized.
+        if (tokens !== null) void run()
       }
     })
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
-    return () => mo.disconnect()
+    return () => {
+      io.disconnect()
+      mo.disconnect()
+    }
   })
 </script>
 
-<div class="h-full w-full overflow-auto bg-card font-mono text-[12px] leading-[20px]">
+<div
+  bind:this={rootEl}
+  class="h-full w-full overflow-auto bg-card font-mono text-[12px] leading-[20px]"
+>
   {#each lines as html, i (i)}
     <div class="flex w-full items-start">
       <span

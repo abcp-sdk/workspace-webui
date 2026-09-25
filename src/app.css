@@ -269,3 +269,15 @@ body {
 .hljs-name {
   color: var(--primary);
 }
+
+/*
+ * Chat virtualization (native): skip rendering work for messages that are
+ * off-screen. `content-visibility: auto` lets the browser skip layout/paint of
+ * a skipped subtree; `contain-intrinsic-size` supplies the placeholder size so
+ * the scrollbar and scroll anchoring stay stable. Works with VARIABLE message
+ * heights (unlike a fixed-size JS virtualizer) and needs no dependency.
+ */
+.chat-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 80px;
+}

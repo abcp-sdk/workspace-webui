@@ -15,6 +15,17 @@
 // bubble, so origin is not an ordering key either. `prevId` is.
 import type { ChatMessage } from './models'
 
+/**
+ * The MOST recent messages kept in memory / the local mirror. Older messages
+ * are still on the server: scrolling to the top loads them (IM-style), and
+ * the retained window is then trimmed back to this cap from the OLD end so a
+ * long session never grows the render/load cost without bound.
+ *
+ * 200 ≈ a few screens of rich tool cards; the RPC itself is cheap (~30ms/50),
+ * the cost is the DOM, so this bounds what is MOUNTED, not what is reachable.
+ */
+export const HISTORY_CAP = 200
+
 /** Order by `seq` ONLY (never `createdAt`). `seq` is re-seated by [orderMessages]. */
 export function compareMessages(a: ChatMessage, b: ChatMessage): number {
   return (a.seq ?? 1 << 30) - (b.seq ?? 1 << 30)
@@ -66,5 +77,9 @@ export function orderMessages(msgs: ChatMessage[]): ChatMessage[] {
   // Defensive: any row unreachable via the walk (cyclic prevId) is appended in
   // array order so it is never silently dropped.
   for (const m of msgs) if (!seen.has(m.id)) out.push(m)
-  return out.map((m, i) => ({ ...m, seq: i }))
+  // Preserve object identity for rows whose position did NOT change: a stream
+  // delta re-numbers the list on every event, and minting a new object for
+  // every row made every MessageBubble re-render (markdown re-parse, tool
+  // cards, Shiki). Only the moved rows get a new `seq`.
+  return out.map((m, i) => (m.seq === i ? m : { ...m, seq: i }))
 }

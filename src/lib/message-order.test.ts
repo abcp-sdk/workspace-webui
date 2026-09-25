@@ -128,4 +128,24 @@ describe('orderMessages (server-authored chain)', () => {
     orderMessages(input)
     expect(input.map(m => ({ id: m.id, seq: m.seq }))).toEqual(snapshot)
   })
+
+  it('preserves object identity for rows whose seq did not change', () => {
+    // A stream delta re-numbers on every event; unchanged rows must keep their
+    // identity so MessageBubble does not re-render (markdown/tool cards).
+    const a = msg({ id: 'a', seq: 0 })
+    const b = msg({ id: 'b', prevId: 'a', seq: 1 })
+    const out = orderMessages([a, b])
+    expect(out[0]).toBe(a)
+    expect(out[1]).toBe(b)
+  })
+
+  it('mints a new object only for a row that MOVED', () => {
+    const a = msg({ id: 'a', seq: 5 })
+    const b = msg({ id: 'b', prevId: 'a', seq: 0 })
+    const out = orderMessages([a, b])
+    // Both were re-seated (5->0, 0->1), so both get fresh objects.
+    expect(out[0]).not.toBe(a)
+    expect(out[1]).not.toBe(b)
+    expect(out.map(m => m.seq)).toEqual([0, 1])
+  })
 })

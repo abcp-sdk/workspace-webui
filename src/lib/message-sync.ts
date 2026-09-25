@@ -21,6 +21,24 @@ export class MessageSync {
     private store: MessageStore,
   ) {}
 
+  /**
+   * Persist the in-memory window as the local mirror, UNLESS the reader has
+   * scrolled away from the tail (`hasNewer`): the mirror then keeps the last
+   * tail-following snapshot, so reopening the session shows the newest history
+   * (IM behaviour) rather than a stale mid-history window.
+   */
+  private async persistWindow(sid: string): Promise<void> {
+    const l = this.local
+    if (!l || this.store.hasNewer) return
+    await l.persistMessages(
+      sid,
+      this.store.messages,
+      this.syncedTipId,
+      this.store.hasMore,
+    )
+    this.syncedOldestId = await l.oldestCachedId(sid)
+  }
+
   /** Seed the store from the local mirror (best-effort; network-only on miss). */
   async hydrate(sid: string): Promise<void> {
     const l = this.local
@@ -33,6 +51,9 @@ export class MessageSync {
       if (cached.length) {
         this.store.messages = [...cached, ...this.store.inFlightLocal()]
         this.store.renumber()
+        // Restore the server's "older history exists" flag so IM scroll-up
+        // works immediately, before the first network sync lands.
+        this.store.hasMore = await l.hasMore(sid)
         this.store.notify()
       }
     } catch {
@@ -63,7 +84,11 @@ export class MessageSync {
         } else {
           this.store.mergeServer(r.messages)
           this.syncedTipId = r.tipId
-          await l.persistMessages(sid, this.store.messages, r.tipId)
+          // A scrolled-up reader stays where they are: newer rows are tracked
+          // in the anchor but trimmed off the visible window. A tail-follower
+          // keeps the newest and drops the oldest instead.
+          this.store.trimHistory(!this.store.hasNewer)
+          await this.persistWindow(sid)
         }
       } else {
         await this.baseline(sid)
@@ -87,12 +112,15 @@ export class MessageSync {
       ]
       this.store.renumber()
       this.store.hasMore = more
+      // A fresh tail load: we are following the newest again.
+      this.store.hasNewer = false
       const l = this.local
       if (l) {
         this.syncedTipId = chat.length ? chat[chat.length - 1]!.id : ''
         await l.applyServerMessages(sid, msgs, {
           replace: true,
           tipId: this.syncedTipId,
+          hasMore: more,
         })
         this.syncedOldestId = await l.oldestCachedId(sid)
       }
@@ -101,7 +129,7 @@ export class MessageSync {
     }
   }
 
-  /** Page of older messages (load-more). */
+  /** Page of older messages (IM-style scroll-up). */
   async fetch(before?: string): Promise<void> {
     this.store.loading = true
     this.store.notify()
@@ -110,34 +138,37 @@ export class MessageSync {
       const [msgs, more] = await this.api.messages(sid, before, 50)
       const chat = mapMessagesToChat(msgs)
       if (before != null) {
+        // Prepend older history. Then SLIDE the window: if we now exceed the
+        // cap, drop the NEWEST rows (they stay on the server) and flag that
+        // newer history exists — the reader follows the older page they asked
+        // for instead of the list growing without bound.
         const existing = new Set(this.store.messages.map(m => m.id))
         this.store.messages = [
           ...chat.filter(m => !existing.has(m.id)),
           ...this.store.messages,
         ]
+        this.store.renumber()
+        this.store.hasMore = more
+        if (this.store.trimHistory(false)) this.store.hasNewer = true
       } else {
+        // No cursor: (re)load the newest page and follow the tail again.
         this.store.messages = [
           ...this.store.inFlightLocal(),
           ...this.store.errors,
           ...chat,
         ]
+        this.store.renumber()
+        this.store.hasMore = more
+        this.store.hasNewer = false
       }
-      this.store.renumber()
-      this.store.hasMore = more
     } catch {
       /* keep current view */
     }
     this.store.loading = false
     this.store.notify()
-    const l = this.local
-    if (l) {
+    if (this.local) {
       try {
-        await l.persistMessages(
-          this.getSessionId(),
-          this.store.messages,
-          this.syncedTipId,
-        )
-        this.syncedOldestId = await l.oldestCachedId(this.getSessionId())
+        await this.persistWindow(this.getSessionId())
       } catch {
         /* ignore */
       }
@@ -162,10 +193,10 @@ export class MessageSync {
       }
       this.store.mergeServer(r.messages)
       this.syncedTipId = r.tipId
+      this.store.trimHistory(!this.store.hasNewer)
       this.store.notify()
       if (l) {
-        await l.persistMessages(sid, this.store.messages, this.syncedTipId)
-        this.syncedOldestId = await l.oldestCachedId(sid)
+        await this.persistWindow(sid)
       }
     } catch {
       /* offline reconcile retry on next turn */

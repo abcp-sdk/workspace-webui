@@ -144,13 +144,53 @@
 
   // ---- scroll behaviour ----
 
+  /** IM-style: auto-load older history as the top edge approaches, and keep
+   *  the reader's viewport anchored when a page is prepended (otherwise the
+   *  new rows shove the content down and the list jumps). */
+  const LOAD_OLDER_AT = 200
+
   function onScroll() {
     if (!listEl) return
-    const nearBottom = listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight < 80
+    const nearBottom =
+      listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight < 80
     followBottom = nearBottom
-    if (listEl.scrollTop < 60 && ctrl?.hasMore && !ctrl.loading) {
-      void ctrl.loadMore()
+    if (
+      listEl.scrollTop < LOAD_OLDER_AT &&
+      ctrl?.hasMore &&
+      !ctrl.loading
+    ) {
+      void loadOlder()
     }
+  }
+
+  /** Load one older page, preserving the scroll position across the prepend. */
+  async function loadOlder() {
+    const el = listEl
+    if (!el || !ctrl) return
+    const before = { height: el.scrollHeight, top: el.scrollTop }
+    await ctrl.loadMore()
+    // Restore the anchor: the prepended height pushes content down, so shift
+    // scrollTop by exactly the growth. `content-visibility` reflows the newly
+    // prepended rows over a frame or two, so re-apply across two frames.
+    const restore = () => {
+      if (!listEl) return
+      listEl.scrollTop = before.top + (listEl.scrollHeight - before.height)
+    }
+    requestAnimationFrame(() => {
+      restore()
+      requestAnimationFrame(restore)
+    })
+  }
+
+  /** Jump back to the newest history (after the user scrolled far up and the
+   *  window slid away from the tail). */
+  async function jumpToLatest() {
+    if (!ctrl) return
+    followBottom = true
+    await ctrl.jumpToLatest()
+    requestAnimationFrame(() => {
+      if (listEl) listEl.scrollTop = listEl.scrollHeight
+    })
   }
 
   $effect(() => {
@@ -725,35 +765,51 @@
     <ReconnectBanner />
 
     <!-- messages -->
-    <div bind:this={listEl} class="min-h-0 flex-1 overflow-y-auto px-3 py-3" onscroll={onScroll}>
-      {#if ctrl.loading && ctrl.messages.length === 0}
-        <div class="flex h-full items-center justify-center">
-          <span class="size-6 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground"></span>
-        </div>
-      {:else}
-        {#if ctrl.hasMore}
-          <div class="mb-2 flex justify-center">
-            <button
-              type="button"
-              class="rounded px-2 py-1 text-sm text-primary hover:bg-muted disabled:opacity-50"
-              disabled={ctrl.loading}
-              onclick={() => void ctrl!.loadMore()}
-            >{ctrl.loading ? t('loading') : t('loadEarlier')}</button>
+    <div class="relative min-h-0 flex-1">
+      <div bind:this={listEl} class="h-full overflow-y-auto px-3 py-3" onscroll={onScroll}>
+        {#if ctrl.loading && ctrl.messages.length === 0}
+          <div class="flex h-full items-center justify-center">
+            <span class="size-6 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground"></span>
           </div>
+        {:else}
+          {#if ctrl.hasMore}
+            <div class="mb-2 flex justify-center">
+              <button
+                type="button"
+                class="rounded px-2 py-1 text-sm text-primary hover:bg-muted disabled:opacity-50"
+                disabled={ctrl.loading}
+                onclick={() => void loadOlder()}
+              >{ctrl.loading ? t('loading') : t('loadEarlier')}</button>
+            </div>
+          {/if}
+          {#each ctrl.sorted as msg (msg.id)}
+            <!-- `chat-row` skips layout/paint for off-screen messages
+                 (content-visibility: auto) while preserving the scroll
+                 geometry via contain-intrinsic-size. Combined with the 200-row
+                 cap and collapsed tool cards this keeps a long chat cheap to
+                 switch into without a JS virtualizer. -->
+            <div class="chat-row">
+              <MessageBubble
+                {msg}
+                sessionId={sid}
+                api={store.api}
+                onUndo={id => void ctrl!.revert(id)}
+                onResend={txt => void ctrl!.resendFrom(ctrl!.messages.find(m => m.id === msg.id)!, txt)}
+                onEdit={txt => void ctrl!.resendFrom(ctrl!.messages.find(m => m.id === msg.id)!, txt)}
+                onOpenSession={name => store.pickSession(name)}
+                sessionExists={name => store.sessionById(name) !== null}
+                {store}
+              />
+            </div>
+          {/each}
         {/if}
-        {#each ctrl.sorted as msg (msg.id)}
-          <MessageBubble
-            {msg}
-            sessionId={sid}
-            api={store.api}
-            onUndo={id => void ctrl!.revert(id)}
-            onResend={txt => void ctrl!.resendFrom(ctrl!.messages.find(m => m.id === msg.id)!, txt)}
-            onEdit={txt => void ctrl!.resendFrom(ctrl!.messages.find(m => m.id === msg.id)!, txt)}
-            onOpenSession={name => store.pickSession(name)}
-            sessionExists={name => store.sessionById(name) !== null}
-            {store}
-          />
-        {/each}
+      </div>
+      {#if ctrl.hasNewer}
+        <button
+          type="button"
+          class="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-border bg-card px-3 py-1 text-meta text-primary shadow-sm hover:bg-muted"
+          onclick={() => void jumpToLatest()}
+        >{t('jumpToLatest')}</button>
       {/if}
     </div>
 
