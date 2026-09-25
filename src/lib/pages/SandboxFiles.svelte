@@ -18,7 +18,8 @@
     guessMime,
     previewKind,
     formatBytes,
-    isTextMime,
+    isBinaryPreviewKind,
+    looksTextual,
     type PreviewKind,
   } from '$lib/file-types'
   import {
@@ -149,30 +150,34 @@
     tooBig = false
     const nm = basename(abs)
     const mime = guessMime(nm)
-    fileKind = previewKind(mime, nm)
+    // The extension is only a HINT (go.mod / LICENSE / Makefile / extensionless
+    // scripts are all text). Decide the viewer from the CONTENT: read the bytes
+    // first, then classify. Only true media/office kinds skip the read (they
+    // stream to the browser and may be huge).
+    const hintKind = previewKind(mime, nm)
+    fileKind = hintKind
     fileSize = size
-    const isText =
-      isTextMime(mime) ||
-      fileKind === 'code' ||
-      fileKind === 'json' ||
-      fileKind === 'csv' ||
-      fileKind === 'markdown' ||
-      fileKind === 'html' ||
-      fileKind === 'text'
-    const isMedia =
-      fileKind === 'image' || fileKind === 'video' || fileKind === 'audio'
+    const streamAsBlob = isBinaryPreviewKind(hintKind)
     try {
-      if (isText) {
-        const r = await store.api.readSandboxFile(name, abs)
-        text = new TextDecoder('utf-8', { fatal: false }).decode(r.data)
-        fileSize = r.data.length || size
-      } else if (isMedia && size > PREVIEW_MAX) {
+      if (streamAsBlob && size > PREVIEW_MAX) {
         tooBig = true
+        return
+      }
+      const r = await store.api.readSandboxFile(name, abs)
+      fileSize = r.data.length || size
+      if (!streamAsBlob && looksTextual(r.data)) {
+        // Text (by CONTENT): decode and show as source. Re-resolve the kind
+        // from the filename so a .md renders as markdown, .go as code, etc.,
+        // and an unknown extension degrades to plain text.
+        fileKind = hintKind === 'none' ? 'text' : hintKind
+        text = new TextDecoder('utf-8', { fatal: false }).decode(r.data)
       } else {
-        const r = await store.api.readSandboxFile(name, abs)
-        fileSize = r.data.length || size
+        // Genuinely binary (or a media kind): hand the bytes to the browser.
+        fileKind = streamAsBlob ? hintKind : 'none'
         url = URL.createObjectURL(
-          new Blob([new Uint8Array(r.data)], { type: mime || 'application/octet-stream' }),
+          new Blob([new Uint8Array(r.data)], {
+            type: mime || 'application/octet-stream',
+          }),
         )
       }
     } catch (e) {
@@ -274,10 +279,10 @@
             <AppIcons.download class="size-4" />{t('download')}
           </button>
         </div>
-      {:else if fileKind === 'text' || fileKind === 'code' || fileKind === 'json' || fileKind === 'csv' || fileKind === 'markdown' || fileKind === 'html'}
-        <CodeSurface code={text} name={basename(file)} />
       {:else if url}
         <BlobView name={basename(file)} mime={guessMime(basename(file))} {url} size={fileSize} isText={false} />
+      {:else if fileKind !== 'none'}
+        <CodeSurface code={text} name={basename(file)} />
       {:else}
         <div class="flex h-full items-center justify-center"><span class="size-6 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground"></span></div>
       {/if}

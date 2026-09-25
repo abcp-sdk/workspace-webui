@@ -7,8 +7,10 @@ import {
   formatBytes,
   formatDuration,
   guessMime,
+  isBinaryPreviewKind,
   isPreviewable,
   isTextMime,
+  looksTextual,
   mimeToKind,
   previewKind,
 } from './file-types'
@@ -47,6 +49,39 @@ describe('isTextMime', () => {
   it('rejects binary types', () => {
     expect(isTextMime('image/png')).toBe(false)
     expect(isTextMime('application/zip')).toBe(false)
+  })
+})
+
+describe('looksTextual (content sniff)', () => {
+  const bytes = (s: string) => new TextEncoder().encode(s)
+
+  it('accepts valid UTF-8 with no NUL, regardless of extension', () => {
+    expect(looksTextual(bytes('module github.com/x/y\n\ngo 1.26.5\n'))).toBe(
+      true,
+    )
+    expect(looksTextual(bytes('MIT License\n\nCopyright (c) 2026'))).toBe(true)
+    expect(looksTextual(bytes(''))).toBe(true)
+  })
+
+  it('rejects bytes with a NUL in the first 8 KiB', () => {
+    expect(looksTextual(new Uint8Array([0x50, 0x4b, 0x00, 0x04]))).toBe(false)
+  })
+
+  it('rejects invalid UTF-8', () => {
+    expect(looksTextual(new Uint8Array([0xff, 0xfe, 0xfd]))).toBe(false)
+  })
+})
+
+describe('isBinaryPreviewKind', () => {
+  it('marks media/office kinds as binary', () => {
+    expect(isBinaryPreviewKind('image')).toBe(true)
+    expect(isBinaryPreviewKind('video')).toBe(true)
+    expect(isBinaryPreviewKind('pdf')).toBe(true)
+  })
+  it('treats text/code/json kinds as non-binary', () => {
+    expect(isBinaryPreviewKind('text')).toBe(false)
+    expect(isBinaryPreviewKind('code')).toBe(false)
+    expect(isBinaryPreviewKind('none')).toBe(false)
   })
 })
 

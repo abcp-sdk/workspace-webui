@@ -24,6 +24,9 @@
 
   let dark = $state(false)
   let tokens = $state<Token[][] | null>(null)
+  /** The source `tokens` were computed FROM; guards against rendering stale
+   *  tokens against a newer `code` (e.g. a fast file switch). */
+  let tokenSrc = $state('')
   let tokenizing = $state(false)
   /** True once the surface has scrolled into view (arms highlighting). */
   let visible = $state(false)
@@ -42,14 +45,33 @@
 
   async function run() {
     if (!visible) return
+    // Never tokenize empty code: the caller may mount us with '' and set the
+    // real content a tick later. Latching an empty tokenization here left every
+    // line blank once the content arrived (the effect below re-runs on change).
+    if (code === '') {
+      tokens = null
+      tokenSrc = ''
+      tokenizing = false
+      return
+    }
     tokenizing = true
     const lang = langForName(name)
+    const src = code
     try {
-      tokens = await highlightLines(code, lang, themeFor(dark))
+      const out = await highlightLines(src, lang, themeFor(dark))
+      // Guard against a stale async result: only adopt tokens for the CURRENT
+      // source (a fast edit / file switch may have superseded this call).
+      if (src === code) {
+        tokens = out
+        tokenSrc = src
+      }
     } catch {
-      tokens = null
+      if (src === code) {
+        tokens = null
+        tokenSrc = src
+      }
     }
-    tokenizing = false
+    if (src === code) tokenizing = false
   }
 
   function esc(s: string): string {
@@ -58,7 +80,9 @@
 
   // Per-line HTML: tokenized when available, else escaped plain text.
   const lines = $derived.by<string[]>(() => {
-    const tk = tokens
+    // Only use tokens computed from the CURRENT source; otherwise fall back to
+    // escaped plain text so content is never lost or mismatched.
+    const tk = tokenSrc === code ? tokens : null
     const out: string[] = []
     for (let i = 0; i < rawLines.length; i++) {
       if (tk) {
@@ -86,7 +110,6 @@
         if (entries.some(e => e.isIntersecting)) {
           visible = true
           io.disconnect()
-          void run()
         }
       },
       { rootMargin: '200px' },
@@ -95,17 +118,23 @@
 
     const mo = new MutationObserver(() => {
       const d = isDark()
-      if (d !== dark) {
-        dark = d
-        // Re-highlight with the new theme, but only if already tokenized.
-        if (tokens !== null) void run()
-      }
+      if (d !== dark) dark = d
     })
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
     return () => {
       io.disconnect()
       mo.disconnect()
     }
+  })
+
+  // (Re)highlight whenever the source, language or theme changes — once the
+  // surface is visible. This covers content that arrives AFTER mount (the file
+  // viewer mounts with '' then sets the decoded text).
+  $effect(() => {
+    void code
+    void name
+    void dark
+    if (visible) void run()
   })
 </script>
 

@@ -98,6 +98,36 @@ export function isTextMime(mime: string): boolean {
   )
 }
 
+/**
+ * Content-based text sniff: valid UTF-8 with no NUL in the first 8 KiB. The
+ * extension is NOT reliable (`go.mod`, `LICENSE`, `Makefile`, extensionless
+ * scripts), so callers that have the bytes should classify by CONTENT.
+ */
+export function looksTextual(data: Uint8Array): boolean {
+  if (data.length === 0) return true
+  const n = Math.min(data.length, 8192)
+  for (let i = 0; i < n; i++) if (data[i] === 0) return false
+  try {
+    new TextDecoder('utf-8', { fatal: true }).decode(data)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Preview kinds whose bytes are NEVER text (streamed to the browser instead). */
+export function isBinaryPreviewKind(kind: PreviewKind): boolean {
+  return (
+    kind === 'image' ||
+    kind === 'video' ||
+    kind === 'audio' ||
+    kind === 'pdf' ||
+    kind === 'docx' ||
+    kind === 'xlsx' ||
+    kind === 'pptx'
+  )
+}
+
 export function guessMime(name: string): string {
   const ext = name.split('.').pop()?.toLowerCase() ?? ''
   const table: Record<string, string> = {
