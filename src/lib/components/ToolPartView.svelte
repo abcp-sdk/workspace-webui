@@ -38,7 +38,6 @@
   let open = $state(false)
   let inputOpen = $state(false)
   let resultOpen = $state(false)
-  let metaOpen = $state(false)
   // Pretty (structured card) vs raw (JSON for input, text for result).
   let inputPretty = $state(true)
   let resultPretty = $state(true)
@@ -62,7 +61,7 @@
     }
   })
 
-  // Expanding the card shows its detail by DEFAULT: the Input / Result / Meta
+  // Expanding the card shows its detail by DEFAULT: the Input / Result
   // sections open together with the card. (They can still be collapsed
   // individually afterwards; collapsing the card and re-opening resets them.)
   function toggleOpen() {
@@ -71,7 +70,6 @@
     if (next) {
       inputOpen = true
       resultOpen = true
-      metaOpen = true
     }
   }
   const input = $derived((toolState?.input ?? {}) as Record<string, unknown>)
@@ -149,20 +147,6 @@
     else collect(files)
     return out
   })
-
-  const changeId = $derived(
-    (toolState?.changeId as string | undefined) ??
-      ((toolState?.data?.['change_id'] as string | undefined) ?? ''),
-  )
-  const diffText = $derived(
-    (toolState?.diff as string | undefined) ??
-      ((toolState?.data?.['diff'] as string | undefined) ?? ''),
-  )
-  const additions = $derived((toolState?.additions as number | undefined) ?? 0)
-  const deletions = $derived((toolState?.deletions as number | undefined) ?? 0)
-  const hasMeta = $derived(
-    !!changeId || !!diffText || additions > 0 || deletions > 0,
-  )
 
   /** flutter `toolDisplayName`: `todowrite` shows as `todo`. */
   function toolDisplayName(name: string): string {
@@ -318,42 +302,6 @@
           {#each fileRefs as f (f.code)}
             <MediaAttachment {api} file={f} siblings={fileRefs} />
           {/each}
-        </div>
-      {/if}
-
-      <!-- metadata section -->
-      {#if hasMeta}
-        <div class="min-w-0 rounded-sm border border-border/50 bg-background/50">
-          <button
-            type="button"
-            class="flex w-full items-center gap-1 px-2 py-1 text-micro text-muted-foreground"
-            onclick={() => (metaOpen = !metaOpen)}
-          >
-            {#if metaOpen}<AppIcons.chevron_down class="size-3.5" />{:else}<AppIcons.chevron_right class="size-3.5" />{/if}
-            <AppIcons.info class="size-[13px] text-primary" />
-            <span>{t('metadata')}</span>
-          </button>
-          {#if metaOpen}
-            <div class="min-w-0 px-2 pb-2">
-              {#if changeId}
-                <div class="flex items-center gap-1 pb-1 text-micro">
-                  <AppIcons.commit class="size-[13px] text-primary" />
-                  <span class="text-muted-foreground">change_id</span>
-                  <span class="min-w-0 truncate font-mono text-primary">{changeId}</span>
-                </div>
-              {/if}
-              {#if (additions ?? 0) > 0 || (deletions ?? 0) > 0}
-                <div class="flex items-center gap-1 pb-1 text-micro">
-                  <AppIcons.diff class="size-[13px] {deletions ? 'text-destructive' : 'text-success'}" />
-                  <span class="text-muted-foreground">diff</span>
-                  <span class="font-mono {deletions ? 'text-destructive' : 'text-success'}">+{additions ?? 0} -{deletions ?? 0}</span>
-                </div>
-              {/if}
-              {#if diffText}
-                <div class="max-h-52 min-w-0 overflow-auto rounded-sm bg-muted/40 p-1 font-mono text-[11px] wrap-anywhere whitespace-pre-wrap">{diffText}</div>
-              {/if}
-            </div>
-          {/if}
         </div>
       {/if}
     </div>
