@@ -312,15 +312,45 @@ const sandboxExec: CardHandler = ({ tool, data, input, output }) => {
   }
 }
 
-const sandboxJobList: CardHandler = ({ tool, data, output }) => {
+const sandboxJobList: CardHandler = ({ tool, data, input, output }) => {
   if (tool !== 'sandbox-job-list') return null
-  const count = n(data, 'count')
+  const sandbox = pick(data, input, 'worker-name')
+  const jobs = arr<{
+    id: string
+    state: string
+    exit_code: number
+    command: string
+  }>(data, 'jobs')
+  const count = jobs.length || n(data, 'count')
+  const rows = jobs.map(j => ({
+    label: j.command || j.id,
+    sub: `${j.id} · ${j.state}${typeof j.exit_code === 'number' && j.exit_code !== 0 ? ` (exit ${j.exit_code})` : ''}`,
+    icon: 'terminal',
+    tone:
+      j.state === 'running'
+        ? ('muted' as const)
+        : j.state === 'failed'
+          ? ('destructive' as const)
+          : ('success' as const),
+    ...(sandbox ? { link: P.sandboxJobPage(sandbox, j.id) } : {}),
+  }))
   return {
-    subtitle: 'jobs',
-    input: { fields: [] },
+    subtitle: sandbox || 'jobs',
+    input: {
+      fields: fs(fin(input, 'worker-name', 'box', 'sandbox', { mono: true })),
+    },
     result: {
       fields: [{ icon: 'terminal', label: 'jobs', value: String(count) }],
-      body: output ? { kind: 'terminal', text: output } : undefined,
+      // A LIST of jobs, not a terminal transcript. Fall back to the raw output
+      // text only when the server sent no structured rows (older agent).
+      body: rows.length
+        ? { kind: 'list', rows }
+        : output
+          ? { kind: 'text', text: output }
+          : undefined,
+      actions: sandbox
+        ? [{ label: sandbox, icon: 'box', page: P.sandboxPage(sandbox) }]
+        : [],
     },
   }
 }
@@ -661,6 +691,118 @@ const sandboxList: CardHandler = ({ tool, data }) => {
   }
 }
 
+const sandboxDelete: CardHandler = ({ tool, data, input }) => {
+  if (tool !== 'sandbox-delete') return null
+  const name = s(data, 'name') || pick(data, input, 'worker-name')
+  return {
+    subtitle: name,
+    input: {
+      fields: fs(fin(input, 'worker-name', 'box', 'sandbox', { mono: true })),
+    },
+    result: {
+      fields: fs(
+        data['deleted'] === true
+          ? {
+              icon: 'delete',
+              label: 'deleted',
+              value: name,
+              mono: true,
+              tone: 'destructive',
+            }
+          : null,
+      ),
+    },
+  }
+}
+
+const pvcCreate: CardHandler = ({ tool, data, input }) => {
+  if (tool !== 'pvc-create') return null
+  const name = s(data, 'name') || pick(data, input, 'name')
+  return {
+    subtitle: name || 'pvc',
+    input: {
+      fields: fs(
+        fin(input, 'name', 'server', 'name', { mono: true }),
+        fin(input, 'size', 'list', 'size', { mono: true }),
+        fin(input, 'storage-class', 'server', 'class', { mono: true }),
+      ),
+    },
+    result: {
+      fields: fs(
+        name
+          ? { icon: 'server', label: 'name', value: name, mono: true }
+          : null,
+        fres(data, 'size', 'list', 'size', { mono: true }),
+        fres(data, 'storage_class', 'server', 'class', {
+          mono: true,
+          tone: 'muted',
+        }),
+        fres(data, 'phase', 'success', 'phase'),
+      ),
+    },
+  }
+}
+
+const pvcList: CardHandler = ({ tool, data }) => {
+  if (tool !== 'pvc-list') return null
+  const pvcs = arr<{
+    name: string
+    size: string
+    storage_class: string
+    phase: string
+    mounted_by: string[]
+  }>(data, 'pvcs')
+  return {
+    subtitle: 'pvcs',
+    input: { fields: [] },
+    result: {
+      fields: [
+        {
+          icon: 'server',
+          label: 'pvcs',
+          value: String(pvcs.length || n(data, 'count')),
+        },
+      ],
+      body: pvcs.length
+        ? {
+            kind: 'list',
+            rows: pvcs.map(p => ({
+              label: p.name,
+              sub: `${p.phase} · ${p.size}${p.storage_class ? ` · class=${p.storage_class}` : ''}${(p.mounted_by ?? []).length ? ` · mounted-by=${(p.mounted_by ?? []).join(',')}` : ''}`,
+              icon: 'server',
+              tone:
+                p.phase === 'Bound' ? ('success' as const) : ('muted' as const),
+            })),
+          }
+        : undefined,
+    },
+  }
+}
+
+const pvcDelete: CardHandler = ({ tool, data, input }) => {
+  if (tool !== 'pvc-delete') return null
+  const name = s(data, 'name') || pick(data, input, 'name')
+  return {
+    subtitle: name,
+    input: {
+      fields: fs(fin(input, 'name', 'server', 'name', { mono: true })),
+    },
+    result: {
+      fields: fs(
+        data['deleted'] === true
+          ? {
+              icon: 'delete',
+              label: 'deleted',
+              value: name,
+              mono: true,
+              tone: 'destructive',
+            }
+          : null,
+      ),
+    },
+  }
+}
+
 /** Sandbox + service handlers, in match order. */
 export const sandboxHandlers: CardHandler[] = [
   sandboxCreate,
@@ -678,6 +820,10 @@ export const sandboxHandlers: CardHandler[] = [
   sandboxFileRm,
   sandboxInfo,
   sandboxFileTransfer,
+  sandboxDelete,
+  pvcCreate,
+  pvcList,
+  pvcDelete,
   serviceList,
   sandboxList,
 ]

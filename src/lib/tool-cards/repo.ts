@@ -170,6 +170,8 @@ const repoShow: CardHandler = ({
 }) => {
   if (tool !== 'repo-show' || !org || !repo || !sha) return null
   const c = (data['commit'] ?? {}) as Record<string, unknown>
+  const message = s(data, 'message') || s(c, 'message')
+  const diff = s(data, 'diff')
   return {
     subtitle: at,
     input: { fields: fs(fin(input, 'sha', 'commit', 'sha', { mono: true })) },
@@ -202,8 +204,15 @@ const repoShow: CardHandler = ({
             ]
           : []),
       ),
-      // The commit message + patch (the output carries header + message + patch).
-      body: output ? { kind: 'terminal', text: output } : undefined,
+      // The commit message + patch. Prefer the structured diff (green/red);
+      // fall back to the raw output text when the server sent no diff.
+      body: diff
+        ? { kind: 'diff', diff }
+        : output
+          ? { kind: 'text', text: output }
+          : message
+            ? { kind: 'text', text: message }
+            : undefined,
       actions: [
         {
           label: short(sha),
@@ -674,14 +683,15 @@ const repoExplore: CardHandler = ({ tool, data, input, org }) => {
         fields: [
           { icon: 'building', label: 'orgs', value: String(orgs.length) },
         ],
-        body: { kind: 'text', text: orgs.join('\n') },
+        body: {
+          kind: 'list',
+          rows: orgs.map(o => ({ label: o, icon: 'building' })),
+        },
       },
     }
   }
   if (Array.isArray(repos)) {
-    const list = (repos as Array<Record<string, unknown>>).map(
-      r => s(r, 'full_name') || `${s(r, 'org')}/${s(r, 'repo')}`,
-    )
+    const list = repos as Array<Record<string, unknown>>
     return {
       subtitle: org || 'repos',
       input: inputSection,
@@ -689,7 +699,24 @@ const repoExplore: CardHandler = ({ tool, data, input, org }) => {
         fields: [
           { icon: 'folder', label: 'repos', value: String(list.length) },
         ],
-        body: { kind: 'text', text: list.join('\n') },
+        body: {
+          kind: 'list',
+          rows: list.map(r => {
+            const name = s(r, 'repo') || s(r, 'full_name')
+            const def = s(r, 'default_branch')
+            const branches = Array.isArray(r['branches'])
+              ? (r['branches'] as unknown[]).map(String)
+              : []
+            return {
+              label: org ? `${org}/${name}` : name,
+              sub: `${def ? `default: ${def}` : ''}${branches.length ? ` · branches: ${branches.join(', ')}` : ''}`,
+              icon: 'folder',
+              ...(org && name
+                ? { link: P.repoDetail(org, name, def || 'main') }
+                : {}),
+            }
+          }),
+        },
       },
     }
   }
@@ -776,12 +803,6 @@ const repoSetPushMirror: CardHandler = ({ tool, data, input, at }) => {
 const repoListPushMirrors: CardHandler = ({ tool, data, at }) => {
   if (tool !== 'repo-list-push-mirrors') return null
   const mirrors = arr<Record<string, unknown>>(data, 'mirrors')
-  const text = mirrors
-    .map(
-      m =>
-        `${s(m, 'remote_name')} → ${s(m, 'remote_address')}${s(m, 'last_error') ? ` ⚠ ${s(m, 'last_error')}` : ''}`,
-    )
-    .join('\n')
   return {
     subtitle: at || 'push mirrors',
     input: { fields: [] },
@@ -789,7 +810,20 @@ const repoListPushMirrors: CardHandler = ({ tool, data, at }) => {
       fields: [
         { icon: 'branch', label: 'mirrors', value: String(mirrors.length) },
       ],
-      body: { kind: 'text', text: text || '(none)' },
+      body: mirrors.length
+        ? {
+            kind: 'list',
+            rows: mirrors.map(m => {
+              const err = s(m, 'last_error')
+              return {
+                label: s(m, 'remote_name') || s(m, 'remote_address'),
+                sub: `${s(m, 'remote_address')}${s(m, 'branch_filter') ? ` [${s(m, 'branch_filter')}]` : ''}${m['sync_on_commit'] === true ? ' (on commit)' : ''}${s(m, 'interval') ? ` every ${s(m, 'interval')}` : ''}${err ? ` ⚠ ${err}` : ''}`,
+                icon: 'branch',
+                tone: err ? ('destructive' as const) : ('muted' as const),
+              }
+            }),
+          }
+        : undefined,
     },
   }
 }

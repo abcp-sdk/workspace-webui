@@ -429,7 +429,7 @@ describe('cardFor', () => {
     })
   })
 
-  it('repo-show renders the commit patch as a terminal body', () => {
+  it('repo-show renders the commit patch as a diff body', () => {
     const c = cardFor(
       'repo-show',
       {
@@ -438,11 +438,29 @@ describe('cardFor', () => {
         ref: 'main',
         sha: 'abc123',
         commit: { author: 'me', date: 'now' },
+        message: 'fix thing',
+        diff: 'diff --git a/x b/x\n+1',
       },
       { sha: 'abc123' },
-      'abc123  now  me\n\nfix thing\n\ndiff --git a/x b/x',
+      'abc123  now  me\n\nfix thing\n\ndiff --git a/x b/x\n+1',
     )!
-    expect(c.result.body).toMatchObject({ kind: 'terminal' })
+    expect(c.result.body).toEqual({
+      kind: 'diff',
+      diff: 'diff --git a/x b/x\n+1',
+    })
+  })
+
+  it('repo-show falls back to text when the server sent no structured diff', () => {
+    const c = cardFor(
+      'repo-show',
+      { org: 'a', repo: 'b', ref: 'main', sha: 'abc123', commit: {} },
+      { sha: 'abc123' },
+      'abc123  now  me\n\nfix thing',
+    )!
+    expect(c.result.body).toEqual({
+      kind: 'text',
+      text: 'abc123  now  me\n\nfix thing',
+    })
   })
 
   it('repo-build-image renders the build log as a terminal body', () => {
@@ -501,5 +519,129 @@ describe('cardFor', () => {
     })
     expect(cardFor('image-generate', {}, {})).not.toBeNull()
     expect(cardFor('repo-file-read', { org: 'a' }, {})).toBeNull()
+  })
+
+  it('sandbox-job-list renders a clickable LIST of jobs (not a terminal)', () => {
+    const c = cardFor(
+      'sandbox-job-list',
+      {
+        count: 2,
+        jobs: [
+          { id: 'j1', state: 'done', exit_code: 0, command: 'ls' },
+          { id: 'j2', state: 'running', exit_code: 0, command: 'sleep 5' },
+        ],
+      },
+      { 'worker-name': 'sb' },
+      'j1  done  ls\nj2  running  sleep 5',
+    )!
+    expect(c.result.body).toMatchObject({ kind: 'list' })
+    const rows = (
+      c.result.body as {
+        rows: Array<{ label: string; link?: { kind: string } }>
+      }
+    ).rows
+    expect(rows.map(r => r.label)).toEqual(['ls', 'sleep 5'])
+    expect(rows[0]!.link).toMatchObject({
+      kind: 'sandbox_job',
+      name: 'sb',
+      jobId: 'j1',
+    })
+  })
+
+  it('repo-explore renders orgs/repos as list bodies', () => {
+    const orgs = cardFor('repo-explore', { orgs: ['a', 'b'] }, {})!
+    expect(orgs.result.body).toMatchObject({ kind: 'list' })
+    const repos = cardFor(
+      'repo-explore',
+      {
+        org: 'o',
+        repos: [{ repo: 'r', default_branch: 'main', branches: ['main'] }],
+      },
+      { org: 'o' },
+    )!
+    const rows = (
+      repos.result.body as { rows: Array<{ label: string; link?: unknown }> }
+    ).rows
+    expect(rows[0]!.label).toBe('o/r')
+    expect(rows[0]!.link).toMatchObject({
+      kind: 'repo_detail',
+      org: 'o',
+      repo: 'r',
+    })
+  })
+
+  it('repo-list-push-mirrors renders a list body', () => {
+    const c = cardFor(
+      'repo-list-push-mirrors',
+      {
+        mirrors: [
+          {
+            remote_name: 'up',
+            remote_address: 'https://x',
+            last_error: 'boom',
+          },
+        ],
+      },
+      {},
+    )!
+    expect(c.result.body).toMatchObject({ kind: 'list' })
+  })
+
+  it('pvc cards: create/delete fields, list body', () => {
+    const created = cardFor(
+      'pvc-create',
+      {
+        name: 'data',
+        size: '1Gi',
+        storage_class: 'local-path',
+        phase: 'Bound',
+      },
+      { name: 'data', size: '1Gi' },
+    )!
+    expect(created.result.fields.map(f => f.label)).toEqual([
+      'name',
+      'size',
+      'class',
+      'phase',
+    ])
+    const listed = cardFor(
+      'pvc-list',
+      {
+        count: 1,
+        pvcs: [
+          {
+            name: 'data',
+            size: '1Gi',
+            storage_class: 'local-path',
+            phase: 'Bound',
+            mounted_by: [],
+          },
+        ],
+      },
+      {},
+    )!
+    expect(listed.result.body).toMatchObject({ kind: 'list' })
+    const deleted = cardFor(
+      'pvc-delete',
+      { name: 'data', deleted: true },
+      { name: 'data' },
+    )!
+    expect(deleted.result.fields[0]).toMatchObject({
+      label: 'deleted',
+      value: 'data',
+    })
+  })
+
+  it('sandbox-delete and time-wait render cards', () => {
+    expect(
+      cardFor(
+        'sandbox-delete',
+        { name: 'sb', deleted: true },
+        { 'worker-name': 'sb' },
+      )!.result.fields[0],
+    ).toMatchObject({ label: 'deleted', value: 'sb' })
+    expect(cardFor('time-wait', { seconds: 5 }, { seconds: 5 })!.subtitle).toBe(
+      '5s',
+    )
   })
 })

@@ -321,6 +321,28 @@ const braveSearch: CardHandler = ({ tool, data, input }) => {
   }
 }
 
+const timeWait: CardHandler = ({ tool, data, input }) => {
+  if (tool !== 'time-wait') return null
+  const seconds = n(data, 'seconds') || n(input, 'seconds')
+  return {
+    subtitle: `${seconds}s`,
+    input: {
+      fields: fs(fin(input, 'seconds', 'clock', 'seconds', { mono: true })),
+    },
+    result: {
+      fields: [
+        {
+          icon: 'clock',
+          label: 'waited',
+          value: `${seconds}s`,
+          mono: true,
+          tone: 'muted',
+        },
+      ],
+    },
+  }
+}
+
 /** Bundled-extension handlers, in match order. */
 export const bundledHandlers: CardHandler[] = [
   history,
@@ -334,6 +356,7 @@ export const bundledHandlers: CardHandler[] = [
   subsessionCreate,
   mailSend,
   braveSearch,
+  timeWait,
 ]
 
 export type { CardCtx }
