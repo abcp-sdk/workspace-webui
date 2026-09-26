@@ -658,6 +658,9 @@ const serviceList: CardHandler = ({ tool, data }) => {
     image: string
     url: string
     session: string
+    stage: string
+    replicas: number
+    ready_replicas: number
     publicUrl: string
   }>(data, 'services')
   return {
@@ -670,13 +673,17 @@ const serviceList: CardHandler = ({ tool, data }) => {
       body: services.length
         ? {
             kind: 'list',
-            rows: services.map(s => ({
-              label: s.name,
-              sub: `${s.phase}${s.publicUrl ? ` · ${s.publicUrl}` : s.url ? ` · ${s.url}` : ''}`,
-              icon: 'server',
-              tone: s.phase === 'Running' ? 'success' : 'muted',
-              link: P.servicePage(s.name),
-            })),
+            rows: services.map(s => {
+              const stage = s.stage === 'preview' ? 'preview' : 'release'
+              const reps = s.replicas != null ? ` · ${s.ready_replicas ?? 0}/${s.replicas}` : ''
+              return {
+                label: s.name,
+                sub: `${stage} · ${s.phase}${reps}${s.publicUrl ? ` · ${s.publicUrl}` : s.url ? ` · ${s.url}` : ''}`,
+                icon: 'server',
+                tone: s.phase === 'Running' ? 'success' : 'muted',
+                link: P.servicePage(s.name),
+              }
+            }),
           }
         : undefined,
     },

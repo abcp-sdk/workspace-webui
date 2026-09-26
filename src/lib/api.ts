@@ -1066,6 +1066,41 @@ export class AgentApi {
     return r.service ? serviceFromPb(r.service) : null
   }
 
+  /** Set a service's desired replica count (0 = scaled down). */
+  async scaleService(name: string, replicas: number): Promise<ServiceInfo | null> {
+    const r = await this._guard(() =>
+      this._c.scaleService({ name, replicas }),
+    )
+    return r.service ? serviceFromPb(r.service) : null
+  }
+
+  /** The service's Deployment + Services as a multi-document YAML. */
+  async getServiceManifest(name: string): Promise<string> {
+    const r = await this._guard(() => this._c.getServiceManifest({ name }))
+    return r.yaml
+  }
+
+  /** Apply an edited service manifest; `dryRun` validates without writing. */
+  async applyServiceManifest(
+    name: string,
+    yaml: string,
+    dryRun = false,
+  ): Promise<{ service: ServiceInfo | null; yaml: string }> {
+    const r = await this._guard(() =>
+      this._c.applyServiceManifest({ name, yaml, dryRun }),
+    )
+    return {
+      service: r.service ? serviceFromPb(r.service) : null,
+      yaml: r.yaml,
+    }
+  }
+
+  /** List the tenant's PersistentVolumeClaims (read-only). */
+  async listPVCs(): Promise<PVCInfo[]> {
+    const r = await this._guard(() => this._c.listPVCs({}))
+    return (r.pvcs ?? []).map(pvcFromPb)
+  }
+
   /** Tail a service's container log (previous = the crashed instance). */
   async serviceLogs(
     name: string,
@@ -1270,12 +1305,21 @@ export interface ServicePortInfo {
   publicUrl: string
 }
 
+export interface ServiceVolume {
+  pvc: string
+  mountPath: string
+  readOnly: boolean
+  subPath: string
+}
+
 export interface ServiceInfo {
   name: string
   image: string
   phase: string
   ready: boolean
   replicas: number
+  /** Pods reporting ready (from the Deployment status). */
+  readyReplicas: number
   url: string
   publicUrl: string
   ports: ServicePortInfo[]
@@ -1290,6 +1334,24 @@ export interface ServiceInfo {
   paused: boolean
   /** Deployment creation time (unix ms); the list is sorted by this desc. */
   createdAt: number
+  /** Container resource requests (k8s quantity strings; '' when unset). */
+  cpu: string
+  memory: string
+  /** Container argv override (empty = the image default). */
+  command: string[]
+  env: Record<string, string>
+  /** PVCs mounted into the container. */
+  volumes: ServiceVolume[]
+}
+
+export interface PVCInfo {
+  name: string
+  size: string
+  storageClass: string
+  phase: string
+  creator: string
+  createdAt: number
+  mountedBy: string[]
 }
 
 type PbSandboxInfo = {
@@ -1329,6 +1391,7 @@ type PbServiceInfo = {
   phase: string
   ready: boolean
   replicas: number
+  readyReplicas: number
   url: string
   publicUrl: string
   ports: {
@@ -1348,6 +1411,16 @@ type PbServiceInfo = {
   expiresAt: bigint
   paused: boolean
   createdAt: bigint
+  cpu: string
+  memory: string
+  command: string[]
+  env: Record<string, string>
+  volumes: {
+    pvc: string
+    mountPath: string
+    readOnly: boolean
+    subPath: string
+  }[]
 }
 function serviceFromPb(s: PbServiceInfo): ServiceInfo {
   return {
@@ -1356,6 +1429,7 @@ function serviceFromPb(s: PbServiceInfo): ServiceInfo {
     phase: s.phase,
     ready: s.ready,
     replicas: s.replicas,
+    readyReplicas: s.readyReplicas,
     url: s.url,
     publicUrl: s.publicUrl,
     ports: (s.ports ?? []).map(p => ({
@@ -1375,6 +1449,37 @@ function serviceFromPb(s: PbServiceInfo): ServiceInfo {
     expiresAt: Number(s.expiresAt),
     paused: s.paused,
     createdAt: Number(s.createdAt),
+    cpu: s.cpu,
+    memory: s.memory,
+    command: [...(s.command ?? [])],
+    env: { ...(s.env ?? {}) },
+    volumes: (s.volumes ?? []).map(v => ({
+      pvc: v.pvc,
+      mountPath: v.mountPath,
+      readOnly: v.readOnly,
+      subPath: v.subPath,
+    })),
+  }
+}
+
+type PbPVCInfo = {
+  name: string
+  size: string
+  storageClass: string
+  phase: string
+  creator: string
+  createdAt: bigint
+  mountedBy: string[]
+}
+function pvcFromPb(p: PbPVCInfo): PVCInfo {
+  return {
+    name: p.name,
+    size: p.size,
+    storageClass: p.storageClass,
+    phase: p.phase,
+    creator: p.creator,
+    createdAt: Number(p.createdAt),
+    mountedBy: [...(p.mountedBy ?? [])],
   }
 }
 

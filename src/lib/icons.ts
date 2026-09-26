@@ -97,6 +97,7 @@ import {
   Monitor,
   Moon,
   Music,
+  Minus,
   Network,
   Notebook,
   Package,
@@ -151,6 +152,7 @@ import {
 /** Semantic icon slots. */
 export const AppIcons = {
   add: Plus,
+  remove: Minus,
   apps: LayoutGrid,
   arrow_up: ArrowUp,
   asterisk: Asterisk,
