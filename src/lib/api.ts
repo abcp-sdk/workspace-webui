@@ -1124,6 +1124,25 @@ export class AgentApi {
       yield { output: ev.output, done: ev.done, error: ev.error }
     }
   }
+
+  /** Live workspace lists (sandboxes/services/PVCs) — a server-push stream.
+   *  Yields a full frame on connect, then a frame whenever anything changes. */
+  async *watchWorkspace(
+    signal?: AbortSignal,
+  ): AsyncGenerator<{
+    sandboxes: SandboxInfo[]
+    services: ServiceInfo[]
+    pvcs: PVCInfo[]
+  }> {
+    const opts = signal ? { signal } : undefined
+    for await (const ev of this._c.watchWorkspace({}, opts)) {
+      yield {
+        sandboxes: (ev.sandboxes ?? []).map(sandboxFromPb),
+        services: (ev.services ?? []).map(serviceFromPb),
+        pvcs: (ev.pvcs ?? []).map(pvcFromPb),
+      }
+    }
+  }
 }
 
 export function emptySession(id: string): Session {

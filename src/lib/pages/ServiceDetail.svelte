@@ -9,7 +9,6 @@
   import { confirmDialog } from '$lib/dialogs'
   import { cn } from '$lib/utils'
   import { AppIcons } from '$lib/icons'
-  import { usePoll } from '$lib/poll.svelte'
   import PageHeader from '$lib/components/layout/PageHeader.svelte'
   import EmptyState from '$lib/components/layout/EmptyState.svelte'
   import IconButton from '$lib/components/layout/IconButton.svelte'
@@ -37,8 +36,10 @@
     previous = next.previous ?? previous
   }
 
-  // Initial load is CACHE-FIRST (a pane SLIDE re-runs the effect but must not
-  // refetch). The poll bypasses the cache and writes it back.
+  // LIVE: the workspace watch stream pushes this service's latest state; a
+  // one-shot getService() seeds from cache instantly while the stream opens.
+  let watchAbort: AbortController | null = null
+
   async function load() {
     const key = `service:${name}`
     try {
@@ -47,21 +48,33 @@
       showErrorToast(String(e))
     }
   }
-  async function refresh() {
-    try {
-      const v = await store.api.getService(name)
-      store.dataSet(`service:${name}`, v)
-      svc = v
-    } catch (e) {
-      showErrorToast(String(e))
-    }
+
+  function watch() {
+    watchAbort?.abort()
+    const ac = new AbortController()
+    watchAbort = ac
+    void (async () => {
+      try {
+        for await (const frame of store.api.watchWorkspace(ac.signal)) {
+          if (ac.signal.aborted) return
+          const v = frame.services.find(s => s.name === name) ?? null
+          if (v) {
+            svc = v
+            store.dataSet(`service:${name}`, v)
+          }
+        }
+      } catch {
+        /* the connection banner covers a dropped stream */
+      }
+    })()
   }
 
   $effect(() => {
     void name
     void load()
+    watch()
+    return () => watchAbort?.abort()
   })
-  usePoll(() => void refresh(), 10000, { immediate: false })
 
   async function deleteService() {
     const ok = await confirmDialog({
@@ -82,9 +95,13 @@
 
   async function togglePause() {
     try {
-      if (svc?.paused) await store.api.resumeService(name)
-      else await store.api.pauseService(name)
-      await load()
+      const next = svc?.paused
+        ? await store.api.resumeService(name)
+        : await store.api.pauseService(name)
+      if (next) {
+        svc = next
+        store.dataSet(`service:${name}`, next)
+      }
     } catch (e) {
       showErrorToast(String(e))
     }

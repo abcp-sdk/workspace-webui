@@ -9,7 +9,6 @@
   import { confirmDialog } from '$lib/dialogs'
   import { cn } from '$lib/utils'
   import { AppIcons } from '$lib/icons'
-  import { usePoll } from '$lib/poll.svelte'
   import PageHeader from '$lib/components/layout/PageHeader.svelte'
   import TabBar from '$lib/components/layout/TabBar.svelte'
   import TabItem from '$lib/components/layout/TabItem.svelte'
@@ -31,22 +30,23 @@
   const releaseServices = $derived(services.filter(s => s.stage !== 'preview'))
   const previewServices = $derived(services.filter(s => s.stage === 'preview'))
 
-  async function fetchLists() {
-    const [s, sv, p] = await Promise.all([
-      store.api.listSandboxes(),
-      store.api.listServices(),
-      store.api.listPVCs(),
-    ])
-    return { sandboxes: s, services: sv, pvcs: p }
-  }
+  // LIVE: WatchWorkspace pushes a full frame on connect and on every change, so
+  // there is no polling. A one-shot `listX()` seed paints instantly from cache
+  // while the stream opens, then the stream owns the data.
+  let abort: AbortController | null = null
 
-  // Initial load is CACHE-FIRST (a pane SLIDE re-runs the effect but must not
-  // refetch). The poll bypasses the cache and writes it back.
-  async function load() {
+  async function seed() {
     const key = 'service-lists'
     loading = !store.hasData(key)
     try {
-      const v = await store.dataLoad(key, fetchLists)
+      const v = await store.dataLoad(key, async () => {
+        const [s, sv, p] = await Promise.all([
+          store.api.listSandboxes(),
+          store.api.listServices(),
+          store.api.listPVCs(),
+        ])
+        return { sandboxes: s, services: sv, pvcs: p }
+      })
       sandboxes = v.sandboxes
       services = v.services
       pvcs = v.pvcs
@@ -56,24 +56,42 @@
     loading = false
   }
 
+  function applyFrame(v: { sandboxes: SandboxInfo[]; services: ServiceInfo[]; pvcs: PVCInfo[] }) {
+    sandboxes = v.sandboxes
+    services = v.services
+    pvcs = v.pvcs
+    store.dataSet('service-lists', v)
+    loading = false
+  }
+
+  // A manual refresh drops the cache, re-seeds, and reconnects the stream.
   async function refresh() {
-    try {
-      const v = await fetchLists()
-      store.dataSet('service-lists', v)
-      sandboxes = v.sandboxes
-      services = v.services
-      pvcs = v.pvcs
-    } catch (e) {
-      showErrorToast(String(e))
-    }
+    store.dropData('service-lists')
+    await seed()
+    connect()
+  }
+
+  function connect() {
+    abort?.abort()
+    const ac = new AbortController()
+    abort = ac
+    void (async () => {
+      try {
+        for await (const frame of store.api.watchWorkspace(ac.signal)) {
+          if (ac.signal.aborted) return
+          applyFrame(frame)
+        }
+      } catch {
+        /* the connection banner covers a dropped stream */
+      }
+    })()
   }
 
   $effect(() => {
-    void load()
+    void seed()
+    connect()
+    return () => abort?.abort()
   })
-
-  // Poll only while the tab is visible; refresh immediately on return.
-  usePoll(() => void refresh(), 15000, { immediate: false })
 
   function copyUrl(u: string) {
     void navigator.clipboard?.writeText(u).then(
@@ -127,7 +145,9 @@
       await store.api.deleteSandbox(s.name)
       showToast(t('deleted'))
       store.dropData('service-lists')
-      await load()
+      // The watch stream will push the updated list; drop the local row now so
+      // the action feels instant.
+      sandboxes = sandboxes.filter(x => x.name !== s.name)
     } catch (e) {
       showErrorToast(String(e))
     }
@@ -145,7 +165,7 @@
       await store.api.deleteService(sv.name)
       showToast(t('deleted'))
       store.dropData('service-lists')
-      await load()
+      services = services.filter(x => x.name !== sv.name)
     } catch (e) {
       showErrorToast(String(e))
     }
@@ -153,10 +173,11 @@
 
   async function togglePause(sv: ServiceInfo) {
     try {
-      if (sv.paused) await store.api.resumeService(sv.name)
-      else await store.api.pauseService(sv.name)
-      store.dropData('service-lists')
-      await load()
+      const next = sv.paused
+        ? await store.api.resumeService(sv.name)
+        : await store.api.pauseService(sv.name)
+      // Apply the returned state immediately (the stream confirms shortly).
+      if (next) services = services.map(x => (x.name === next.name ? next : x))
     } catch (e) {
       showErrorToast(String(e))
     }
@@ -178,7 +199,7 @@
 <div class="flex h-full w-full flex-col">
   <PageHeader title={t('tabService')}>
     {#snippet right()}
-      <IconButton icon={AppIcons.refresh} label={t('refresh')} onclick={() => void load()} />
+      <IconButton icon={AppIcons.refresh} label={t('refresh')} onclick={() => void refresh()} />
     {/snippet}
   </PageHeader>
 

@@ -73,13 +73,34 @@
     }
   }
 
-  // Reload when the sandbox changes; poll only while visible (the $effect does
-  // the immediate load, so the poll itself must not fire one).
+  // Reload when the sandbox changes. Jobs still poll (they come from the
+  // worker, not the k8s watch); the sandbox's own phase is LIVE via the
+  // workspace watch stream.
   $effect(() => {
     void name
     void load()
   })
   usePoll(() => void refresh(), 15000, { immediate: false })
+
+  let watchAbort: AbortController | null = null
+  $effect(() => {
+    void name
+    watchAbort?.abort()
+    const ac = new AbortController()
+    watchAbort = ac
+    void (async () => {
+      try {
+        for await (const frame of store.api.watchWorkspace(ac.signal)) {
+          if (ac.signal.aborted) return
+          const v = frame.sandboxes.find(s => s.name === name)
+          if (v) sandbox = v
+        }
+      } catch {
+        /* the connection banner covers a dropped stream */
+      }
+    })()
+    return () => watchAbort?.abort()
+  })
 
   function openJob(job: SandboxJob) {
     store.navigate({ kind: 'sandbox_job', key: `job:${name}:${job.id}`, name, jobId: job.id })
