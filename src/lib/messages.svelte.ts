@@ -276,6 +276,38 @@ export class MessagesController {
     await this.sync.fetch()
   }
 
+  /** Regenerate from an agent step: withdraw THIS assistant message and
+   *  everything after it, then re-run the turn from that point. For a tool
+   *  turn the withdrawal leaves the chain ending on the prior step (an
+   *  assistant tool-call + `role:"tool"` result), so the model simply
+   *  continues — no user prompt is inserted. The empty Prompt is ONLY a
+   *  mailbox wake: the agent's empty-trigger guard persists nothing
+   *  (session-agent `handleItem`), so no blank bubble appears. */
+  async regenerateFrom(msg: ChatMessage) {
+    if (this.store.sending) {
+      await this.api.interrupt(this.getSessionId())
+    }
+    await this.api.revert(this.getSessionId(), msg.id)
+    this.clearStreaming()
+    this.store.sending = false
+    await this.sync.fetch()
+    // Empty-prompt wake, bypassing deliver()'s empty guard. `awaitingSend`
+    // locks the composer until the server accepts (mirrors deliver).
+    this.store.clearErrors()
+    this.store.awaitingSend = true
+    this.store.notify()
+    try {
+      await this.api.prompt(this.getSessionId(), '', [])
+      this.store.awaitingSend = false
+      this.store.notify()
+    } catch (e) {
+      this.store.addError(this.sendFailedMsg(e), 'send')
+      this.store.awaitingSend = false
+      this.store.notify()
+      throw e
+    }
+  }
+
   /** Retry/Edit: withdraw a user message and everything after, then resend. */
   async resendFrom(msg: ChatMessage, text: string) {
     const trimmed = text.trim()

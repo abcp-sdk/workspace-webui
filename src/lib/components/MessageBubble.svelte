@@ -24,6 +24,7 @@
     onUndo,
     onResend,
     onEdit,
+    onRegenerate,
     onOpenSession,
     sessionExists,
     sessionId = '',
@@ -34,6 +35,9 @@
     onUndo: (messageId: string) => void
     onResend?: ((text: string) => void) | null
     onEdit?: ((text: string) => void) | null
+    /** Re-run the turn from THIS agent step: withdraw this message and
+     *  everything after, then continue (no prompt inserted). */
+    onRegenerate?: (() => void) | null
     /** Open the session named by a `session:{name}` source (jump to it). */
     onOpenSession?: ((sessionId: string) => void) | null
     /** Whether a `session:{name}` source still resolves to a live session. */
@@ -87,6 +91,13 @@
   // The reader's OWN prompt: right-aligned, no avatar, retry/edit allowed.
   // A session hand-off has role `user` but is NOT ours.
   const isOwn = $derived(isUser && sourceKind !== 'session')
+  // An agent-authored assistant step (never a hand-off / system / compaction).
+  // Undo applies to it too (withdraw this step and everything after); the
+  // regenerate action re-runs the turn from here.
+  const isAssistant = $derived(msg.role === 'assistant')
+  const canUndo = $derived(
+    !isSending && !isStreaming && (isOwn || isAssistant),
+  )
   // Left-aligned and avatar-bearing (assistant replies, session hand-offs).
   const incoming = $derived(!isOwn && !isSystem)
 
@@ -144,6 +155,7 @@
   let editText = $state('')
   let undoOpen = $state(false)
   let retryOpen = $state(false)
+  let regenerateOpen = $state(false)
 
   function textOfMessage(): string {
     return msg.parts.filter(p => p.type === 'text').map(p => p.text).join('\n')
@@ -324,7 +336,10 @@
         {#if !isSending && isOwn && onEdit}
           <button type="button" class="rounded p-0.5 hover:bg-muted" title={t('edit')} aria-label={t('edit')} onclick={beginEdit}><AppIcons.edit class="size-3.5" /></button>
         {/if}
-        {#if !isSending && isOwn}
+        {#if !isSending && isAssistant && onRegenerate}
+          <button type="button" class="rounded p-0.5 hover:bg-muted" title={t('regenerate')} aria-label={t('regenerate')} onclick={() => (regenerateOpen = true)}><AppIcons.refresh class="size-3.5" /></button>
+        {/if}
+        {#if canUndo}
           <button type="button" class="rounded p-0.5 hover:bg-muted" title={t('undo')} aria-label={t('undo')} onclick={() => (undoOpen = true)}><AppIcons.undo class="size-3.5" /></button>
         {/if}
         {#if msg.createdAt}
@@ -387,5 +402,24 @@
         onUndo(msg.id)
       }}
     >{t('undo')}</button>
+  {/snippet}
+</Dialog>
+
+<!-- regenerate confirm: withdraw this agent step and everything after, then
+     re-run the turn from here (no prompt is inserted). -->
+<Dialog bind:open={regenerateOpen} title={t('regenerateTitle')}>
+  {#snippet children()}
+    <div class="text-meta text-muted-foreground">{t('regenerateBody')}</div>
+  {/snippet}
+  {#snippet footer()}
+    <button type="button" class="rounded-md px-3 py-1.5 text-sm hover:bg-muted" onclick={() => (regenerateOpen = false)}>{t('cancel')}</button>
+    <button
+      type="button"
+      class="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/80"
+      onclick={() => {
+        regenerateOpen = false
+        onRegenerate?.()
+      }}
+    >{t('regenerate')}</button>
   {/snippet}
 </Dialog>

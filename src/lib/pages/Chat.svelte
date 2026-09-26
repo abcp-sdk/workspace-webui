@@ -797,6 +797,7 @@
                 onUndo={id => void ctrl!.revert(id)}
                 onResend={txt => void ctrl!.resendFrom(ctrl!.messages.find(m => m.id === msg.id)!, txt)}
                 onEdit={txt => void ctrl!.resendFrom(ctrl!.messages.find(m => m.id === msg.id)!, txt)}
+                onRegenerate={msg.role === 'assistant' ? () => void ctrl!.regenerateFrom(ctrl!.messages.find(m => m.id === msg.id)!) : null}
                 onOpenSession={name => store.pickSession(name)}
                 sessionExists={name => store.sessionById(name) !== null}
                 {store}
