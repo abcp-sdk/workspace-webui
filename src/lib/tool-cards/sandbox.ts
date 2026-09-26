@@ -322,13 +322,17 @@ const sandboxJobList: CardHandler = ({ tool, data, input, output }) => {
     command: string
   }>(data, 'jobs')
   const count = jobs.length || n(data, 'count')
-  const rows = jobs.map(j => ({
+  // Running first (the server already orders so, but be robust), then as-is.
+  const ordered = [...jobs].sort(
+    (a, b) => (a.state === 'running' ? 0 : 1) - (b.state === 'running' ? 0 : 1),
+  )
+  const rows = ordered.map(j => ({
     label: j.command || j.id,
     sub: `${j.id} · ${j.state}${typeof j.exit_code === 'number' && j.exit_code !== 0 ? ` (exit ${j.exit_code})` : ''}`,
     icon: 'terminal',
     tone:
       j.state === 'running'
-        ? ('muted' as const)
+        ? ('warning' as const)
         : j.state === 'failed'
           ? ('destructive' as const)
           : ('success' as const),
@@ -598,7 +602,10 @@ const sandboxFileTransfer: CardHandler = ({ tool, data, input }) => {
   if (tool !== 'sandbox-file-download' && tool !== 'sandbox-file-upload')
     return null
   const path = pick(data, input, 'path')
-  const code = s(data, 'code')
+  // The result carries the produced file under `data.files` (rendered as a file
+  // card below); the code lives there, not at the top level.
+  const files = arr<{ code: string }>(data, 'files')
+  const code = files[0]?.code || s(data, 'code')
   return {
     subtitle: path || code || tool,
     input: {

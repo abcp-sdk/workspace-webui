@@ -214,7 +214,7 @@
          narrow ones overlay it full-width. -->
     {#if drawerTop && DrawerC}
       <div
-        class="absolute inset-0 z-20 flex min-h-0 min-w-0 flex-col bg-background sm:static sm:w-[45%] sm:max-w-[560px] sm:shrink-0 sm:border-l sm:border-border"
+        class="absolute inset-0 z-20 flex min-h-0 min-w-0 flex-col bg-background sm:static sm:w-1/2 sm:max-w-[900px] sm:shrink-0 sm:border-l sm:border-border"
         onpointerdowncapture={() => (store.navTarget = 'drawer')}
       >
         <!-- drawer toolbar: back / open-in-tab -->

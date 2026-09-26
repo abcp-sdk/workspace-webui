@@ -521,6 +521,16 @@ describe('cardFor', () => {
     expect(cardFor('repo-file-read', { org: 'a' }, {})).toBeNull()
   })
 
+  it('sandbox-file-upload: code comes from data.files, not the top level', () => {
+    const c = cardFor(
+      'sandbox-file-upload',
+      { files: [{ code: 'c0de', name: 'a.txt', mime: 'text/plain', size: 4 }] },
+      { 'worker-name': 'sb', path: 'dir/a.txt' },
+    )!
+    const codeField = c.result.fields.find(f => f.label === 'code')
+    expect(codeField?.value).toBe('c0de')
+  })
+
   it('sandbox-job-list renders a clickable LIST of jobs (not a terminal)', () => {
     const c = cardFor(
       'sandbox-job-list',
@@ -537,14 +547,16 @@ describe('cardFor', () => {
     expect(c.result.body).toMatchObject({ kind: 'list' })
     const rows = (
       c.result.body as {
-        rows: Array<{ label: string; link?: { kind: string } }>
+        rows: Array<{ label: string; link?: { kind: string }; tone?: string }>
       }
     ).rows
-    expect(rows.map(r => r.label)).toEqual(['ls', 'sleep 5'])
+    // Running jobs are hoisted to the top, regardless of input order.
+    expect(rows.map(r => r.label)).toEqual(['sleep 5', 'ls'])
+    expect(rows[0]!.tone).toBe('warning')
     expect(rows[0]!.link).toMatchObject({
       kind: 'sandbox_job',
       name: 'sb',
-      jobId: 'j1',
+      jobId: 'j2',
     })
   })
 

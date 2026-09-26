@@ -1281,6 +1281,8 @@ export interface ServiceInfo {
   expiresAt: number
   /** Scaled to zero by PauseService (resume restores the prior count). */
   paused: boolean
+  /** Deployment creation time (unix ms); the list is sorted by this desc. */
+  createdAt: number
 }
 
 type PbSandboxInfo = {
@@ -1338,6 +1340,7 @@ type PbServiceInfo = {
   message: string
   expiresAt: bigint
   paused: boolean
+  createdAt: bigint
 }
 function serviceFromPb(s: PbServiceInfo): ServiceInfo {
   return {
@@ -1364,6 +1367,7 @@ function serviceFromPb(s: PbServiceInfo): ServiceInfo {
     message: s.message,
     expiresAt: Number(s.expiresAt),
     paused: s.paused,
+    createdAt: Number(s.createdAt),
   }
 }
 

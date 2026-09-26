@@ -193,7 +193,11 @@ export function messageFromPb(m: PbMessage): Message {
         const res = results[callId]
         const content = res?.['content']
         parts.push({
-          id: p.id,
+          // The part id is the toolCallId (data.id), NOT the DB UUID: the live
+          // streamed part is keyed by toolCallId, so keeping the SAME id after
+          // persistence lets Svelte reuse the component (its expand/collapse
+          // state survives the stream→persisted swap).
+          id: callId,
           type: 'tool',
           tool: (d['name'] as string) || '',
           toolCallId: callId,
@@ -212,7 +216,7 @@ export function messageFromPb(m: PbMessage): Message {
         if (results[id] && m.parts.some(q => q.type === 'tool')) break
         const content = d['content']
         parts.push({
-          id: p.id,
+          id,
           type: 'tool',
           tool: '',
           toolCallId: id,

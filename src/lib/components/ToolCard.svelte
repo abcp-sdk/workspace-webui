@@ -237,7 +237,7 @@
             >
               <Icon class="size-3.5 shrink-0 text-primary" />
               <span class="min-w-0 flex-1 truncate">
-                <span class={cn('block truncate', r.tone === 'success' && 'text-success', r.tone === 'destructive' && 'text-destructive')}>{r.label}</span>
+                <span class={cn('block truncate', r.tone === 'success' && 'text-success', r.tone === 'warning' && 'text-warning', r.tone === 'destructive' && 'text-destructive')}>{r.label}</span>
                 {#if r.sub}<span class="block truncate text-[10px] text-muted-foreground">{r.sub}</span>{/if}
               </span>
             </button>
@@ -245,7 +245,7 @@
             <div class="flex min-w-0 items-start gap-1.5 border-b border-border/30 px-1.5 py-1 text-micro last:border-b-0">
               <Icon class="mt-0.5 size-3.5 shrink-0 text-primary" />
               <span class="min-w-0 flex-1">
-                <span class={cn('block truncate', r.tone === 'success' && 'text-success', r.tone === 'destructive' && 'text-destructive')}>{r.label}</span>
+                <span class={cn('block truncate', r.tone === 'success' && 'text-success', r.tone === 'warning' && 'text-warning', r.tone === 'destructive' && 'text-destructive')}>{r.label}</span>
                 {#if r.sub}<span class="block text-[10px] whitespace-pre-wrap text-muted-foreground">{r.sub}</span>{/if}
               </span>
             </div>

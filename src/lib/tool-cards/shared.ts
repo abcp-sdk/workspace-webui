@@ -128,7 +128,7 @@ export type CardBody =
         sub?: string
         icon?: string
         link?: AppPage
-        tone?: 'default' | 'success' | 'destructive' | 'muted'
+        tone?: 'default' | 'success' | 'destructive' | 'muted' | 'warning'
       }>
     }
   // A key/value definition table (file-info).
