@@ -94,6 +94,19 @@
     } catch {
       /* non-JSON payload: show it verbatim as text */
     }
+    // Control messages carry no user text: synthesize a readable body from the
+    // payload so they never render as "No content".
+    if (e.msgType === 'compact') {
+      const reason = parsed !== null ? String(parsed['reason'] ?? '') : ''
+      return {
+        text: reason === 'overflow' ? t('mailboxCompactOverflow') : t('mailboxCompactManual'),
+        attachmentCount: 0,
+        attachments: [],
+      }
+    }
+    if (e.msgType === 'interrupt') {
+      return { text: t('mailboxInterruptBody'), attachmentCount: 0, attachments: [] }
+    }
     if (parsed === null) return { text: e.payload, attachmentCount: 0, attachments: [] }
     const text = String(parsed['text'] ?? parsed['prompt'] ?? parsed['content'] ?? '')
     const rawAtts = Array.isArray(parsed['attachments']) ? parsed['attachments'] : []
@@ -124,6 +137,14 @@
         icon: AppIcons.stop,
         label: t('mailboxInterrupt'),
         cls: 'bg-destructive/12 text-destructive',
+        origin: '',
+      }
+    }
+    if (msgType === 'compact') {
+      return {
+        icon: AppIcons.shrink,
+        label: t('mailboxCompact'),
+        cls: 'bg-violet-500/15 text-violet-600 dark:text-violet-400',
         origin: '',
       }
     }
