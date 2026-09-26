@@ -62,6 +62,13 @@
   // Poll only while the tab is visible; refresh immediately on return.
   usePoll(() => void refresh(), 15000, { immediate: false })
 
+  function copyUrl(u: string) {
+    void navigator.clipboard?.writeText(u).then(
+      () => showToast(t('copied')),
+      () => showErrorToast(t('copyFailed')),
+    )
+  }
+
   function relTime(ms: number): string {
     if (!ms) return ''
     const mins = Math.floor((Date.now() - ms) / 60000)
@@ -173,23 +180,23 @@
           <ListRow divided onclick={() => store.navigate({ kind: 'sandbox_detail', key: `sbx:${s.name}`, name: s.name })}>
             <span class={cn('flex size-8 shrink-0 items-center justify-center rounded-full', phaseTone(s.phase))}><AppIcons.box class="size-4" /></span>
             <span class="min-w-0 flex-1">
-              <span class="flex items-center gap-2"><span class="truncate text-meta font-semibold">{s.name}</span></span>
-              <span class="block truncate text-[10px] text-muted-foreground">{s.image}</span>
+              <span class="flex items-center gap-2"><span class="wrap-anywhere text-meta font-semibold">{s.name}</span></span>
+              <span class="block break-all whitespace-pre-wrap text-[10px] text-muted-foreground">{s.image}</span>
               {#if s.session}
-                <span class="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground">
-                  <AppIcons.chat_round class="size-3 shrink-0" />
+                <span class="mt-0.5 flex min-w-0 items-start gap-1 text-[10px] text-muted-foreground">
+                  <AppIcons.chat_round class="mt-px size-3 shrink-0" />
                   {#if store.sessionById(s.session)}
                     <button
                       type="button"
-                      class="min-w-0 truncate text-left text-primary hover:underline"
+                      class="min-w-0 text-left break-all whitespace-pre-wrap text-primary hover:underline"
                       onclick={e => { e.stopPropagation(); openSession(s.session) }}
                     >{s.session}</button>
                   {:else}
-                    <span class="min-w-0 truncate">{s.session}</span>
+                    <span class="min-w-0 break-all whitespace-pre-wrap">{s.session}</span>
                   {/if}
                 </span>
               {:else}
-                <span class="block truncate text-[10px] text-muted-foreground">{s.creator} · {relTime(s.createdAt)}</span>
+                <span class="block wrap-anywhere text-[10px] text-muted-foreground">{s.creator} · {relTime(s.createdAt)}</span>
               {/if}
             </span>
             <span class={cn('shrink-0 rounded-full px-2 py-px text-[10px]', phaseTone(s.phase))}>{s.phase}</span>
@@ -210,22 +217,22 @@
           <ListRow divided onclick={() => store.navigate({ kind: 'service_detail', key: `svc:${sv.name}`, name: sv.name })}>
             <span class={cn('flex size-8 shrink-0 items-center justify-center rounded-full', phaseTone(sv.phase, sv.paused))}><AppIcons.server class="size-4" /></span>
             <span class="min-w-0 flex-1">
-              <span class="block truncate text-meta font-semibold">{sv.name}</span>
-              <span class="block truncate text-[10px] text-muted-foreground">{sv.image}</span>
-              <span class="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground">
-                <AppIcons.chat_round class="size-3 shrink-0" />
+              <span class="block wrap-anywhere text-meta font-semibold">{sv.name}</span>
+              <span class="block break-all whitespace-pre-wrap text-[10px] text-muted-foreground">{sv.image}</span>
+              <span class="mt-0.5 flex min-w-0 items-start gap-1 text-[10px] text-muted-foreground">
+                <AppIcons.chat_round class="mt-px size-3 shrink-0" />
                 {#if sv.session}
                   {#if store.sessionById(sv.session)}
                     <button
                       type="button"
-                      class="min-w-0 truncate text-left text-primary hover:underline"
+                      class="min-w-0 text-left break-all whitespace-pre-wrap text-primary hover:underline"
                       onclick={e => { e.stopPropagation(); openSession(sv.session) }}
                     >{sv.session}</button>
                   {:else}
-                    <span class="min-w-0 truncate">{sv.session}</span>
+                    <span class="min-w-0 break-all whitespace-pre-wrap">{sv.session}</span>
                   {/if}
                 {:else}
-                  <span class="min-w-0 truncate">{t('roleAdmin')}</span>
+                  <span class="min-w-0 break-all whitespace-pre-wrap">{t('roleAdmin')}</span>
                 {/if}
                 <span class="shrink-0">· {sv.replicas}×</span>
               </span>
@@ -239,17 +246,24 @@
               {#if sv.publicUrl}
                 <span class="mt-0.5 flex min-w-0 flex-col gap-0.5 text-[10px]">
                   {#each sv.ports.filter(p => p.publicUrl) as p (p.publicUrl)}
-                    <a
-                      href={p.publicUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="min-w-0 truncate text-primary hover:underline"
-                      onclick={e => e.stopPropagation()}
-                    >{p.publicUrl}</a>
+                    <span class="flex min-w-0 items-center gap-1">
+                      <a
+                        href={p.publicUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="min-w-0 break-all text-primary hover:underline"
+                        title={p.publicUrl}
+                        onclick={e => e.stopPropagation()}
+                      >{p.publicUrl}</a>
+                      <button type="button" class="shrink-0 rounded p-0.5 hover:bg-muted" title={t('copy')} onclick={e => { e.stopPropagation(); copyUrl(p.publicUrl) }}><AppIcons.copy class="size-3" /></button>
+                    </span>
                   {/each}
                 </span>
               {:else}
-                <span class="mt-0.5 block truncate text-[10px] text-muted-foreground">{sv.url}</span>
+                <span class="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground">
+                  <span class="min-w-0 break-all">{sv.url}</span>
+                  <button type="button" class="shrink-0 rounded p-0.5 hover:bg-muted" title={t('copy')} onclick={e => { e.stopPropagation(); copyUrl(sv.url) }}><AppIcons.copy class="size-3" /></button>
+                </span>
               {/if}
             </span>
             <span class={cn('shrink-0 rounded-full px-2 py-px text-[10px]', phaseTone(sv.phase, sv.paused))}>{sv.paused ? t('servicePaused') : sv.ready ? 'Ready' : sv.phase}</span>

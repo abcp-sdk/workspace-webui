@@ -13,6 +13,7 @@
   import PageHeader from '$lib/components/layout/PageHeader.svelte'
   import EmptyState from '$lib/components/layout/EmptyState.svelte'
   import IconButton from '$lib/components/layout/IconButton.svelte'
+  import LogViewer from '$lib/components/LogViewer.svelte'
 
   let { store, name, showBack = false }: PageProps & { name: string } = $props()
 
@@ -22,8 +23,9 @@
   // The log source is component-local view state (not part of the identity).
   let previous = $state(false)
   let follow = $state(true)
+  // The viewer's auto-scroll is independent of the stream-source `follow`.
+  let autoScroll = $state(true)
   let logError = $state('')
-  let outEl: HTMLElement | null = $state(null)
   let abort: AbortController | null = null
 
   function pickLogSource(next: { follow?: boolean; previous?: boolean }) {
@@ -101,10 +103,14 @@
     return `${Math.floor(mins / 60)}h`
   }
 
+  const SNAPSHOT_TAIL = 500
+  let truncated = $state(false)
+
   async function startLogs() {
     abort?.abort()
     lines = []
     logError = ''
+    truncated = false
     streaming = true
     abort = new AbortController()
     try {
@@ -117,15 +123,15 @@
           }
         }
       } else {
-        lines = await store.api.serviceLogs(name, 500, previous)
+        const snap = await store.api.serviceLogs(name, SNAPSHOT_TAIL, previous)
+        lines = snap
+        // A full tail means the container likely has older lines above it.
+        truncated = snap.length >= SNAPSHOT_TAIL
       }
     } catch (e) {
       logError = String(e)
     }
     streaming = false
-    requestAnimationFrame(() => {
-      if (outEl) outEl.scrollTop = outEl.scrollHeight
-    })
   }
 
   $effect(() => {
@@ -139,18 +145,13 @@
     void startLogs()
     return () => abort?.abort()
   })
-
-  $effect(() => {
-    void lines.length
-    if (outEl) outEl.scrollTop = outEl.scrollHeight
-  })
 </script>
 
 <div class="flex h-full w-full flex-col">
   <PageHeader>
     {#if showBack}<IconButton icon={AppIcons.back} onclick={() => store.popPage()} />{/if}
     <AppIcons.server class="size-4 shrink-0 text-primary" />
-    <span class="min-w-0 flex-1 truncate text-base font-semibold">{name}</span>
+    <span class="min-w-0 flex-1 wrap-anywhere text-base font-semibold">{name}</span>
     {#if svc?.stage === 'preview'}<span class="shrink-0 rounded-full bg-warning/15 px-2 py-px text-[10px] text-warning">{t('serviceStagePreview')}</span>{/if}
     {#if svc}<span class="shrink-0 rounded-full bg-muted px-2 py-px text-[10px] leading-4 text-muted-foreground">{svc.paused ? t('servicePaused') : svc.ready ? 'Ready' : svc.phase}</span>{/if}
     {#if svc}
@@ -165,7 +166,7 @@
 
   {#if svc}
     <div class="shrink-0 border-b border-border/50 px-4 py-2 text-[10px] text-muted-foreground">
-      <div class="truncate font-mono">{svc.image}</div>
+      <div class="break-all whitespace-pre-wrap font-mono">{svc.image}</div>
       <div class="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
         {#if svc.podPhase}<span>{t('servicePodPhase')}: {svc.podPhase}</span>{/if}
         <span class={cn(svc.restarts > 0 && 'text-destructive')}>{t('serviceRestarts')}: {svc.restarts}</span>
@@ -208,7 +209,7 @@
     <AppIcons.terminal class="size-3.5" />
     <span>{t('serviceLogs')}</span>
     {#if streaming}<span class="flex items-center gap-1 text-warning"><span class="size-2 animate-pulse rounded-full bg-warning"></span>{t('live')}</span>{/if}
-    <label class="ml-auto flex items-center gap-1">
+    <label class="flex items-center gap-1">
       <input type="checkbox" checked={previous} onchange={e => pickLogSource({ previous: e.currentTarget.checked })} /> {t('serviceLogsPrevious')}
     </label>
     <label class="flex items-center gap-1">
@@ -216,13 +217,13 @@
     </label>
     <button type="button" class="rounded p-1 hover:bg-muted" title={t('refresh')} onclick={() => void startLogs()}><AppIcons.refresh class="size-3.5" /></button>
   </div>
-  <div bind:this={outEl} class="min-h-0 flex-1 overflow-auto bg-black/90 p-3 font-mono text-[11px] leading-relaxed text-green-200">
-    {#if logError}
-      <div class="text-red-300">{logError}</div>
-    {:else if lines.length === 0}
-      <div class="text-muted-foreground">{t('serviceLogsWaiting')}</div>
-    {:else}
-      {#each lines as l, i (i)}<div class="whitespace-pre-wrap">{l}</div>{/each}
-    {/if}
-  </div>
+  <LogViewer
+    lines={lines}
+    error={logError}
+    waitingText={t('serviceLogsWaiting')}
+    bind:follow={autoScroll}
+    showFollow={false}
+    caption={truncated ? t('logsTruncated', { arg1: String(SNAPSHOT_TAIL) }) : ''}
+    downloadName={`${name}.log`}
+  />
 </div>

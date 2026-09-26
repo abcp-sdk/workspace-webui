@@ -54,10 +54,15 @@
   let tags = $state<TagInfo[]>([])
   let releases = $state<ReleaseInfo[]>([])
   let tree = $state<TreeEntry[]>([])
+  let treeTruncated = $state(false)
   let expanded = $state<Set<string>>(new Set()) // expanded dir paths (Files tree)
   let commits = $state<CommitInfo[]>([])
+  let commitsHasMore = $state(false)
+  let commitsLoadingMore = $state(false)
   let mrs = $state<MRInfo[]>([])
   let loading = $state(true)
+
+  const COMMITS_PAGE = 50
 
   const tabs: { id: Tab; label: string; icon: any }[] = [
     { id: 'files', label: 'files', icon: AppIcons.folder },
@@ -112,19 +117,43 @@
     const key = `repo-tree:${org}/${repo}@${ref}`
     try {
       // One recursive fetch for the whole ref; the tree below is derived.
-      tree = await store.dataLoad(key, () => api.tree(org, repo, ref, ''))
+      const v = await store.dataLoad(key, () => api.tree(org, repo, ref, ''))
+      tree = v.entries
+      treeTruncated = v.truncated
     } catch (e) {
       showErrorToast(String(e))
       tree = []
+      treeTruncated = false
     }
   }
   async function loadCommits() {
     const key = `repo-commits:${org}/${repo}@${ref}`
     try {
-      commits = await store.dataLoad(key, () => api.log(org, repo, ref, '', 50))
+      const v = await store.dataLoad(key, () =>
+        api.log(org, repo, ref, '', COMMITS_PAGE, 0),
+      )
+      commits = v.commits
+      commitsHasMore = v.hasMore
     } catch {
       commits = []
+      commitsHasMore = false
     }
+  }
+  async function loadMoreCommits() {
+    if (commitsLoadingMore || !commitsHasMore) return
+    commitsLoadingMore = true
+    try {
+      const v = await api.log(org, repo, ref, '', COMMITS_PAGE, commits.length)
+      commits = [...commits, ...v.commits]
+      commitsHasMore = v.hasMore
+      store.dataSet(`repo-commits:${org}/${repo}@${ref}`, {
+        commits,
+        hasMore: commitsHasMore,
+      })
+    } catch (e) {
+      showErrorToast(String(e))
+    }
+    commitsLoadingMore = false
   }
   async function loadMRs() {
     const key = `repo-mrs:${org}/${repo}:${mrState}`
@@ -272,6 +301,9 @@
            file CONTENT is a sibling `repo_blob` page, so the Shell split shows
            the tree | the content as two equal panes. -->
       <div class="min-h-0 h-full overflow-y-auto">
+        {#if treeTruncated}
+          <div class="border-b border-warning/40 bg-warning/10 px-3 py-1.5 text-micro text-warning">{t('treeTruncated')}</div>
+        {/if}
         {#if visibleRows.length === 0}
           <EmptyState>{t('emptyRepo')}</EmptyState>
         {:else}
@@ -307,6 +339,16 @@
           </span>
         </ListRow>
       {/each}
+      {#if commitsHasMore}
+        <div class="flex justify-center px-3 py-2">
+          <button
+            type="button"
+            class="rounded-full border border-border px-3 py-1 text-micro text-muted-foreground hover:bg-muted disabled:opacity-40"
+            disabled={commitsLoadingMore}
+            onclick={() => void loadMoreCommits()}
+          >{commitsLoadingMore ? t('loading') : t('loadMore')}</button>
+        </div>
+      {/if}
 
     {:else if tab === 'tags'}
       {#if tags.length === 0}

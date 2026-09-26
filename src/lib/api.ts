@@ -698,13 +698,16 @@ export class AgentApi {
     repo: string,
     ref: string,
     path: string,
-  ): Promise<TreeEntry[]> {
+  ): Promise<{ entries: TreeEntry[]; truncated: boolean }> {
     const r = await this._guard(() => this._c.tree({ org, repo, ref, path }))
-    return (r.entries ?? []).map(e => ({
-      path: e.path,
-      type: e.type,
-      size: Number(e.size),
-    }))
+    return {
+      entries: (r.entries ?? []).map(e => ({
+        path: e.path,
+        type: e.type,
+        size: Number(e.size),
+      })),
+      truncated: r.truncated,
+    }
   }
 
   async readBlob(
@@ -736,16 +739,20 @@ export class AgentApi {
     ref: string,
     path: string,
     limit = 50,
-  ): Promise<CommitInfo[]> {
+    offset = 0,
+  ): Promise<{ commits: CommitInfo[]; hasMore: boolean }> {
     const r = await this._guard(() =>
-      this._c.log({ org, repo, ref, path, limit }),
+      this._c.log({ org, repo, ref, path, limit, offset }),
     )
-    return (r.commits ?? []).map(c => ({
-      sha: c.sha,
-      message: c.message,
-      author: c.author,
-      date: c.date,
-    }))
+    return {
+      commits: (r.commits ?? []).map(c => ({
+        sha: c.sha,
+        message: c.message,
+        author: c.author,
+        date: c.date,
+      })),
+      hasMore: r.hasMore,
+    }
   }
 
   async branches(org: string, repo: string): Promise<BranchInfo[]> {

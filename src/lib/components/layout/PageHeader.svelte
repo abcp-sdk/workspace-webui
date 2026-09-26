@@ -37,7 +37,7 @@
 </script>
 
 <header
-  class={cn('flex h-12 shrink-0 items-center gap-2 border-b border-border px-2', className)}
+  class={cn('flex min-h-12 shrink-0 items-center gap-2 border-b border-border px-2 py-1.5', className)}
 >
   {#if left}{@render left()}{/if}
   {#if onBack}

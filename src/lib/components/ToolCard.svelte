@@ -76,8 +76,8 @@
         <DiffView diff={b.diff} />
       </div>
     {:else if b.kind === 'commits'}
-      <div class="min-w-0 rounded-sm border border-border/40">
-        {#each b.commits.slice(0, 20) as c (c.sha)}
+      <div class="max-h-72 min-w-0 overflow-auto rounded-sm border border-border/40">
+        {#each b.commits as c (c.sha)}
           <button
             type="button"
             class="flex w-full min-w-0 items-center gap-1.5 border-b border-border/30 px-1.5 py-1 text-left text-micro last:border-b-0 hover:bg-muted"
@@ -90,8 +90,8 @@
         {/each}
       </div>
     {:else if b.kind === 'entries'}
-      <div class="min-w-0 rounded-sm border border-border/40">
-        {#each b.entries.slice(0, 60) as e (e.path)}
+      <div class="max-h-72 min-w-0 overflow-auto rounded-sm border border-border/40">
+        {#each b.entries as e (e.path)}
           <div class="flex min-w-0 items-center gap-1.5 border-b border-border/30 px-1.5 py-0.5 text-micro last:border-b-0">
             {#if e.type === 'dir'}<AppIcons.folder class="size-3.5 shrink-0 text-primary" />{:else}<AppIcons.file class="size-3.5 shrink-0 text-muted-foreground" />{/if}
             <span class="min-w-0 flex-1 truncate font-mono">{e.path}</span>
@@ -100,8 +100,8 @@
         {/each}
       </div>
     {:else if b.kind === 'files'}
-      <div class="min-w-0 rounded-sm border border-border/40">
-        {#each b.files.slice(0, 60) as f (f.path)}
+      <div class="max-h-72 min-w-0 overflow-auto rounded-sm border border-border/40">
+        {#each b.files as f (f.path)}
           <button
             type="button"
             class="flex w-full min-w-0 items-center gap-1.5 border-b border-border/30 px-1.5 py-0.5 text-left text-micro last:border-b-0 hover:bg-muted"
@@ -115,14 +115,14 @@
         {/each}
       </div>
     {:else if b.kind === 'paths'}
-      <div class="min-w-0 rounded-sm border border-border/40">
-        {#each b.paths.slice(0, 60) as p (p)}
+      <div class="max-h-72 min-w-0 overflow-auto rounded-sm border border-border/40">
+        {#each b.paths as p (p)}
           <div class="min-w-0 truncate border-b border-border/30 px-1.5 py-0.5 font-mono text-micro last:border-b-0">{p}</div>
         {/each}
       </div>
     {:else if b.kind === 'branches'}
-      <div class="min-w-0 rounded-sm border border-border/40">
-        {#each b.branches.slice(0, 40) as br (br.name)}
+      <div class="max-h-72 min-w-0 overflow-auto rounded-sm border border-border/40">
+        {#each b.branches as br (br.name)}
           <button
             type="button"
             class="flex w-full min-w-0 items-center gap-1.5 border-b border-border/30 px-1.5 py-0.5 text-left text-micro last:border-b-0 hover:bg-muted"
@@ -135,8 +135,8 @@
         {/each}
       </div>
     {:else if b.kind === 'tags'}
-      <div class="min-w-0 rounded-sm border border-border/40">
-        {#each b.tags.slice(0, 40) as t (t.name)}
+      <div class="max-h-72 min-w-0 overflow-auto rounded-sm border border-border/40">
+        {#each b.tags as t (t.name)}
           <button
             type="button"
             class="flex w-full min-w-0 items-center gap-1.5 border-b border-border/30 px-1.5 py-0.5 text-left text-micro last:border-b-0 hover:bg-muted"
@@ -149,8 +149,8 @@
         {/each}
       </div>
     {:else if b.kind === 'pulls'}
-      <div class="min-w-0 rounded-sm border border-border/40">
-        {#each b.pulls.slice(0, 40) as p (p.index)}
+      <div class="max-h-72 min-w-0 overflow-auto rounded-sm border border-border/40">
+        {#each b.pulls as p (p.index)}
           <button
             type="button"
             class="flex w-full min-w-0 items-center gap-1.5 border-b border-border/30 px-1.5 py-0.5 text-left text-micro last:border-b-0 hover:bg-muted"
@@ -179,8 +179,8 @@
         {/each}
       </div>
     {:else if b.kind === 'images'}
-      <div class="min-w-0 rounded-sm border border-border/40">
-        {#each b.images.slice(0, 60) as im (im.owner + im.name + im.tag)}
+      <div class="max-h-72 min-w-0 overflow-auto rounded-sm border border-border/40">
+        {#each b.images as im (im.owner + im.name + im.tag)}
           <div class="min-w-0 truncate border-b border-border/30 px-1.5 py-0.5 font-mono text-micro last:border-b-0">{im.owner}/{im.name}:{im.tag}</div>
         {/each}
       </div>
@@ -216,8 +216,8 @@
         <CodeSurface code={b.text} name={b.name} startLine={b.startLine ?? 1} />
       </div>
     {:else if b.kind === 'tree'}
-      <div class="min-w-0 rounded-sm border border-border/40">
-        {#each b.rows.slice(0, 200) as r (r.path)}
+      <div class="max-h-72 min-w-0 overflow-auto rounded-sm border border-border/40">
+        {#each b.rows as r (r.path)}
           <div class="flex min-w-0 items-center gap-1.5 border-b border-border/30 py-0.5 pr-1.5 text-micro last:border-b-0" style="padding-left: {0.375 + (r.depth - 1) * 0.75}rem">
             {#if r.type === 'dir'}<AppIcons.folder class="size-3.5 shrink-0 text-primary" />{:else}<AppIcons.file class="size-3.5 shrink-0 text-muted-foreground" />{/if}
             <span class="min-w-0 flex-1 truncate font-mono">{r.path.split('/').pop() || r.path}</span>
@@ -226,8 +226,8 @@
         {/each}
       </div>
     {:else if b.kind === 'list'}
-      <div class="min-w-0 rounded-sm border border-border/40">
-        {#each b.rows.slice(0, 100) as r, i (i)}
+      <div class="max-h-72 min-w-0 overflow-auto rounded-sm border border-border/40">
+        {#each b.rows as r, i (i)}
           {@const Icon = icon(r.icon ?? 'file')}
           {#if r.link && store}
             <button
@@ -262,12 +262,12 @@
         {/each}
       </div>
     {:else if b.kind === 'messages'}
-      <div class="min-w-0 rounded-sm border border-border/40">
-        {#each b.entries.slice(0, 60) as e, i (i)}
+      <div class="max-h-72 min-w-0 overflow-auto rounded-sm border border-border/40">
+        {#each b.entries as e, i (i)}
           <div class="flex min-w-0 items-start gap-1.5 border-b border-border/30 px-1.5 py-1 text-micro last:border-b-0">
             <span class={cn('mt-px shrink-0 rounded px-1 py-px text-[9px] leading-4', e.role === 'user' ? 'bg-primary/15 text-primary' : e.role === 'assistant' ? 'bg-muted text-foreground' : 'bg-muted text-muted-foreground')}>{e.role}</span>
             <span class="min-w-0 flex-1">
-              <span class="block line-clamp-4 whitespace-pre-wrap">{e.content}</span>
+              <span class="block whitespace-pre-wrap">{e.content}</span>
               {#if e.tool_name || e.change_id}
                 <span class="mt-0.5 flex flex-wrap items-center gap-1 text-[9px] text-muted-foreground">
                   {#if e.tool_name}<span class="rounded bg-muted px-1 font-mono">{e.tool_name}</span>{/if}

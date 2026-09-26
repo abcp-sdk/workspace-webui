@@ -54,8 +54,11 @@
   let ready = $state(false) // anchors applied
   let dir = $state('') // absolute dir currently listed
   let entries = $state<{ path: string; name: string; isDir: boolean; size: number }[]>([])
+  let listingTruncated = $state(false)
   let loading = $state(false)
   let err = $state('')
+
+  const DIR_LIMIT = 2000
 
   // open file state
   let file = $state('') // absolute path
@@ -109,10 +112,11 @@
     loading = true
     err = ''
     try {
-      const r = await store.api.listSandboxFiles(name, abs, 1, 2000)
+      const r = await store.api.listSandboxFiles(name, abs, 1, DIR_LIMIT)
       if (r.isDir) {
         closeFile()
         dir = abs
+        listingTruncated = r.files.length >= DIR_LIMIT
         entries = r.files
           .map(f => {
             const a = absOf(f.path)
@@ -229,7 +233,7 @@
   <PageHeader>
     {#if showBack}<IconButton icon={AppIcons.back} onclick={() => store.popPage()} />{/if}
     <AppIcons.folder class="size-4 shrink-0 text-primary" />
-    <span class="min-w-0 flex-1 truncate text-base font-semibold">{name}</span>
+    <span class="min-w-0 flex-1 wrap-anywhere text-base font-semibold">{name}</span>
     <span class="shrink-0 rounded-full bg-muted px-2 py-px text-[10px] leading-4 text-muted-foreground">{t('files')}</span>
   </PageHeader>
 
@@ -253,7 +257,7 @@
     {/each}
     {#if file}
       <AppIcons.chevron_right class="size-3 shrink-0 opacity-50" />
-      <span class="truncate px-1 text-foreground">{basename(file)}</span>
+      <span class="break-all px-1 text-foreground">{basename(file)}</span>
     {/if}
   </div>
 
@@ -265,7 +269,7 @@
     <!-- file viewer -->
     <div class="flex shrink-0 items-center gap-1.5 border-b border-border/50 px-3 py-1 text-micro text-muted-foreground">
       <AppIcons.file class="size-3.5 shrink-0" />
-      <span class="min-w-0 flex-1 truncate font-mono">{displayPath(file)}</span>
+      <span class="min-w-0 flex-1 break-all font-mono">{displayPath(file)}</span>
       {#if fileSize}<span class="shrink-0">{formatBytes(fileSize)}</span>{/if}
       <button type="button" class="shrink-0 rounded p-1 hover:bg-muted" title={t('download')} onclick={() => void download()}><AppIcons.download class="size-3.5" /></button>
       <button type="button" class="shrink-0 rounded p-1 hover:bg-muted" title={t('close')} onclick={closeFile}><AppIcons.close class="size-3.5" /></button>
@@ -299,6 +303,9 @@
       {:else if entries.length === 0}
         <EmptyState>{t('emptyDir')}</EmptyState>
       {:else}
+        {#if listingTruncated}
+          <div class="border-b border-warning/40 bg-warning/10 px-3 py-1.5 text-micro text-warning">{t('listingTruncated', { arg1: String(DIR_LIMIT) })}</div>
+        {/if}
         {#each entries as e (e.path)}
           <button
             type="button"
@@ -306,7 +313,7 @@
             onclick={() => activate(e)}
           >
             {#if e.isDir}<AppIcons.folder class="size-4 shrink-0 text-primary" />{:else}<AppIcons.file class="size-4 shrink-0 text-muted-foreground" />{/if}
-            <span class="min-w-0 flex-1 truncate text-meta">{e.name}</span>
+            <span class="min-w-0 flex-1 break-all text-meta">{e.name}</span>
             <span class="shrink-0 text-[10px] text-muted-foreground">{e.isDir ? '' : formatBytes(e.size)}</span>
             {#if e.isDir}<AppIcons.chevron_right class="size-3.5 shrink-0 text-muted-foreground" />{/if}
           </button>

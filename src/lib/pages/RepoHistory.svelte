@@ -25,7 +25,11 @@
   const name = $derived(path.split('/').pop() ?? path)
 
   let commits = $state<CommitInfo[]>([])
+  let hasMore = $state(false)
+  let loadingMore = $state(false)
   let loading = $state(true)
+
+  const PAGE = 100
 
   $effect(() => {
     const o = org, r = repo, rf = ref, p = path
@@ -41,12 +45,34 @@
     const key = `filehist:${org}/${repo}@${ref}:${path}`
     loading = !store.hasData(key)
     try {
-      commits = await store.dataLoad(key, () => api.log(org, repo, ref, path, 100))
+      const v = await store.dataLoad(key, () =>
+        api.log(org, repo, ref, path, PAGE, 0),
+      )
+      commits = v.commits
+      hasMore = v.hasMore
     } catch (e) {
       showErrorToast(String(e))
       commits = []
+      hasMore = false
     }
     loading = false
+  }
+
+  async function loadMore() {
+    if (loadingMore || !hasMore) return
+    loadingMore = true
+    try {
+      const v = await api.log(org, repo, ref, path, PAGE, commits.length)
+      commits = [...commits, ...v.commits]
+      hasMore = v.hasMore
+      store.dataSet(`filehist:${org}/${repo}@${ref}:${path}`, {
+        commits,
+        hasMore,
+      })
+    } catch (e) {
+      showErrorToast(String(e))
+    }
+    loadingMore = false
   }
 
   function open(c: CommitInfo) {
@@ -100,6 +126,16 @@
           </span>
         </ListRow>
       {/each}
+      {#if hasMore}
+        <div class="flex justify-center px-3 py-2">
+          <button
+            type="button"
+            class="rounded-full border border-border px-3 py-1 text-micro text-muted-foreground hover:bg-muted disabled:opacity-40"
+            disabled={loadingMore}
+            onclick={() => void loadMore()}
+          >{loadingMore ? t('loading') : t('loadMore')}</button>
+        </div>
+      {/if}
     {/if}
   </div>
 </div>
