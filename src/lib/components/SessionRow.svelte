@@ -2,15 +2,15 @@
   // SessionRow — port of flutter widgets/session_row.dart. Geometry, type
   // scale, colours and the relative-time label are kept identical to the
   // Flutter implementation: avatar (honeycomb identicon) | title row
-  // (name / subsession pill / expand chip / fixed 52px right-aligned stamp) |
-  // preview row (subtitle + unread badge), 12px horizontal / 8px vertical.
+  // (name / fixed 52px right-aligned stamp) | preview row (subtitle + unread
+  // badge), 12px horizontal / 8px vertical.
   //
-  // Naming: a repo-bound row shows the REPO only (no branch); an expanded
-  // branch child shows its BRANCH only (no org/repo prefix). The avatar is
-  // ALWAYS the first element (every row's avatar is left-aligned); the expand
-  // chevron lives at the RIGHT end of the title row, not beside the avatar.
+  // Every session is an EQUAL, flat row: the title is the full
+  // `org:repo:branch` (or the free-session id). There is no parent/child
+  // grouping and no expand affordance. The avatar is ALWAYS the first element.
   import type { Session } from '$lib/models'
   import { t } from '$lib/i18n.svelte'
+  import { sessionName } from '$lib/models'
   import { roleLabelKey, roleIcon, roleTone } from '$lib/roles'
   import { cn } from '$lib/utils'
   import { AppIcons } from '$lib/icons'
@@ -26,13 +26,9 @@
     unreadCount = 0,
     selectable = false,
     selected = false,
-    childCount = 0,
-    expanded = false,
-    isChild = false,
     onTap,
     onMenuRequest,
     menuOpen = false,
-    onToggleExpand,
   }: {
     session: Session
     /** Workspace role (admin/explorer/maintainer/developer). */
@@ -43,9 +39,6 @@
     unreadCount?: number
     selectable?: boolean
     selected?: boolean
-    childCount?: number
-    expanded?: boolean
-    isChild?: boolean
     onTap?: () => void
     /** Open the row's context menu. Receives the ROW's viewport rect so the
      *  menu anchors to this row (not the cursor) and the row can be
@@ -54,7 +47,6 @@
     /** This row's context menu is open — highlight it so the target is
      *  unambiguous. */
     menuOpen?: boolean
-    onToggleExpand?: () => void
   } = $props()
 
   // Long-press (touch): 480ms hold without movement opens the context menu at
@@ -114,15 +106,8 @@
   const stamp = $derived(fmtTime(session.lastMessageAt || session.updatedAt))
   const RoleIcon = $derived(role ? roleIcon(role) : null)
 
-  // Title text: a branch child shows just its branch; a repo-bound row shows
-  // `org:repo` (no branch); a free session shows its id.
-  const title = $derived(
-    isChild && session.branch
-      ? session.branch
-      : session.org
-        ? `${session.org}:${session.repo}`
-        : session.id,
-  )
+  // Title: the full `org:repo:branch` for a repo-bound session, else the id.
+  const title = $derived(sessionName(session))
 </script>
 
 <button
@@ -190,9 +175,6 @@
   <span class="w-3 shrink-0"></span>
   <span class="min-w-0 flex-1">
     <span class="flex items-center">
-      {#if isChild}
-        <AppIcons.branch class="mr-1 size-3.5 shrink-0 text-muted-foreground/70" />
-      {/if}
       <!-- FIXED-width name slot: a long name auto-scrolls (marquee) instead of
            being truncated, matching the chat header's session bubble. -->
       <Marquee
@@ -210,34 +192,6 @@
       <!-- Fixed-width right-aligned slot: every trailing chip ends at the same
            x on every row, exactly like the Flutter implementation. -->
       <span class="w-[52px] shrink-0 text-right text-micro text-muted-foreground" style="line-height:1.4">{stamp}</span>
-      <!-- Expand affordance (branches of this repo's main session): at the
-           RIGHT end so it never pushes the avatar off the left edge. A span
-           (not a button): the row itself is a button, so a nested button would
-           be invalid HTML. -->
-      {#if childCount > 0}
-        <span
-          role="button"
-          tabindex="0"
-          class="ml-1 flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-          aria-label={t('branch')}
-          aria-expanded={expanded}
-          onclick={e => {
-            e.stopPropagation()
-            onToggleExpand?.()
-          }}
-          onkeydown={e => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault()
-              e.stopPropagation()
-              onToggleExpand?.()
-            }
-          }}
-        >
-          {#if expanded}<AppIcons.chevron_down class="size-4" />{:else}<AppIcons.chevron_right class="size-4" />{/if}
-        </span>
-      {:else}
-        <span class="w-5 shrink-0"></span>
-      {/if}
     </span>
     <span class="mt-0.5 flex items-center">
       <span class="min-w-0 flex-1 truncate text-micro text-muted-foreground">{subtitle || title}</span>

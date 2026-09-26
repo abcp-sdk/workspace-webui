@@ -1,8 +1,8 @@
 <script lang="ts">
   // SessionList — the primary tab. Every session is listed FLAT and sorted by
-  // most-recent reply. A repo's `main` session is a normal row; when that repo
-  // also has feature-branch sessions, main gets a LEFT triangle that expands
-  // them as indented children (branch sessions only — no repo/role grouping).
+  // most-recent reply: main and feature-branch sessions are equal rows (no
+  // parent/child grouping, no expand affordance). Each row shows the full
+  // `org:repo:branch` name.
   //
   // Free sessions (admin/explorer) appear as rows. The `+` action offers only
   // the four creation flows: org / repo / branch(fork) / free session.
@@ -36,8 +36,6 @@
   let q = $state('')
   let selectMode = $state(false)
   let selected = $state<Set<string>>(new Set())
-  // Repos whose feature-branch children are EXPANDED (default: collapsed).
-  let expandedRepos = $state<Set<string>>(new Set())
 
   let refreshStartY: number | null = null
   let refreshing = $state(false)
@@ -56,10 +54,6 @@
       await store.refreshSessions()
       refreshing = false
     }
-  }
-
-  function repoKey(s: Session): string {
-    return s.org ? `${s.org}/${s.repo}` : ''
   }
 
   /** Newest first: lastMessageAt, then updatedAt, then createdAt. */
@@ -82,73 +76,16 @@
     return list
   })
 
-  // A flat display list: free rows + each repo's main row (with its branch
-  // sessions as optional indented children), all ordered by recency.
-  type Display = {
-    key: string
-    session: Session
-    isChild: boolean
-    childCount: number
-    expanded: boolean
-  }
+  // A FLAT display list: every session is an equal row (main and feature
+  // branches alike), ordered newest-first by recency.
+  type Display = { key: string; session: Session }
 
-  const display = $derived.by<Display[]>(() => {
-    const free: Session[] = []
-    const byRepo = new Map<string, Session[]>()
-    for (const s of filtered) {
-      const role = roleOfSession(s)
-      if (!isBranchRole(role) || !s.org) {
-        free.push(s)
-        continue
-      }
-      const key = repoKey(s)
-      const list = byRepo.get(key) ?? []
-      list.push(s)
-      byRepo.set(key, list)
-    }
-
-    type Anchor = { key: string; main: Session; children: Session[]; rec: number }
-    const anchors: Anchor[] = []
-    for (const [key, list] of byRepo) {
-      const sorted = [...list].sort((a, b) => recency(b) - recency(a))
-      const main = sorted.find(s => s.branch === 'main')
-      const anchor = main ?? sorted[0]!
-      const children = sorted.filter(s => s.id !== anchor.id)
-      anchors.push({ key, main: anchor, children, rec: recency(anchor) })
-    }
-
-    // Merge free sessions and repo anchors by recency (newest first).
-    type Item = { rec: number; free?: Session; anchor?: Anchor }
-    const items: Item[] = [
-      ...free.map(s => ({ rec: recency(s), free: s })),
-      ...anchors.map(a => ({ rec: a.rec, anchor: a })),
-    ]
-    items.sort((a, b) => b.rec - a.rec)
-
-    const out: Display[] = []
-    for (const it of items) {
-      if (it.free) {
-        out.push({ key: `s:${it.free.id}`, session: it.free, isChild: false, childCount: 0, expanded: false })
-        continue
-      }
-      const a = it.anchor!
-      const expanded = expandedRepos.has(a.key)
-      out.push({ key: `m:${a.key}`, session: a.main, isChild: false, childCount: a.children.length, expanded })
-      if (expanded) {
-        for (const c of a.children) {
-          out.push({ key: `c:${c.id}`, session: c, isChild: true, childCount: 0, expanded: false })
-        }
-      }
-    }
-    return out
-  })
-
-  function toggleExpand(key: string) {
-    const next = new Set(expandedRepos)
-    if (next.has(key)) next.delete(key)
-    else next.add(key)
-    expandedRepos = next
-  }
+  const display = $derived.by<Display[]>(
+    () =>
+      [...filtered]
+        .sort((a, b) => recency(b) - recency(a))
+        .map(s => ({ key: `s:${s.id}`, session: s })),
+  )
 
   function exitSelect() {
     selectMode = false
@@ -412,13 +349,9 @@
           unreadCount={store.unreadCountFor(s)}
           selectable={selectMode}
           selected={selected.has(s.id)}
-          childCount={item.childCount}
-          expanded={item.expanded}
-          isChild={item.isChild}
           onTap={() => (selectMode ? toggle(s.id) : store.pickSession(s.id))}
           menuOpen={rowMenu?.sid === s.id}
           onMenuRequest={selectMode ? null : anchor => openRowMenu(s.id, anchor)}
-          onToggleExpand={item.childCount > 0 ? () => toggleExpand(repoKey(s)) : undefined}
         />
       {/each}
     {/if}
