@@ -531,6 +531,17 @@ describe('cardFor', () => {
     expect(codeField?.value).toBe('c0de')
   })
 
+  it('sandbox-port: renders the unified diff body when present', () => {
+    const diff = '--- a/src/a.txt\n+++ b/src/a.txt\n@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n'
+    const c = cardFor(
+      'sandbox-port',
+      { org: 'acme', repo: 'web', ref: 'feature/x', commit: 'abc123', count: 1, paths: ['src/a.txt'], added: 1, removed: 1, diff },
+      { 'worker-name': 'sb', path: 'app/src/a.txt', 'repo-path': 'src/a.txt' },
+    )!
+    expect(c.result.body).toMatchObject({ kind: 'diff', diff })
+    expect(c.result.fields.map(f => f.label)).toContain('changes')
+  })
+
   it('sandbox-job-list renders a clickable LIST of jobs (not a terminal)', () => {
     const c = cardFor(
       'sandbox-job-list',

@@ -103,6 +103,9 @@ const sandboxPort: CardHandler = ({
 }) => {
   if (tool !== 'sandbox-port' || !org || !repo) return null
   const paths = arr<string>(data, 'paths')
+  const added = n(data, 'added')
+  const removed = n(data, 'removed')
+  const diff = s(data, 'diff')
   return {
     subtitle: at,
     input: {
@@ -121,11 +124,26 @@ const sandboxPort: CardHandler = ({
           label: 'files',
           value: String(paths.length || n(data, 'count')),
         } as CardField,
+        added || removed
+          ? {
+              icon: 'diff',
+              label: 'changes',
+              value: `+${added} −${removed}`,
+              mono: true,
+              tone: diffTone(added, removed),
+            }
+          : null,
         sha
           ? { icon: 'commit', label: 'commit', value: short(sha), mono: true }
           : null,
       ),
-      body: paths.length ? { kind: 'paths', paths } : undefined,
+      // Prefer the unified diff (green/red); fall back to the plain path list
+      // (e.g. a binary-only port, which has no textual diff).
+      body: diff
+        ? { kind: 'diff', diff }
+        : paths.length
+          ? { kind: 'paths', paths }
+          : undefined,
       actions: sha
         ? [
             {
