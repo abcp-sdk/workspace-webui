@@ -1361,6 +1361,48 @@ export interface ServiceInfo {
   env: Record<string, string>
   /** PVCs mounted into the container. */
   volumes: ServiceVolume[]
+  /** ConfigMap/Secret volumes mounted into the container (Tier 0). */
+  configMounts: ServiceConfigMount[]
+  /** Split resource requests/limits (Tier 0; '' when unset). */
+  resources: ServiceResources
+  /** Container probes (Tier 0; null when unset). */
+  readinessProbe: ServiceProbe | null
+  livenessProbe: ServiceProbe | null
+  startupProbe: ServiceProbe | null
+  /** RollingUpdate strategy (Tier 0). */
+  rollout: ServiceRollout
+  /** Extra containers (sidecars + init) on the pod. */
+  sidecarCount: number
+}
+
+export interface ServiceConfigMount {
+  configMap: string
+  secret: string
+  mountPath: string
+}
+
+export interface ServiceResources {
+  cpu: string
+  memory: string
+  cpuLimit: string
+  memoryLimit: string
+}
+
+export interface ServiceProbe {
+  httpPath: string
+  httpPort: number
+  tcpPort: number
+  execCommand: string[]
+  initialDelaySeconds: number
+  periodSeconds: number
+  timeoutSeconds: number
+  failureThreshold: number
+  successThreshold: number
+}
+
+export interface ServiceRollout {
+  maxSurge: string
+  maxUnavailable: string
 }
 
 export interface PVCInfo {
@@ -1440,6 +1482,30 @@ type PbServiceInfo = {
     readOnly: boolean
     subPath: string
   }[]
+  configMounts?: { configMap: string; secret: string; mountPath: string }[]
+  resources?: {
+    cpu: string
+    memory: string
+    cpuLimit: string
+    memoryLimit: string
+  }
+  readinessProbe?: PbProbeSpec
+  livenessProbe?: PbProbeSpec
+  startupProbe?: PbProbeSpec
+  rollout?: { maxSurge: string; maxUnavailable: string }
+  sidecarCount: number
+}
+
+type PbProbeSpec = {
+  httpPath: string
+  httpPort: number
+  tcpPort: number
+  execCommand: string[]
+  initialDelaySeconds: number
+  periodSeconds: number
+  timeoutSeconds: number
+  failureThreshold: number
+  successThreshold: number
 }
 function serviceFromPb(s: PbServiceInfo): ServiceInfo {
   return {
@@ -1478,6 +1544,39 @@ function serviceFromPb(s: PbServiceInfo): ServiceInfo {
       readOnly: v.readOnly,
       subPath: v.subPath,
     })),
+    configMounts: (s.configMounts ?? []).map(c => ({
+      configMap: c.configMap,
+      secret: c.secret,
+      mountPath: c.mountPath,
+    })),
+    resources: {
+      cpu: s.resources?.cpu ?? '',
+      memory: s.resources?.memory ?? '',
+      cpuLimit: s.resources?.cpuLimit ?? '',
+      memoryLimit: s.resources?.memoryLimit ?? '',
+    },
+    readinessProbe: s.readinessProbe ? probeFromPb(s.readinessProbe) : null,
+    livenessProbe: s.livenessProbe ? probeFromPb(s.livenessProbe) : null,
+    startupProbe: s.startupProbe ? probeFromPb(s.startupProbe) : null,
+    rollout: {
+      maxSurge: s.rollout?.maxSurge ?? '',
+      maxUnavailable: s.rollout?.maxUnavailable ?? '',
+    },
+    sidecarCount: s.sidecarCount,
+  }
+}
+
+function probeFromPb(p: PbProbeSpec): ServiceProbe {
+  return {
+    httpPath: p.httpPath,
+    httpPort: p.httpPort,
+    tcpPort: p.tcpPort,
+    execCommand: [...(p.execCommand ?? [])],
+    initialDelaySeconds: p.initialDelaySeconds,
+    periodSeconds: p.periodSeconds,
+    timeoutSeconds: p.timeoutSeconds,
+    failureThreshold: p.failureThreshold,
+    successThreshold: p.successThreshold,
   }
 }
 

@@ -3,7 +3,7 @@
   // via WatchServiceLogs (k8s pod log through the gateway); `previous` reads
   // the crashed container instance (CrashLoopBackOff diagnosis).
   import type { PageProps } from '$lib/page-props'
-  import type { ServiceInfo } from '$lib/api'
+  import type { ServiceInfo, ServiceProbe } from '$lib/api'
   import { t } from '$lib/i18n.svelte'
   import { showErrorToast, showToast } from '$lib/toast.svelte'
   import { confirmDialog } from '$lib/dialogs'
@@ -182,6 +182,39 @@
 
   const envEntries = $derived(Object.entries(svc?.env ?? {}))
 
+  // Tier 0 detail presence + a compact probe summary.
+  const hasTier0 = $derived(
+    !!svc &&
+      (svc.sidecarCount > 0 ||
+        svc.configMounts.length > 0 ||
+        svc.rollout.maxSurge !== '' ||
+        svc.rollout.maxUnavailable !== '' ||
+        svc.resources.cpu !== '' ||
+        svc.resources.memory !== '' ||
+        svc.resources.cpuLimit !== '' ||
+        svc.resources.memoryLimit !== '' ||
+        svc.readinessProbe !== null ||
+        svc.livenessProbe !== null ||
+        svc.startupProbe !== null),
+  )
+  const probeCount = $derived(
+    (svc?.readinessProbe ? 1 : 0) + (svc?.livenessProbe ? 1 : 0) + (svc?.startupProbe ? 1 : 0),
+  )
+  function probeLabel(p: ServiceProbe): string {
+    if (p.httpPort > 0) return `http:${p.httpPort}${p.httpPath}`
+    if (p.tcpPort > 0) return `tcp:${p.tcpPort}`
+    return `exec`
+  }
+  const probeSummary = $derived(
+    [
+      svc?.readinessProbe ? `ready ${probeLabel(svc.readinessProbe)}` : '',
+      svc?.livenessProbe ? `live ${probeLabel(svc.livenessProbe)}` : '',
+      svc?.startupProbe ? `start ${probeLabel(svc.startupProbe)}` : '',
+    ]
+      .filter(Boolean)
+      .join(' · '),
+  )
+
   function copyUrl(u: string) {
     void navigator.clipboard?.writeText(u).then(
       () => showToast(t('copied')),
@@ -332,8 +365,28 @@
       oninput={onManifestInput}
     ></textarea>
   {:else}
-    {#if svc && (envEntries.length || svc.command.length || svc.volumes.length)}
+    {#if svc && (envEntries.length || svc.command.length || svc.volumes.length || svc.configMounts.length || hasTier0)}
       <div class="shrink-0 border-b border-border/50 px-4 py-2 text-[10px]">
+        {#if hasTier0}
+          <div class="mb-1 flex flex-wrap gap-x-4 gap-y-0.5">
+            {#if svc.resources.cpu || svc.resources.memory || svc.resources.cpuLimit || svc.resources.memoryLimit}
+              <span><span class="text-muted-foreground">{t('serviceResources')}:</span>
+                <span class="ml-1 font-mono">req {svc.resources.cpu || '-'}/{svc.resources.memory || '-'} · lim {svc.resources.cpuLimit || '-'}/{svc.resources.memoryLimit || '-'}</span></span>
+            {/if}
+            {#if svc.rollout.maxSurge || svc.rollout.maxUnavailable}
+              <span><span class="text-muted-foreground">{t('serviceRollout')}:</span>
+                <span class="ml-1 font-mono">surge {svc.rollout.maxSurge || '-'} / unavail {svc.rollout.maxUnavailable || '-'}</span></span>
+            {/if}
+            {#if probeCount > 0}
+              <span><span class="text-muted-foreground">{t('serviceProbes')}:</span>
+                <span class="ml-1 font-mono">{probeSummary}</span></span>
+            {/if}
+            {#if svc.sidecarCount > 0}
+              <span><span class="text-muted-foreground">{t('serviceSidecars')}:</span>
+                <span class="ml-1 font-mono">{svc.sidecarCount}</span></span>
+            {/if}
+          </div>
+        {/if}
         {#if svc.command.length}
           <div class="mb-1">
             <span class="text-muted-foreground">{t('serviceCommand')}:</span>
@@ -351,7 +404,7 @@
           </div>
         {/if}
         {#if svc.volumes.length}
-          <div>
+          <div class="mb-1">
             <span class="text-muted-foreground">{t('serviceVolumes')}:</span>
             <div class="mt-0.5 space-y-0.5">
               {#each svc.volumes as v (v.pvc + v.mountPath)}
@@ -361,6 +414,21 @@
                   <span>→ {v.mountPath}</span>
                   {#if v.readOnly}<span class="rounded bg-muted px-1">ro</span>{/if}
                   {#if v.subPath}<span>sub: {v.subPath}</span>{/if}
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
+        {#if svc.configMounts.length}
+          <div>
+            <span class="text-muted-foreground">{t('serviceConfigMounts')}:</span>
+            <div class="mt-0.5 space-y-0.5">
+              {#each svc.configMounts as c (c.configMap + c.secret + c.mountPath)}
+                <div class="flex flex-wrap items-center gap-x-2 font-mono">
+                  <AppIcons.file_code class="size-3 text-primary" />
+                  <span class="text-foreground">{c.configMap || c.secret}</span>
+                  <span class="rounded bg-muted px-1">{c.configMap ? 'cm' : 'secret'}</span>
+                  <span>→ {c.mountPath}</span>
                 </div>
               {/each}
             </div>
