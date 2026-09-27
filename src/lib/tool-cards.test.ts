@@ -300,7 +300,7 @@ describe('cardFor', () => {
     expect(c.result.body).toEqual({ kind: 'diff', diff: '@@ x @@' })
   })
 
-  it('sandbox-file-edit: renders start/end anchors when present', () => {
+  it('sandbox-file-edit: renders neighbor anchors when present', () => {
     const c = cardFor(
       'sandbox-file-edit',
       { path: 'a', added: 1, removed: 1, diff: '@@ x @@' },
@@ -309,8 +309,8 @@ describe('cardFor', () => {
         path: 'a',
         'start-line': 3,
         'end-line': 4,
-        'start-anchor': 'old-start',
-        'end-anchor': 'old-end',
+        'anchor-before': 'above',
+        'anchor-after': 'below',
         content: 'z',
       },
       '',
@@ -320,11 +320,11 @@ describe('cardFor', () => {
       'path',
       'start',
       'end',
-      'start anchor',
-      'end anchor',
+      'anchor above',
+      'anchor below',
     ])
-    expect(c.input.fields.find(f => f.label === 'start anchor')!.value).toBe(
-      'old-start',
+    expect(c.input.fields.find(f => f.label === 'anchor above')!.value).toBe(
+      'above',
     )
   })
 
