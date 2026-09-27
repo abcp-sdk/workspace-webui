@@ -59,6 +59,32 @@
     loading = false
   }
 
+  async function refreshReleases() {
+    try {
+      releases = await store.api.helmList()
+    } catch (e) {
+      showErrorToast(String(e))
+    }
+  }
+  async function promoteRelease(name: string) {
+    try {
+      await store.api.helmPromote(name)
+      showToast(t('promoted'))
+      await refreshReleases()
+    } catch (e) {
+      showErrorToast(String(e))
+    }
+  }
+  async function rollbackRelease(name: string) {
+    try {
+      await store.api.helmRollbackRelease(name)
+      showToast(t('rolledBack'))
+      await refreshReleases()
+    } catch (e) {
+      showErrorToast(String(e))
+    }
+  }
+
   function applyFrame(v: { sandboxes: SandboxInfo[]; services: ServiceInfo[]; pvcs: PVCInfo[] }) {
     sandboxes = v.sandboxes
     services = v.services
@@ -333,6 +359,20 @@
                 <span>{r.chartPath || '.'}@{r.ref || 'HEAD'}</span>
                 {#if r.session}<span>{r.session}</span>{/if}
               </span>
+              {#if r.slots.length > 0}
+                <span class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px]">
+                  {#each r.slots as sl (sl.slot)}
+                    <span class="flex items-center gap-1">
+                      <span class="rounded px-1 font-mono {sl.slot === r.activeSlot ? 'bg-primary/15 text-primary' : 'bg-muted'}">{sl.slot}{sl.slot === r.activeSlot ? ' *' : ''}</span>
+                      <span class={cn(!sl.ready && 'text-warning')}>{sl.readyWorkload}/{sl.totalWorkload}</span>
+                    </span>
+                  {/each}
+                  <span class="ml-auto flex items-center gap-1">
+                    <button type="button" class="rounded border border-border px-2 py-0.5 hover:bg-muted" onclick={() => void promoteRelease(r.name)}>{t('servicePromote')}</button>
+                    <button type="button" class="rounded border border-border px-2 py-0.5 hover:bg-muted" onclick={() => void rollbackRelease(r.name)}>{t('serviceRollback')}</button>
+                  </span>
+                </span>
+              {/if}
             </span>
             <span class={cn('shrink-0 rounded-full px-2 py-px text-[10px]', r.status === 'deployed' ? 'bg-success/15 text-success' : 'bg-destructive/15 text-destructive')}>{r.status}</span>
           </ListRow>

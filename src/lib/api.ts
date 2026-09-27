@@ -1158,6 +1158,14 @@ export class AgentApi {
     const r = await this._guard(() => this._c.helmUninstall({ release }))
     return r.ok
   }
+  /** Blue-green: switch a Helm release's router to the other slot. */
+  async helmPromote(release: string, force = false): Promise<void> {
+    await this._guard(() => this._c.helmPromote({ release, force }))
+  }
+  /** Blue-green: switch a Helm release's router back a slot. */
+  async helmRollbackRelease(release: string): Promise<void> {
+    await this._guard(() => this._c.helmRollbackRelease({ release }))
+  }
 
   /** Tail a service's container log (previous = the crashed instance). */
   async serviceLogs(
@@ -1501,6 +1509,18 @@ export interface HelmRelease {
   revision: number
   status: string
   updatedAt: number
+  slot: string
+  router: string
+  activeSlot: string
+  slots: HelmSlot[]
+}
+
+export interface HelmSlot {
+  slot: string
+  release: string
+  ready: boolean
+  readyWorkload: number
+  totalWorkload: number
 }
 
 export interface HelmRevision {
@@ -1522,6 +1542,16 @@ type PbHelmReleaseInfo = {
   revision: number
   status: string
   updatedAt: bigint
+  slot?: string
+  router?: string
+  activeSlot?: string
+  slots?: {
+    slot: string
+    release: string
+    ready: boolean
+    readyWorkload: number
+    totalWorkload: number
+  }[]
 }
 function helmReleaseFromPb(r: PbHelmReleaseInfo): HelmRelease {
   return {
@@ -1534,6 +1564,16 @@ function helmReleaseFromPb(r: PbHelmReleaseInfo): HelmRelease {
     revision: r.revision,
     status: r.status,
     updatedAt: Number(r.updatedAt),
+    slot: r.slot ?? '',
+    router: r.router ?? '',
+    activeSlot: r.activeSlot ?? '',
+    slots: (r.slots ?? []).map(sl => ({
+      slot: sl.slot,
+      release: sl.release,
+      ready: sl.ready,
+      readyWorkload: sl.readyWorkload,
+      totalWorkload: sl.totalWorkload,
+    })),
   }
 }
 
