@@ -305,6 +305,8 @@ const repoFileWrite: CardHandler = ({
       ? [
           fin(input, 'start-line', 'list', 'start', { mono: true }),
           fin(input, 'end-line', 'list', 'end', { mono: true }),
+          fin(input, 'start-anchor', 'target', 'start anchor', { mono: true }),
+          fin(input, 'end-anchor', 'target', 'end anchor', { mono: true }),
         ]
       : []),
     fin(input, 'message', 'commit', 'message'),
