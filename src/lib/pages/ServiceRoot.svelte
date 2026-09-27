@@ -3,7 +3,7 @@
   // Read + a NARROW action set: delete (sandbox/service) and pause/resume
   // (service only). No deploy / build / exec from this surface.
   import type { PageProps } from '$lib/page-props'
-  import type { PVCInfo, SandboxInfo, ServiceInfo } from '$lib/api'
+  import type { HelmRelease, PVCInfo, SandboxInfo, ServiceInfo } from '$lib/api'
   import { t } from '$lib/i18n.svelte'
   import { showErrorToast, showToast } from '$lib/toast.svelte'
   import { confirmDialog } from '$lib/dialogs'
@@ -18,10 +18,11 @@
 
   let { store }: PageProps = $props()
 
-  let tab = $state<'sandboxes' | 'services' | 'pvcs'>('sandboxes')
+  let tab = $state<'sandboxes' | 'services' | 'pvcs' | 'releases'>('sandboxes')
   let sandboxes = $state<SandboxInfo[]>([])
   let services = $state<ServiceInfo[]>([])
   let pvcs = $state<PVCInfo[]>([])
+  let releases = $state<HelmRelease[]>([])
   let loading = $state(true)
 
   // Group the service list into release vs preview (a view filter, not a page).
@@ -40,16 +41,18 @@
     loading = !store.hasData(key)
     try {
       const v = await store.dataLoad(key, async () => {
-        const [s, sv, p] = await Promise.all([
+        const [s, sv, p, h] = await Promise.all([
           store.api.listSandboxes(),
           store.api.listServices(),
           store.api.listPVCs(),
+          store.api.helmList().catch(() => [] as HelmRelease[]),
         ])
-        return { sandboxes: s, services: sv, pvcs: p }
+        return { sandboxes: s, services: sv, pvcs: p, releases: h }
       })
       sandboxes = v.sandboxes
       services = v.services
       pvcs = v.pvcs
+      releases = v.releases ?? []
     } catch (e) {
       showErrorToast(String(e))
     }
@@ -187,6 +190,7 @@
     { id: 'sandboxes' as const, key: 'sandboxes', icon: AppIcons.box },
     { id: 'services' as const, key: 'services', icon: AppIcons.server },
     { id: 'pvcs' as const, key: 'pvcs', icon: AppIcons.database },
+    { id: 'releases' as const, key: 'helmReleases', icon: AppIcons.pkg },
   ]
 
   const stageDefs = [
@@ -313,6 +317,24 @@
               {/if}
             </span>
             <span class={cn('shrink-0 rounded-full px-2 py-px text-[10px]', p.phase === 'Bound' ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground')}>{p.phase}</span>
+          </ListRow>
+        {/each}
+      {/if}
+    {:else if tab === 'releases'}
+      {#if releases.length === 0}
+        <EmptyState>{t('noHelmReleases')}</EmptyState>
+      {:else}
+        {#each releases as r (r.name)}
+          <ListRow divided>
+            <span class="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"><AppIcons.pkg class="size-4" /></span>
+            <span class="min-w-0 flex-1">
+              <span class="block wrap-anywhere text-meta font-semibold">{r.name} <span class="text-[10px] font-normal text-muted-foreground">rev{r.revision}</span></span>
+              <span class="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
+                <span>{r.chartPath || '.'}@{r.ref || 'HEAD'}</span>
+                {#if r.session}<span>{r.session}</span>{/if}
+              </span>
+            </span>
+            <span class={cn('shrink-0 rounded-full px-2 py-px text-[10px]', r.status === 'deployed' ? 'bg-success/15 text-success' : 'bg-destructive/15 text-destructive')}>{r.status}</span>
           </ListRow>
         {/each}
       {/if}

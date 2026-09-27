@@ -1113,6 +1113,52 @@ export class AgentApi {
     return (r.pvcs ?? []).map(pvcFromPb)
   }
 
+  // ---- Helm releases ----
+  async helmList(): Promise<HelmRelease[]> {
+    const r = await this._guard(() => this._c.helmList({}))
+    return (r.releases ?? []).map(helmReleaseFromPb)
+  }
+  async helmHistory(release: string): Promise<HelmRevision[]> {
+    const r = await this._guard(() => this._c.helmHistory({ release }))
+    return (r.revisions ?? []).map(rv => ({
+      revision: rv.revision,
+      ref: rv.ref,
+      chartPath: rv.chartPath,
+      values: rv.values,
+      createdAt: Number(rv.createdAt),
+      objects: [...(rv.objects ?? [])],
+    }))
+  }
+  async helmDeploy(input: {
+    release: string
+    org: string
+    repo: string
+    ref: string
+    chartPath: string
+    values: string
+    dryRun: boolean
+  }): Promise<{ manifest: string; objects: string[] }> {
+    const r = await this._guard(() =>
+      this._c.helmDeploy({
+        release: input.release,
+        org: input.org,
+        repo: input.repo,
+        ref: input.ref,
+        chartPath: input.chartPath,
+        values: input.values,
+        dryRun: input.dryRun,
+      }),
+    )
+    return { manifest: r.manifest, objects: [...(r.objects ?? [])] }
+  }
+  async helmRollback(release: string, revision = 0): Promise<void> {
+    await this._guard(() => this._c.helmRollback({ release, revision }))
+  }
+  async helmUninstall(release: string): Promise<boolean> {
+    const r = await this._guard(() => this._c.helmUninstall({ release }))
+    return r.ok
+  }
+
   /** Tail a service's container log (previous = the crashed instance). */
   async serviceLogs(
     name: string,
@@ -1443,6 +1489,52 @@ export interface PVCInfo {
   creator: string
   createdAt: number
   mountedBy: string[]
+}
+
+export interface HelmRelease {
+  name: string
+  namespace: string
+  creator: string
+  session: string
+  ref: string
+  chartPath: string
+  revision: number
+  status: string
+  updatedAt: number
+}
+
+export interface HelmRevision {
+  revision: number
+  ref: string
+  chartPath: string
+  values: string
+  createdAt: number
+  objects: string[]
+}
+
+type PbHelmReleaseInfo = {
+  name: string
+  namespace: string
+  creator: string
+  session: string
+  ref: string
+  chartPath: string
+  revision: number
+  status: string
+  updatedAt: bigint
+}
+function helmReleaseFromPb(r: PbHelmReleaseInfo): HelmRelease {
+  return {
+    name: r.name,
+    namespace: r.namespace,
+    creator: r.creator,
+    session: r.session,
+    ref: r.ref,
+    chartPath: r.chartPath,
+    revision: r.revision,
+    status: r.status,
+    updatedAt: Number(r.updatedAt),
+  }
 }
 
 type PbSandboxInfo = {
