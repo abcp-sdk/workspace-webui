@@ -129,6 +129,41 @@
     void scaleTo(svc.replicas + delta)
   }
 
+  // ---- blue-green promote / rollback ----
+  let slotBusy = $state(false)
+  const targetSlot = $derived(svc?.activeSlot === 'green' ? 'blue' : 'green')
+  const hasTargetSlot = $derived(!!svc && svc.slots.some(s => s.slot === targetSlot))
+  async function promote() {
+    if (slotBusy) return
+    slotBusy = true
+    try {
+      const v = await store.api.promoteService(name)
+      if (v) {
+        svc = v
+        store.dataSet(`service:${name}`, v)
+      }
+      showToast(t('promoted'))
+    } catch (e) {
+      showErrorToast(String(e))
+    }
+    slotBusy = false
+  }
+  async function rollback() {
+    if (slotBusy) return
+    slotBusy = true
+    try {
+      const v = await store.api.rollbackService(name)
+      if (v) {
+        svc = v
+        store.dataSet(`service:${name}`, v)
+      }
+      showToast(t('rolledBack'))
+    } catch (e) {
+      showErrorToast(String(e))
+    }
+    slotBusy = false
+  }
+
   // ---- manifest (YAML) editor ----
   let manifest = $state('')
   let manifestDirty = $state(false)
@@ -338,6 +373,26 @@
           </span>
         {/each}
       </div>
+      {#if svc.slots.length > 0}
+        <div class="mt-1.5 border-t border-border/40 pt-1.5">
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span class="text-muted-foreground">{t('serviceSlots')}:</span>
+            {#each svc.slots as sl (sl.slot)}
+              <span class="flex items-center gap-1">
+                <span class="rounded px-1 font-mono {sl.slot === svc.activeSlot ? 'bg-primary/15 text-primary' : 'bg-muted'}">{sl.slot}{sl.slot === svc.activeSlot ? ' *' : ''}</span>
+                <span class={cn(!sl.ready && 'text-warning')}>{sl.readyReplicas}/{sl.replicas}</span>
+                {#if sl.publicUrl}
+                  <a href={sl.publicUrl} target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">{sl.publicUrl}</a>
+                {/if}
+              </span>
+            {/each}
+            <span class="ml-auto flex items-center gap-1">
+              <button type="button" class="rounded border border-border px-2 py-0.5 hover:bg-muted disabled:opacity-40" disabled={slotBusy || !hasTargetSlot} title={t('servicePromoteHint', { arg1: targetSlot })} onclick={() => void promote()}>{t('servicePromote')} → {targetSlot}</button>
+              <button type="button" class="rounded border border-border px-2 py-0.5 hover:bg-muted disabled:opacity-40" disabled={slotBusy || !hasTargetSlot} title={t('serviceRollbackHint')} onclick={() => void rollback()}>{t('serviceRollback')}</button>
+            </span>
+          </div>
+        </div>
+      {/if}
     </div>
   {/if}
 

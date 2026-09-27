@@ -1074,6 +1074,18 @@ export class AgentApi {
     return r.service ? serviceFromPb(r.service) : null
   }
 
+  /** Blue-green: switch the primary URL to the other slot. */
+  async promoteService(name: string, force = false): Promise<ServiceInfo | null> {
+    const r = await this._guard(() => this._c.promoteService({ name, force }))
+    return r.service ? serviceFromPb(r.service) : null
+  }
+
+  /** Blue-green: switch the primary URL back a slot. */
+  async rollbackService(name: string): Promise<ServiceInfo | null> {
+    const r = await this._guard(() => this._c.rollbackService({ name }))
+    return r.service ? serviceFromPb(r.service) : null
+  }
+
   /** The service's Deployment + Services as a multi-document YAML. */
   async getServiceManifest(name: string): Promise<string> {
     const r = await this._guard(() => this._c.getServiceManifest({ name }))
@@ -1373,6 +1385,24 @@ export interface ServiceInfo {
   rollout: ServiceRollout
   /** Extra containers (sidecars + init) on the pod. */
   sidecarCount: number
+  /** Blue-green: the slot the primary URL targets ('blue'|'green'|''). */
+  activeSlot: string
+  /** Blue-green slots (empty for a plain service). */
+  slots: ServiceSlot[]
+}
+
+export interface ServiceSlot {
+  slot: string
+  image: string
+  ready: boolean
+  replicas: number
+  readyReplicas: number
+  url: string
+  publicUrl: string
+  createdAt: number
+  podPhase: string
+  restarts: number
+  message: string
 }
 
 export interface ServiceConfigMount {
@@ -1494,6 +1524,20 @@ type PbServiceInfo = {
   startupProbe?: PbProbeSpec
   rollout?: { maxSurge: string; maxUnavailable: string }
   sidecarCount: number
+  activeSlot?: string
+  slots?: {
+    slot: string
+    image: string
+    ready: boolean
+    replicas: number
+    readyReplicas: number
+    url: string
+    publicUrl: string
+    createdAt: bigint
+    podPhase: string
+    restarts: number
+    message: string
+  }[]
 }
 
 type PbProbeSpec = {
@@ -1563,6 +1607,20 @@ function serviceFromPb(s: PbServiceInfo): ServiceInfo {
       maxUnavailable: s.rollout?.maxUnavailable ?? '',
     },
     sidecarCount: s.sidecarCount,
+    activeSlot: s.activeSlot ?? '',
+    slots: (s.slots ?? []).map(sl => ({
+      slot: sl.slot,
+      image: sl.image,
+      ready: sl.ready,
+      replicas: sl.replicas,
+      readyReplicas: sl.readyReplicas,
+      url: sl.url,
+      publicUrl: sl.publicUrl,
+      createdAt: Number(sl.createdAt),
+      podPhase: sl.podPhase,
+      restarts: sl.restarts,
+      message: sl.message,
+    })),
   }
 }
 
