@@ -77,6 +77,7 @@
   let followBottom = $state(true)
 
   let listEl: HTMLElement | null = $state(null)
+  let contentEl: HTMLElement | null = $state(null)
   let taEl: HTMLTextAreaElement | null = $state(null)
   const recorder = new VoiceRecorder()
 
@@ -154,7 +155,7 @@
     if (!listEl) return
     const nearBottom =
       listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight < 80
-    followBottom = nearBottom
+    if (!autoScrolling) followBottom = nearBottom
     if (
       listEl.scrollTop < LOAD_OLDER_AT &&
       ctrl?.hasMore &&
@@ -162,6 +163,18 @@
     ) {
       void loadOlder()
     }
+  }
+
+  /** Programmatic scrolls must not be read as a user scroll (which would clear
+   *  `followBottom`); this guard suppresses the next onScroll-driven update. */
+  let autoScrolling = false
+  function scrollToBottom() {
+    if (!listEl) return
+    autoScrolling = true
+    listEl.scrollTop = listEl.scrollHeight
+    requestAnimationFrame(() => {
+      autoScrolling = false
+    })
   }
 
   /** Load one older page, preserving the scroll position across the prepend. */
@@ -185,23 +198,45 @@
 
   /** Jump back to the newest history (after the user scrolled far up and the
    *  window slid away from the tail). */
-  async function jumpToLatest() {
+  async function jumpToLatest(): Promise<void> {
     if (!ctrl) return
     followBottom = true
     await ctrl.jumpToLatest()
-    requestAnimationFrame(() => {
-      if (listEl) listEl.scrollTop = listEl.scrollHeight
-    })
+    scrollToBottom()
+    requestAnimationFrame(scrollToBottom)
   }
+
+  // Reset follow state when the OPEN SESSION changes. The Chat pane is reused
+  // across sessions (keyed `chat_session`), so a stale `followBottom=false`
+  // from a previous session would otherwise leave the new one stuck mid-list.
+  // Also drop the "scrolled-up window" flag: a freshly opened session is at the
+  // tail (IM behaviour).
+  $effect(() => {
+    void sid
+    followBottom = true
+    ctrl && (ctrl.store.hasNewer = false)
+  })
+
+  // Converging stick-to-bottom: while following, keep the viewport pinned to
+  // the tail as content grows AFTER the jump (async re-layout, image/media
+  // load, tool cards expanding, `content-visibility` reflow). A single
+  // `scrollTop = scrollHeight` is not enough — `scrollHeight` grows a frame or
+  // more later, which is what stranded long sessions mid-list. The observer
+  // watches the inner content wrapper, created ONCE for the list's lifetime.
+  $effect(() => {
+    const el = contentEl
+    if (!el) return
+    const ro = new ResizeObserver(() => {
+      if (followBottom) scrollToBottom()
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  })
 
   $effect(() => {
     if (!ctrl || !listEl) return
     void ctrl.revision
-    if (followBottom) {
-      requestAnimationFrame(() => {
-        if (listEl) listEl.scrollTop = listEl.scrollHeight
-      })
-    }
+    if (followBottom) scrollToBottom()
   })
 
   // ---- draft persistence ----
@@ -768,6 +803,7 @@
     <!-- messages -->
     <div class="relative min-h-0 flex-1">
       <div bind:this={listEl} class="h-full overflow-y-auto px-3 py-3" onscroll={onScroll}>
+        <div bind:this={contentEl}>
         {#if ctrl.loading && ctrl.messages.length === 0}
           <div class="flex h-full items-center justify-center">
             <span class="size-6 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground"></span>
@@ -805,6 +841,7 @@
             </div>
           {/each}
         {/if}
+        </div>
       </div>
       {#if ctrl.hasNewer}
         <button

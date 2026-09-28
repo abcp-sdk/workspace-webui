@@ -131,6 +131,11 @@ export class MessagesController {
     await this.sync.sync(sid)
     await this.recover()
     this.stream.connect(sid)
+    // Pull the authoritative tip delta ONCE right after connecting. The live
+    // stream (no `since` anchor → `deliver_policy:new`) does NOT replay backlog,
+    // so without this the newest rows only appear on the next live event or the
+    // ~20s idle probe — the "long session shows stale history for a while" bug.
+    void this.sync.reconcile()
     void this.refreshMailbox()
   }
 
