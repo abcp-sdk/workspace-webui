@@ -324,6 +324,13 @@ export class AgentApi {
     return w ? branchSessionToSession(w) : emptySession('')
   }
 
+  /** Advance the session's SHARED read watermark (clears the unread badge on
+   *  every device of the tenant). `seq` omitted => the current tip. */
+  async markRead(id: string, seq = 0): Promise<Session> {
+    const r = await this._guard(() => this._c.markRead({ id, seq }))
+    return r.session ? sessionFromPb(r.session) : emptySession(id)
+  }
+
   async revert(id: string, messageId?: string | null): Promise<void> {
     await this._c.undo({ id, messageId: messageId ?? '' })
   }
