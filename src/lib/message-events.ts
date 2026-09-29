@@ -274,10 +274,27 @@ export function applyStreamEvent(
       break
     case 'status': {
       const stype = params['type']
+      // The stream's SEED frame carries `snapshot:true`: it is the
+      // authoritative current status, not a run transition. Update the badge
+      // (and `sending`) WITHOUT touching streaming state, so a mid-run
+      // subscribe does not clear the live bubble.
+      if (params['snapshot'] === true) {
+        store.runtimeStatus =
+          stype === 'busy' || stype === 'running'
+            ? 'busy'
+            : stype === 'unknown'
+              ? 'unknown'
+              : 'idle'
+        store.sending = store.runtimeStatus === 'busy'
+        store.notify()
+        break
+      }
       if (stype === 'busy' || stype === 'running') {
+        store.runtimeStatus = 'busy'
         store.sending = true
         store.notify()
       } else {
+        store.runtimeStatus = 'idle'
         hooks.finishStreaming()
       }
       break

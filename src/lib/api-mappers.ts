@@ -91,9 +91,12 @@ export function sessionFromPb(
     lastMessagePreview: s.lastMessagePreview,
     messageSeq: s.messageSeq,
     group: s.group,
-    // 'unknown' (a transient read error) → undefined so the row shows NO badge
-    // rather than a misleading idle. Only busy/idle are definite.
-    status: s.status === 'busy' || s.status === 'idle' ? s.status : undefined,
+    // 'unknown' (a transient read error) is surfaced so the row shows a
+    // distinct badge instead of a misleading idle or a bare gap.
+    status:
+      s.status === 'busy' || s.status === 'idle' || s.status === 'unknown'
+        ? s.status
+        : undefined,
   }
 }
 

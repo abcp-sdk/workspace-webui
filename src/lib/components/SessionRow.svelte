@@ -155,8 +155,9 @@
     <span class="relative shrink-0">
       <ChatAvatar seed={session.id} size={40} />
       <!-- Runtime status from the server's run lease: a top-right badge on the
-           avatar. Running (incl. mid-retry) = pulsing green; idle = gray; a
-           reply that did not read the lease (undefined) = no badge. -->
+           avatar. Running (incl. mid-retry) = pulsing green; idle = gray;
+           unknown (lease read error) = amber; a reply that did not read the
+           lease (undefined) = no badge. -->
       {#if session.status === 'busy'}
         <span
           class="absolute -top-0.5 -right-0.5 size-2.5 animate-pulse rounded-full bg-success ring-2 ring-background"
@@ -168,6 +169,12 @@
           class="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-muted-foreground ring-2 ring-background"
           title={t('idle')}
           aria-label={t('idle')}
+        ></span>
+      {:else if session.status === 'unknown'}
+        <span
+          class="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-warning ring-2 ring-background"
+          title={t('statusUnknown')}
+          aria-label={t('statusUnknown')}
         ></span>
       {/if}
     </span>
