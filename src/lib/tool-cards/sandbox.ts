@@ -460,10 +460,16 @@ const sandboxFileWrite: CardHandler = ({ tool, data, input }) => {
         fin(input, 'path', 'file_code', 'path', { mono: true }),
         ...(tool === 'sandbox-file-edit'
           ? [
-              fin(input, 'start-anchor-line', 'target', 'anchor above', {
+              fin(input, 'start-anchor-line', 'target', 'anchor above line', {
                 mono: true,
               }),
-              fin(input, 'end-anchor-line', 'target', 'anchor below', {
+              fin(input, 'start-anchor', 'target', 'anchor above', {
+                mono: true,
+              }),
+              fin(input, 'end-anchor-line', 'target', 'anchor below line', {
+                mono: true,
+              }),
+              fin(input, 'end-anchor', 'target', 'anchor below', {
                 mono: true,
               }),
             ]

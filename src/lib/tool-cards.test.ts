@@ -84,6 +84,8 @@ describe('cardFor', () => {
         path: 'x',
         'start-anchor-line': 0,
         'end-anchor-line': 1,
+        'start-anchor': '',
+        'end-anchor': '1',
         content: 'new',
       },
     )!
@@ -96,7 +98,8 @@ describe('cardFor', () => {
     })
     expect(c.input.fields.map(f => f.label)).toEqual([
       'path',
-      'anchor above',
+      'anchor above line',
+      'anchor below line',
       'anchor below',
     ])
     // The diff/changes belong to the RESULT.
@@ -296,6 +299,8 @@ describe('cardFor', () => {
         path: 'a',
         'start-anchor-line': 2,
         'end-anchor-line': 3,
+        'start-anchor': '1',
+        'end-anchor': '4',
         content: 'z',
       },
       '',
@@ -318,6 +323,8 @@ describe('cardFor', () => {
         path: 'a',
         'start-anchor-line': 3,
         'end-anchor-line': 4,
+        'start-anchor': 'L3',
+        'end-anchor': 'L4',
         content: 'z',
       },
       '',
@@ -325,11 +332,13 @@ describe('cardFor', () => {
     expect(c.input.fields.map(f => f.label)).toEqual([
       'sandbox',
       'path',
+      'anchor above line',
       'anchor above',
+      'anchor below line',
       'anchor below',
     ])
     expect(c.input.fields.find(f => f.label === 'anchor above')!.value).toBe(
-      '3',
+      'L3',
     )
   })
 
