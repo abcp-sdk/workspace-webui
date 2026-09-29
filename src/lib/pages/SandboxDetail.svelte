@@ -30,6 +30,30 @@
   let loading = $state(true)
   let jobsError = $state('')
 
+  // Logs tab.
+  let tab = $state<'jobs' | 'logs'>('jobs')
+  let logLines = $state<string[]>([])
+  let logLoading = $state(false)
+  let logError = $state('')
+  let logPrevious = $state(false)
+
+  async function loadLogs() {
+    logLoading = true
+    logError = ''
+    try {
+      const r = await store.api.sandboxLogs(name, 500, logPrevious)
+      logLines = r.lines
+      if (r.lines.length === 0 && r.message) logError = r.message
+    } catch (e) {
+      logError = String(e)
+    }
+    logLoading = false
+  }
+  function selectTab(next: 'jobs' | 'logs') {
+    tab = next
+    if (next === 'logs') void loadLogs()
+  }
+
   // The active job is the deeper `sandbox_job` page (if the stack is on one),
   // so the list can highlight it without owning the selection.
   const activeJobId = $derived.by(() => {
@@ -152,6 +176,13 @@
   {#if sandbox}
     <div class="shrink-0 border-b border-border/50 px-4 py-2 text-[10px] text-muted-foreground">
       <div class="break-all whitespace-pre-wrap font-mono">{sandbox.image}</div>
+      {#if sandbox.message}
+        <div class="mt-1 rounded bg-destructive/10 px-2 py-1 text-destructive">
+          {t('sandboxExited')}: {sandbox.message} · {t('serviceRestarts')}: {sandbox.restarts}
+        </div>
+      {:else if sandbox.restarts > 0}
+        <div class="mt-1 text-warning">{t('serviceRestarts')}: {sandbox.restarts}</div>
+      {/if}
       {#if sandbox.session}
         {@const session = sandbox.session}
         <span class="mt-0.5 inline-flex min-w-0 items-start gap-1">
@@ -171,14 +202,39 @@
   {/if}
 
   <TabBar>
-    <TabItem active onclick={() => {}}>
+    <TabItem active={tab === 'jobs'} onclick={() => selectTab('jobs')}>
       <AppIcons.terminal class="size-3.5" />{t('jobs')}
+    </TabItem>
+    <TabItem active={tab === 'logs'} onclick={() => selectTab('logs')}>
+      <AppIcons.file_code class="size-3.5" />{t('serviceLogs')}
     </TabItem>
     <TabItem onclick={openFiles}>
       <AppIcons.folder class="size-3.5" />{t('files')}
     </TabItem>
   </TabBar>
 
+  {#if tab === 'logs'}
+    <div class="flex shrink-0 items-center gap-2 border-b border-border/50 px-4 py-1.5 text-[10px]">
+      <label class="flex items-center gap-1 text-muted-foreground">
+        <input type="checkbox" bind:checked={logPrevious} onchange={() => void loadLogs()} />
+        {t('serviceLogsPrevious')}
+      </label>
+      <button type="button" class="rounded border border-border px-2 py-0.5 hover:bg-muted" onclick={() => void loadLogs()}>{t('refresh')}</button>
+    </div>
+    <div class="min-h-0 flex-1 overflow-auto bg-muted/20 p-2">
+      {#if logLoading && logLines.length === 0}
+        <div class="flex justify-center py-10">
+          <span class="size-6 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground"></span>
+        </div>
+      {:else if logError && logLines.length === 0}
+        <div class="px-2 py-2 text-meta text-destructive">{logError}</div>
+      {:else if logLines.length === 0}
+        <EmptyState>{t('serviceLogsWaiting')}</EmptyState>
+      {:else}
+        <pre class="font-mono text-[11px] leading-relaxed whitespace-pre-wrap">{logLines.join('\n')}</pre>
+      {/if}
+    </div>
+  {:else}
   <!-- job list (full pane) -->
   <div class="min-h-0 flex-1 overflow-y-auto">
     <SectionLabel>{t('jobs')} · {jobs.length}</SectionLabel>
@@ -202,4 +258,5 @@
       {/each}
     {/if}
   </div>
+  {/if}
 </div>

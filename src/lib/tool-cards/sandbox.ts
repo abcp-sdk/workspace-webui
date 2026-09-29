@@ -46,6 +46,10 @@ const sandboxCreate: CardHandler = ({ tool, data, input }) => {
         fres(data, 'phase', 'success', 'phase'),
         fres(data, 'url', 'link', 'url', { mono: true, tone: 'muted' }),
         fres(data, 'creator', 'user', 'creator', { tone: 'muted' }),
+        n(data, 'restarts') > 0
+          ? { icon: 'history', label: 'restarts', value: String(n(data, 'restarts')), tone: 'muted' }
+          : null,
+        fres(data, 'message', 'error', 'reason', { tone: 'destructive' }),
       ),
       actions: [{ label: name, icon: 'box', page: P.sandboxPage(name) }],
     },
@@ -713,6 +717,8 @@ const sandboxList: CardHandler = ({ tool, data }) => {
     url: string
     creator: string
     session: string
+    restarts?: number
+    message?: string
   }>(data, 'sandboxes')
   return {
     subtitle: 'sandboxes',
@@ -726,13 +732,40 @@ const sandboxList: CardHandler = ({ tool, data }) => {
             kind: 'list',
             rows: sandboxes.map(s => ({
               label: s.name,
-              sub: `${s.phase}${s.image ? ` · ${s.image}` : ''}`,
+              sub: `${s.phase}${s.image ? ` · ${s.image}` : ''}${s.message ? ` · ${s.message}` : s.restarts ? ` · restarts=${s.restarts}` : ''}`,
               icon: 'box',
-              tone: s.phase === 'Running' ? 'success' : 'muted',
+              tone: s.phase === 'Running' ? 'success' : s.message ? 'destructive' : 'muted',
               link: P.sandboxPage(s.name),
             })),
           }
         : undefined,
+    },
+  }
+}
+
+const sandboxLogs: CardHandler = ({ tool, data, input, output }) => {
+  if (tool !== 'sandbox-logs') return null
+  const name = pick(data, input, 'worker-name')
+  const lines = n(data, 'lines')
+  return {
+    subtitle: name ? `${name} · logs` : 'logs',
+    input: {
+      fields: fs(
+        fin(input, 'worker-name', 'box', 'sandbox', { mono: true }),
+        input['previous'] === true
+          ? { icon: 'clock', label: 'previous', value: 'yes', tone: 'muted' }
+          : null,
+      ),
+    },
+    result: {
+      fields: fs(
+        fres(data, 'restarts', 'history', 'restarts', { tone: 'muted' }),
+        fres(data, 'message', 'error', 'reason', { tone: 'destructive' }),
+        lines > 0
+          ? { icon: 'file_code', label: 'lines', value: String(lines) }
+          : null,
+      ),
+      body: output ? { kind: 'code', name: `${name}.log`, text: output } : undefined,
     },
   }
 }
@@ -872,6 +905,7 @@ export const sandboxHandlers: CardHandler[] = [
   pvcDelete,
   serviceList,
   sandboxList,
+  sandboxLogs,
 ]
 
 export type { CardCtx }

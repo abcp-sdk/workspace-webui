@@ -1190,6 +1190,24 @@ export class AgentApi {
     return r.lines ?? []
   }
 
+  /** Tail a sandbox pod's container log (previous = the crashed/OOM instance). */
+  async sandboxLogs(
+    name: string,
+    tailLines = 500,
+    previous = false,
+  ): Promise<{ lines: string[]; phase: string; restarts: number; message: string; available: boolean }> {
+    const r = await this._guard(() =>
+      this._c.sandboxLogs({ name, tailLines: BigInt(tailLines), previous }),
+    )
+    return {
+      lines: r.lines ?? [],
+      phase: r.phase,
+      restarts: r.restarts,
+      message: r.message,
+      available: r.available,
+    }
+  }
+
   /** Follow a service's container log until the stream ends / aborted. */
   async *watchServiceLogs(
     name: string,
@@ -1372,6 +1390,10 @@ export interface SandboxInfo {
   home: string
   os: string
   arch: string
+  /** Container restarts (diagnostics). */
+  restarts: number
+  /** First failure reason (e.g. OOMKilled); '' when healthy. */
+  message: string
 }
 export interface SandboxFileEntry {
   path: string
@@ -1602,6 +1624,8 @@ type PbSandboxInfo = {
   home: string
   os: string
   arch: string
+  restarts: number
+  message: string
 }
 function sandboxFromPb(s: PbSandboxInfo): SandboxInfo {
   return {
@@ -1617,6 +1641,8 @@ function sandboxFromPb(s: PbSandboxInfo): SandboxInfo {
     home: s.home,
     os: s.os,
     arch: s.arch,
+    restarts: s.restarts,
+    message: s.message,
   }
 }
 
