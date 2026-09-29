@@ -450,7 +450,7 @@ const sandboxFileWrite: CardHandler = ({ tool, data, input }) => {
   const added = n(data, 'added')
   const removed = n(data, 'removed')
   const content = pick(data, input, 'content')
-  const start = n(input, 'start-line')
+  const start = n(input, 'start-anchor-line')
   const d = s(data, 'diff')
   return {
     subtitle: path || tool,
@@ -460,10 +460,12 @@ const sandboxFileWrite: CardHandler = ({ tool, data, input }) => {
         fin(input, 'path', 'file_code', 'path', { mono: true }),
         ...(tool === 'sandbox-file-edit'
           ? [
-              fin(input, 'start-line', 'list', 'start', { mono: true }),
-              fin(input, 'end-line', 'list', 'end', { mono: true }),
-              fin(input, 'anchor-before', 'target', 'anchor above', { mono: true }),
-              fin(input, 'anchor-after', 'target', 'anchor below', { mono: true }),
+              fin(input, 'start-anchor-line', 'target', 'anchor above', {
+                mono: true,
+              }),
+              fin(input, 'end-anchor-line', 'target', 'anchor below', {
+                mono: true,
+              }),
             ]
           : []),
       ),
@@ -473,8 +475,9 @@ const sandboxFileWrite: CardHandler = ({ tool, data, input }) => {
             kind: 'code',
             name: basename(path),
             text: content,
-            ...(tool === 'sandbox-file-edit' && start > 0
-              ? { startLine: start }
+            ...(tool === 'sandbox-file-edit' &&
+            input['start-anchor-line'] !== undefined
+              ? { startLine: start + 1 }
               : {}),
           }
         : undefined,
@@ -677,7 +680,10 @@ const serviceList: CardHandler = ({ tool, data }) => {
             kind: 'list',
             rows: services.map(s => {
               const stage = s.stage === 'preview' ? 'preview' : 'release'
-              const reps = s.replicas != null ? ` · ${s.ready_replicas ?? 0}/${s.replicas}` : ''
+              const reps =
+                s.replicas != null
+                  ? ` · ${s.ready_replicas ?? 0}/${s.replicas}`
+                  : ''
               return {
                 label: s.name,
                 sub: `${stage} · ${s.phase}${reps}${s.publicUrl ? ` · ${s.publicUrl}` : s.url ? ` · ${s.url}` : ''}`,

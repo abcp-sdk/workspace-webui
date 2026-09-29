@@ -303,10 +303,12 @@ const repoFileWrite: CardHandler = ({
     fin(input, 'path', 'file_code', 'path', { mono: true }),
     ...(tool === 'repo-file-edit'
       ? [
-          fin(input, 'start-line', 'list', 'start', { mono: true }),
-          fin(input, 'end-line', 'list', 'end', { mono: true }),
-          fin(input, 'anchor-before', 'target', 'anchor above', { mono: true }),
-          fin(input, 'anchor-after', 'target', 'anchor below', { mono: true }),
+          fin(input, 'start-anchor-line', 'target', 'anchor above', {
+            mono: true,
+          }),
+          fin(input, 'end-anchor-line', 'target', 'anchor below', {
+            mono: true,
+          }),
         ]
       : []),
     fin(input, 'message', 'commit', 'message'),
@@ -345,7 +347,7 @@ const repoFileWrite: CardHandler = ({
       page: P.repoBlob(org, repo, ref, path),
     })
   const d = s(data, 'diff')
-  const editStart = n(input, 'start-line')
+  const editStart = n(input, 'start-anchor-line')
   return {
     subtitle: `${action} · ${at}`,
     input: {
@@ -359,8 +361,9 @@ const repoFileWrite: CardHandler = ({
               kind: 'code',
               name: basename(path),
               text: content,
-              ...(tool === 'repo-file-edit' && editStart > 0
-                ? { startLine: editStart }
+              ...(tool === 'repo-file-edit' &&
+              input['start-anchor-line'] !== undefined
+                ? { startLine: editStart + 1 }
                 : {}),
             }
           : undefined,

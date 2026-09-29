@@ -80,7 +80,12 @@ describe('cardFor', () => {
         removed: 1,
         diff: '@@ -1 +1 @@',
       },
-      { path: 'x', 'start-line': 1, 'end-line': 2, content: 'new' },
+      {
+        path: 'x',
+        'start-anchor-line': 0,
+        'end-anchor-line': 1,
+        content: 'new',
+      },
     )!
     // The inserted content belongs to the INPUT, shown with its target line.
     expect(c.input.body).toEqual({
@@ -89,7 +94,11 @@ describe('cardFor', () => {
       text: 'new',
       startLine: 1,
     })
-    expect(c.input.fields.map(f => f.label)).toEqual(['path', 'start', 'end'])
+    expect(c.input.fields.map(f => f.label)).toEqual([
+      'path',
+      'anchor above',
+      'anchor below',
+    ])
     // The diff/changes belong to the RESULT.
     expect(c.result.fields.find(f => f.label === 'changes')!.value).toBe(
       '+3 −1',
@@ -285,8 +294,8 @@ describe('cardFor', () => {
       {
         'worker-name': 'sb',
         path: 'a',
-        'start-line': 3,
-        'end-line': 3,
+        'start-anchor-line': 2,
+        'end-anchor-line': 3,
         content: 'z',
       },
       '',
@@ -300,17 +309,15 @@ describe('cardFor', () => {
     expect(c.result.body).toEqual({ kind: 'diff', diff: '@@ x @@' })
   })
 
-  it('sandbox-file-edit: renders neighbor anchors when present', () => {
+  it('sandbox-file-edit: renders the anchor lines when present', () => {
     const c = cardFor(
       'sandbox-file-edit',
       { path: 'a', added: 1, removed: 1, diff: '@@ x @@' },
       {
         'worker-name': 'sb',
         path: 'a',
-        'start-line': 3,
-        'end-line': 4,
-        'anchor-before': 'above',
-        'anchor-after': 'below',
+        'start-anchor-line': 3,
+        'end-anchor-line': 4,
         content: 'z',
       },
       '',
@@ -318,13 +325,11 @@ describe('cardFor', () => {
     expect(c.input.fields.map(f => f.label)).toEqual([
       'sandbox',
       'path',
-      'start',
-      'end',
       'anchor above',
       'anchor below',
     ])
     expect(c.input.fields.find(f => f.label === 'anchor above')!.value).toBe(
-      'above',
+      '3',
     )
   })
 
@@ -560,10 +565,21 @@ describe('cardFor', () => {
   })
 
   it('sandbox-port: renders the unified diff body when present', () => {
-    const diff = '--- a/src/a.txt\n+++ b/src/a.txt\n@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n'
+    const diff =
+      '--- a/src/a.txt\n+++ b/src/a.txt\n@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n'
     const c = cardFor(
       'sandbox-port',
-      { org: 'acme', repo: 'web', ref: 'feature/x', commit: 'abc123', count: 1, paths: ['src/a.txt'], added: 1, removed: 1, diff },
+      {
+        org: 'acme',
+        repo: 'web',
+        ref: 'feature/x',
+        commit: 'abc123',
+        count: 1,
+        paths: ['src/a.txt'],
+        added: 1,
+        removed: 1,
+        diff,
+      },
       { 'worker-name': 'sb', path: 'app/src/a.txt', 'repo-path': 'src/a.txt' },
     )!
     expect(c.result.body).toMatchObject({ kind: 'diff', diff })
@@ -694,5 +710,89 @@ describe('cardFor', () => {
     expect(cardFor('time-wait', { seconds: 5 }, { seconds: 5 })!.subtitle).toBe(
       '5s',
     )
+  })
+
+  it('helm-deploy: release + revision + objects', () => {
+    const c = cardFor(
+      'helm-deploy',
+      {
+        name: 'web',
+        revision: 2,
+        status: 'deployed',
+        objects: ['Deployment/web'],
+      },
+      {
+        release: 'web',
+        org: 'o',
+        repo: 'r',
+        ref: 'main',
+        'chart-path': 'chart',
+      },
+    )!
+    expect(c.subtitle).toBe('helm · web')
+    expect(c.result.fields.find(f => f.label === 'release')!.value).toBe('web')
+    expect(c.result.fields.find(f => f.label === 'revision')!.value).toBe(
+      'rev2',
+    )
+    expect(c.result.body).toEqual({
+      kind: 'list',
+      rows: [{ label: 'Deployment/web', icon: 'container' }],
+    })
+  })
+
+  it('helm-list: one row per release', () => {
+    const c = cardFor(
+      'helm-list',
+      {
+        releases: [
+          {
+            name: 'web',
+            revision: 1,
+            status: 'deployed',
+            ref: 'main',
+            chart_path: 'chart',
+          },
+        ],
+      },
+      {},
+    )!
+    expect(c.result.fields[0].value).toBe('1')
+    expect(c.result.body).toEqual({
+      kind: 'list',
+      rows: [
+        {
+          label: 'web',
+          sub: 'rev1 · deployed · chart@main',
+          icon: 'pkg',
+          tone: 'success',
+        },
+      ],
+    })
+  })
+
+  it('helm-promote: active slot + release action', () => {
+    const c = cardFor(
+      'helm-promote',
+      { release: 'web', active_slot: 'green' },
+      { release: 'web' },
+    )!
+    expect(c.subtitle).toBe('promote · web')
+    expect(c.result.fields.find(f => f.label === 'active slot')!.value).toBe(
+      'green',
+    )
+    expect(c.result.actions![0].page.kind).toBe('service_detail')
+  })
+
+  it('helm-uninstall: destructive deleted field', () => {
+    const c = cardFor(
+      'helm-uninstall',
+      { release: 'web', deleted: true },
+      { release: 'web' },
+    )!
+    expect(c.subtitle).toBe('uninstall · web')
+    expect(c.result.fields.find(f => f.label === 'deleted')).toMatchObject({
+      value: 'web',
+      tone: 'destructive',
+    })
   })
 })

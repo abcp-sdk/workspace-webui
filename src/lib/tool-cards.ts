@@ -15,6 +15,7 @@
 // and walks the domain handlers in order.
 import type { AppPage } from './nav'
 import { bundledHandlers } from './tool-cards/bundled'
+import { helmHandlers } from './tool-cards/helm'
 import { imageHandlers } from './tool-cards/images'
 import { repoHandlers } from './tool-cards/repo'
 import { sandboxHandlers } from './tool-cards/sandbox'
@@ -42,6 +43,7 @@ const HANDLERS: CardHandler[] = [
   ...repoHandlers,
   ...imageHandlers,
   ...sandboxHandlers,
+  ...helmHandlers,
   ...bundledHandlers,
 ]
 

@@ -1074,15 +1074,19 @@ export class AgentApi {
   }
 
   /** Set a service's desired replica count (0 = scaled down). */
-  async scaleService(name: string, replicas: number): Promise<ServiceInfo | null> {
-    const r = await this._guard(() =>
-      this._c.scaleService({ name, replicas }),
-    )
+  async scaleService(
+    name: string,
+    replicas: number,
+  ): Promise<ServiceInfo | null> {
+    const r = await this._guard(() => this._c.scaleService({ name, replicas }))
     return r.service ? serviceFromPb(r.service) : null
   }
 
   /** Blue-green: switch the primary URL to the other slot. */
-  async promoteService(name: string, force = false): Promise<ServiceInfo | null> {
+  async promoteService(
+    name: string,
+    force = false,
+  ): Promise<ServiceInfo | null> {
     const r = await this._guard(() => this._c.promoteService({ name, force }))
     return r.service ? serviceFromPb(r.service) : null
   }
@@ -1198,14 +1202,14 @@ export class AgentApi {
     }
   }
 
-  /** Live workspace lists (sandboxes/services/PVCs) — a server-push stream.
-   *  Yields a full frame on connect, then a frame whenever anything changes. */
-  async *watchWorkspace(
-    signal?: AbortSignal,
-  ): AsyncGenerator<{
+  /** Live workspace lists (sandboxes/services/PVCs/releases) — a server-push
+   *  stream. Yields a full frame on connect, then a frame whenever anything
+   *  changes. */
+  async *watchWorkspace(signal?: AbortSignal): AsyncGenerator<{
     sandboxes: SandboxInfo[]
     services: ServiceInfo[]
     pvcs: PVCInfo[]
+    releases: HelmRelease[]
   }> {
     const opts = signal ? { signal } : undefined
     for await (const ev of this._c.watchWorkspace({}, opts)) {
@@ -1213,6 +1217,7 @@ export class AgentApi {
         sandboxes: (ev.sandboxes ?? []).map(sandboxFromPb),
         services: (ev.services ?? []).map(serviceFromPb),
         pvcs: (ev.pvcs ?? []).map(pvcFromPb),
+        releases: (ev.releases ?? []).map(helmReleaseFromPb),
       }
     }
   }

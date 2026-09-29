@@ -85,10 +85,16 @@
     }
   }
 
-  function applyFrame(v: { sandboxes: SandboxInfo[]; services: ServiceInfo[]; pvcs: PVCInfo[] }) {
+  function applyFrame(v: {
+    sandboxes: SandboxInfo[]
+    services: ServiceInfo[]
+    pvcs: PVCInfo[]
+    releases: HelmRelease[]
+  }) {
     sandboxes = v.sandboxes
     services = v.services
     pvcs = v.pvcs
+    releases = v.releases
     store.dataSet('service-lists', v)
     loading = false
   }
@@ -98,6 +104,20 @@
     store.dropData('service-lists')
     await seed()
     connect()
+  }
+
+  // Switching to a tab re-fetches its list (the live stream covers sandboxes/
+  // services/pvcs/releases, but a tab switch is a natural point to reconcile).
+  async function selectTab(next: typeof tab) {
+    tab = next
+    try {
+      if (next === 'releases') releases = await store.api.helmList()
+      else if (next === 'pvcs') pvcs = await store.api.listPVCs()
+      else if (next === 'services') services = await store.api.listServices()
+      else if (next === 'sandboxes') sandboxes = await store.api.listSandboxes()
+    } catch (e) {
+      showErrorToast(String(e))
+    }
   }
 
   function connect() {
@@ -235,7 +255,7 @@
 
   <TabBar>
     {#each tabDefs as tb (tb.id)}
-      <TabItem active={tab === tb.id} onclick={() => (tab = tb.id)}>
+      <TabItem active={tab === tb.id} onclick={() => void selectTab(tb.id)}>
         <tb.icon class="size-3.5" />{t(tb.key)}
       </TabItem>
     {/each}
@@ -319,7 +339,7 @@
           <EmptyState>{t('noServices')}</EmptyState>
         {/if}
       {/if}
-    {:else}
+    {:else if tab === 'pvcs'}
       {#if pvcs.length === 0}
         <EmptyState>{t('noPVCs')}</EmptyState>
       {:else}
