@@ -1,32 +1,34 @@
-// Role model — the four immutable session roles (presets) of the workspace
+// Role model — the three immutable session roles (presets) of the workspace
 // gateway. A session's role decides ONLY what it may do (tools); visibility is
 // always the whole tenant. Free roles (admin/explorer) are not bound to a
-// repo/branch; maintainer/developer ARE (branch = identity).
+// repo/branch; developer IS (branch = identity).
 //
-//   admin      tenant   create org/repo, read everything, no sandbox
-//   explorer   tenant   read every repo (no sandbox, no writes)
-//   maintainer org:repo:main      review/merge MRs, branches, releases, sandbox
-//   developer  org:repo:<branch>  write its branch, open MRs, sandbox
+//   admin      tenant          create org/repo, read everything, sandbox
+//   explorer   tenant          read every repo (sandbox, no writes)
+//   developer  org:repo:<branch>  edit in a sandbox, submit/merge MRs
+//
+// All branch sessions (main included) share the SAME developer role; what an MR
+// may be merged into depends on the MR's base, not the session's branch.
 import type { BranchSession } from './api'
 import { AppIcons } from './icons'
 
-export type Role = 'admin' | 'explorer' | 'maintainer' | 'developer'
+export type Role = 'admin' | 'explorer' | 'developer'
 
-/** The four roles in display order (free roles first). */
-export const ROLES: Role[] = ['admin', 'explorer', 'maintainer', 'developer']
+/** The roles in display order (free roles first). */
+export const ROLES: Role[] = ['admin', 'explorer', 'developer']
 
 /** Free roles: not bound to a repo/branch, any number may exist. */
 export const FREE_ROLES: Role[] = ['admin', 'explorer']
 
 /** Branch-bound roles: exactly one session per (repo, branch). */
-export const BRANCH_ROLES: Role[] = ['maintainer', 'developer']
+export const BRANCH_ROLES: Role[] = ['developer']
 
 export function isFreeRole(r: string): boolean {
   return r === 'admin' || r === 'explorer'
 }
 
 export function isBranchRole(r: string): boolean {
-  return r === 'maintainer' || r === 'developer'
+  return r === 'developer'
 }
 
 /** Role of a workspace row; free sessions carry the role explicitly. */
@@ -36,8 +38,8 @@ export function workspaceRole(w: BranchSession): string {
 
 /**
  * Resolve a session's role. Workspace rows carry it explicitly (the gateway
- * stored it); for a raw agent session fall back to the branch-derived rule
- * (`main` = maintainer, else developer) and `''` when neither.
+ * stored it); for a raw agent session fall back to `developer` when it is bound
+ * to a repo/branch and `''` otherwise.
  */
 export function roleOfSession(s: {
   preset: string
@@ -46,7 +48,7 @@ export function roleOfSession(s: {
 }): string {
   if (s.preset) return s.preset
   if (!s.org) return ''
-  return s.branch === 'main' ? 'maintainer' : 'developer'
+  return 'developer'
 }
 
 type IconComponent = typeof AppIcons.shield
@@ -57,8 +59,6 @@ export function roleIcon(r: string): IconComponent {
       return AppIcons.shield
     case 'explorer':
       return AppIcons.compass
-    case 'maintainer':
-      return AppIcons.merge
     case 'developer':
       return AppIcons.code
     default:
@@ -74,8 +74,6 @@ export function roleLabelKey(r: string): string {
       return 'roleAdmin'
     case 'explorer':
       return 'roleExplorer'
-    case 'maintainer':
-      return 'roleMaintainer'
     case 'developer':
       return 'roleDeveloper'
     default:
@@ -90,8 +88,6 @@ export function roleTone(r: string): string {
       return 'bg-destructive/12 text-destructive'
     case 'explorer':
       return 'bg-sky-500/15 text-sky-600 dark:text-sky-400'
-    case 'maintainer':
-      return 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
     case 'developer':
       return 'bg-primary/15 text-primary'
     default:

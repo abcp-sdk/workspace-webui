@@ -228,7 +228,7 @@
     const items: ContextMenuItem[] = []
     // Only a MAIN session (maintainer) can fork a new branch (with its chat
     // context); a feature-branch session must not spawn more branches.
-    if (s && roleOfSession(s) === 'maintainer') items.push({ value: 'fork', label: t('createBranchTitle') })
+    if (s && isBranchRole(roleOfSession(s))) items.push({ value: 'fork', label: t('createBranchTitle') })
     if (s && store.isUnread(s)) items.push({ value: 'read', label: t('markRead') })
     items.push({ value: 'delete', label: t('deleteSession'), destructive: true })
     return items
