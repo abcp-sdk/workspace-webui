@@ -43,30 +43,30 @@ const helmDeploy: CardHandler = ({ tool, data, input }) => {
   const fields: CardField[] = fs(
     fin(input, 'org', 'building', 'org', { mono: true }),
     fin(input, 'repo', 'book', 'repo', { mono: true }),
-    fin(input, 'ref', 'branch', 'ref', { mono: true }),
-    fin(input, 'chart-path', 'file_code', 'chart', { mono: true }),
-    fin(input, 'slot', 'layers', 'slot', { mono: true }),
+    fin(input, 'ref', 'branch', 'tcRef', { mono: true }),
+    fin(input, 'chart-path', 'file_code', 'tcChart', { mono: true }),
+    fin(input, 'slot', 'layers', 'tcSlot', { mono: true }),
     data['dry_run'] === true
-      ? { icon: 'eye', label: 'mode', value: 'dry-run', tone: 'muted' }
+      ? { icon: 'eye', label: 'tcMode', value: 'dry-run', tone: 'muted' }
       : null,
   )
   const resultFields: CardField[] = fs(
     release
-      ? { icon: 'pkg', label: 'release', value: release, mono: true }
+      ? { icon: 'pkg', label: 'tcRelease', value: release, mono: true }
       : null,
     n(data, 'revision') > 0
       ? {
           icon: 'history',
-          label: 'revision',
+          label: 'tcRevision',
           value: `rev${n(data, 'revision')}`,
           mono: true,
         }
       : null,
-    fres(data, 'status', 'success', 'status'),
+    fres(data, 'status', 'success', 'tcStatus'),
     slots.length
       ? {
           icon: 'layers',
-          label: 'slots',
+          label: 'tcSlots',
           value: slotValue({ active_slot: activeSlot, slots }),
           mono: true,
         }
@@ -74,7 +74,7 @@ const helmDeploy: CardHandler = ({ tool, data, input }) => {
     objects.length
       ? {
           icon: 'container',
-          label: 'objects',
+          label: 'tcObjects',
           value: String(objects.length),
           tone: 'muted',
         }
@@ -108,7 +108,7 @@ const helmList: CardHandler = ({ tool, data }) => {
     slots?: Slot[]
   }>(data, 'releases')
   return {
-    subtitle: 'helm releases',
+    subtitle: 'helmReleases',
     input: { fields: [] },
     result: {
       fields: [
@@ -148,13 +148,13 @@ const helmHistory: CardHandler = ({ tool, data, input }) => {
   return {
     subtitle: release ? `helm · ${release}` : 'helm-history',
     input: {
-      fields: fs(fin(input, 'release', 'pkg', 'release', { mono: true })),
+      fields: fs(fin(input, 'release', 'pkg', 'tcRelease', { mono: true })),
     },
     result: {
       fields: [
         {
           icon: 'history',
-          label: 'revisions',
+          label: 'tcRevisions',
           value: String(revisions.length),
         },
       ],
@@ -185,13 +185,13 @@ const helmAction: CardHandler = ({ tool, data, input }) => {
   const release =
     s(data, 'release') || s(data, 'name') || pick(data, input, 'release')
   const fields: CardField[] = fs(
-    fin(input, 'release', 'pkg', 'release', { mono: true }),
-    fin(input, 'revision', 'history', 'revision', { mono: true }),
-    fin(input, 'force', 'bolt', 'force'),
+    fin(input, 'release', 'pkg', 'tcRelease', { mono: true }),
+    fin(input, 'revision', 'history', 'tcRevision', { mono: true }),
+    fin(input, 'force', 'bolt', 'tcForce'),
     s(data, 'active_slot')
       ? {
           icon: 'layers',
-          label: 'active slot',
+          label: 'tcActiveSlot',
           value: s(data, 'active_slot'),
           mono: true,
         }
@@ -199,7 +199,7 @@ const helmAction: CardHandler = ({ tool, data, input }) => {
     n(data, 'revision') > 0
       ? {
           icon: 'history',
-          label: 'revision',
+          label: 'tcRevision',
           value: `rev${n(data, 'revision')}`,
           mono: true,
         }
@@ -220,7 +220,7 @@ const helmAction: CardHandler = ({ tool, data, input }) => {
   return {
     subtitle: `${action} · ${release || 'helm'}`,
     input: {
-      fields: fs(fin(input, 'release', 'pkg', 'release', { mono: true })),
+      fields: fs(fin(input, 'release', 'pkg', 'tcRelease', { mono: true })),
     },
     result: { fields, actions: cardActions },
   }

@@ -185,7 +185,7 @@
                   {:else if knob.type === 'boolean'}
                     <Select
                       value={knobValue(tl, knob)}
-                      items={[{ value: '', label: t('none') }, { value: 'true', label: 'true' }, { value: 'false', label: 'false' }]}
+                      items={[{ value: '', label: t('none') }, { value: 'true', label: t('boolTrue') }, { value: 'false', label: t('boolFalse') }]}
                       onchange={v => void saveExtConfig(tl, knob, v)}
                     />
                   {:else}

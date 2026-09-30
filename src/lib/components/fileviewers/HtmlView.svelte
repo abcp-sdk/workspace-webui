@@ -27,7 +27,7 @@
     <div class="p-6 text-center text-meta text-muted-foreground">{t('loading')}</div>
   {:else}
     <iframe
-      title="html preview"
+      title={t('htmlPreview')}
       sandbox=""
       srcdoc={html}
       class="size-full border-0 bg-white"

@@ -25,12 +25,6 @@
   let releases = $state<HelmRelease[]>([])
   let loading = $state(true)
 
-  // Group the service list into release vs preview (a view filter, not a page).
-  let stageFilter = $state<'all' | 'release' | 'preview'>('all')
-
-  const releaseServices = $derived(services.filter(s => s.stage !== 'preview'))
-  const previewServices = $derived(services.filter(s => s.stage === 'preview'))
-
   // LIVE: WatchWorkspace pushes a full frame on connect and on every change, so
   // there is no polling. A one-shot `listX()` seed paints instantly from cache
   // while the stream opens, then the stream owns the data.
@@ -149,16 +143,6 @@
     )
   }
 
-  /** Remaining TTL as a compact label (e.g. "12m", "2h"). */
-  function ttlLabel(expiresAt: number): string {
-    const ms = expiresAt - Date.now()
-    if (ms <= 0) return t('expired')
-    const mins = Math.floor(ms / 60000)
-    if (mins < 1) return '<1m'
-    if (mins < 60) return `${mins}m`
-    return `${Math.floor(mins / 60)}h`
-  }
-
   function relTime(ms: number): string {
     if (!ms) return ''
     const mins = Math.floor((Date.now() - ms) / 60000)
@@ -174,6 +158,18 @@
     if (phase === 'Pending' || phase === 'Progressing') return 'bg-warning/15 text-warning'
     if (phase === 'Failed') return 'bg-destructive/15 text-destructive'
     return 'bg-muted text-muted-foreground'
+  }
+
+  /** Localized status chip: paused → Ready → the raw k8s phase (translated). */
+  function phaseLabel(phase: string, paused = false): string {
+    if (paused) return t('servicePaused')
+    if (phase === 'Running') return t('phaseRunning')
+    if (phase === 'Pending') return t('phasePending')
+    if (phase === 'Progressing') return t('phaseProgressing')
+    if (phase === 'Failed') return t('phaseFailed')
+    if (phase === 'Bound') return t('phaseBound')
+    if (phase === 'Ready') return t('phaseReady')
+    return phase
   }
 
   /** Open the session bound to a sandbox/service (its name IS the session id). */
@@ -238,12 +234,6 @@
     { id: 'pvcs' as const, key: 'pvcs', icon: AppIcons.database },
     { id: 'releases' as const, key: 'helmReleases', icon: AppIcons.pkg },
   ]
-
-  const stageDefs = [
-    { id: 'all' as const, key: 'serviceStageAll' },
-    { id: 'release' as const, key: 'serviceStageRelease' },
-    { id: 'preview' as const, key: 'serviceStagePreview' },
-  ]
 </script>
 
 <div class="flex h-full w-full flex-col">
@@ -300,7 +290,7 @@
                 <span class="block wrap-anywhere text-[10px] text-muted-foreground">{s.creator} · {relTime(s.createdAt)}</span>
               {/if}
             </span>
-            <span class={cn('shrink-0 rounded-full px-2 py-px text-[10px]', phaseTone(s.phase))}>{s.phase}</span>
+            <span class={cn('shrink-0 rounded-full px-2 py-px text-[10px]', phaseTone(s.phase))}>{phaseLabel(s.phase)}</span>
             <button
               type="button"
               class="shrink-0 rounded p-1 text-muted-foreground hover:bg-background hover:text-destructive"
@@ -314,30 +304,9 @@
       {#if services.length === 0}
         <EmptyState>{t('noServices')}</EmptyState>
       {:else}
-        <div class="flex items-center gap-1 border-b border-border/40 px-3 py-1.5">
-          {#each stageDefs as st (st.id)}
-            <button
-              type="button"
-              class={cn('rounded-full border px-2.5 py-0.5 text-micro', stageFilter === st.id ? 'border-primary/50 bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted')}
-              onclick={() => (stageFilter = st.id)}
-            >{t(st.key)}{#if st.id === 'release'} · {releaseServices.length}{:else if st.id === 'preview'} · {previewServices.length}{/if}</button>
-          {/each}
-        </div>
-        {#if (stageFilter === 'all' || stageFilter === 'release') && releaseServices.length > 0}
-          <div class="border-b border-border/40 bg-muted/30 px-3 py-1 text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">{t('serviceStageRelease')} · {releaseServices.length}</div>
-          {#each releaseServices as sv (sv.name)}
-            {@render serviceRow(sv)}
-          {/each}
-        {/if}
-        {#if (stageFilter === 'all' || stageFilter === 'preview') && previewServices.length > 0}
-          <div class="border-b border-border/40 bg-warning/5 px-3 py-1 text-[10px] font-semibold tracking-wider text-warning uppercase">{t('serviceStagePreview')} · {previewServices.length}</div>
-          {#each previewServices as sv (sv.name)}
-            {@render serviceRow(sv)}
-          {/each}
-        {/if}
-        {#if stageFilter !== 'all' && (stageFilter === 'release' ? releaseServices : previewServices).length === 0}
-          <EmptyState>{t('noServices')}</EmptyState>
-        {/if}
+        {#each services as sv (sv.name)}
+          {@render serviceRow(sv)}
+        {/each}
       {/if}
     {:else if tab === 'pvcs'}
       {#if pvcs.length === 0}
@@ -362,7 +331,7 @@
                 </span>
               {/if}
             </span>
-            <span class={cn('shrink-0 rounded-full px-2 py-px text-[10px]', p.phase === 'Bound' ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground')}>{p.phase}</span>
+            <span class={cn('shrink-0 rounded-full px-2 py-px text-[10px]', p.phase === 'Bound' ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground')}>{phaseLabel(p.phase)}</span>
           </ListRow>
         {/each}
       {/if}
@@ -407,7 +376,6 @@
     <span class="min-w-0 flex-1">
       <span class="flex min-w-0 items-center gap-2">
         <span class="wrap-anywhere text-meta font-semibold">{sv.name}</span>
-        {#if sv.stage === 'preview'}<span class="shrink-0 rounded-full bg-warning/15 px-1.5 py-px text-[9px] leading-4 text-warning">{t('serviceStagePreview')}</span>{/if}
       </span>
       <span class="block break-all whitespace-pre-wrap text-[10px] text-muted-foreground">{sv.image}</span>
       <span class="mt-0.5 flex min-w-0 items-start gap-1 text-[10px] text-muted-foreground">
@@ -425,7 +393,7 @@
         {:else}
           <span class="min-w-0 break-all whitespace-pre-wrap">{t('roleAdmin')}</span>
         {/if}
-        <span class="shrink-0">· {sv.readyReplicas}/{sv.replicas} ready</span>
+        <span class="shrink-0">· {sv.readyReplicas}/{sv.replicas} {t('serviceReadySuffix')}</span>
       </span>
       {#if sv.ports.length}
         <span class="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
@@ -456,11 +424,8 @@
           <button type="button" class="shrink-0 rounded p-0.5 hover:bg-muted" title={t('copy')} onclick={e => { e.stopPropagation(); copyUrl(sv.url) }}><AppIcons.copy class="size-3" /></button>
         </span>
       {/if}
-      {#if sv.stage === 'preview' && sv.expiresAt > 0}
-        <span class="mt-0.5 block text-[10px] text-warning">{t('serviceTtl')}: {ttlLabel(sv.expiresAt)}</span>
-      {/if}
     </span>
-    <span class={cn('shrink-0 rounded-full px-2 py-px text-[10px]', phaseTone(sv.phase, sv.paused))}>{sv.paused ? t('servicePaused') : sv.ready ? 'Ready' : sv.phase}</span>
+    <span class={cn('shrink-0 rounded-full px-2 py-px text-[10px]', phaseTone(sv.phase, sv.paused))}>{phaseLabel(sv.ready ? 'Ready' : sv.phase, sv.paused)}</span>
     <button
       type="button"
       class="shrink-0 rounded p-1 text-muted-foreground hover:bg-background hover:text-primary"

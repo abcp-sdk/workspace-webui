@@ -257,14 +257,14 @@
     )
   }
 
-  /** Remaining TTL as a compact label (e.g. "12m", "2h"). */
-  function ttlLabel(expiresAt: number): string {
-    const ms = expiresAt - Date.now()
-    if (ms <= 0) return t('expired')
-    const mins = Math.floor(ms / 60000)
-    if (mins < 1) return '<1m'
-    if (mins < 60) return `${mins}m`
-    return `${Math.floor(mins / 60)}h`
+  /** Localized k8s phase (Running/Pending/…); unknown phases pass through. */
+  function phaseLabel(phase: string): string {
+    if (phase === 'Running') return t('phaseRunning')
+    if (phase === 'Pending') return t('phasePending')
+    if (phase === 'Progressing') return t('phaseProgressing')
+    if (phase === 'Failed') return t('phaseFailed')
+    if (phase === 'Bound') return t('phaseBound')
+    return phase
   }
 
   const SNAPSHOT_TAIL = 500
@@ -316,8 +316,7 @@
     {#if showBack}<IconButton icon={AppIcons.back} onclick={() => store.popPage()} />{/if}
     <AppIcons.server class="size-4 shrink-0 text-primary" />
     <span class="min-w-0 flex-1 wrap-anywhere text-base font-semibold">{name}</span>
-    {#if svc?.stage === 'preview'}<span class="shrink-0 rounded-full bg-warning/15 px-2 py-px text-[10px] text-warning">{t('serviceStagePreview')}</span>{/if}
-    {#if svc}<span class="shrink-0 rounded-full bg-muted px-2 py-px text-[10px] leading-4 text-muted-foreground">{svc.paused ? t('servicePaused') : svc.ready ? 'Ready' : svc.phase}</span>{/if}
+    {#if svc}<span class="shrink-0 rounded-full bg-muted px-2 py-px text-[10px] leading-4 text-muted-foreground">{svc.paused ? t('servicePaused') : svc.ready ? t('phaseReady') : phaseLabel(svc.phase)}</span>{/if}
     {#if svc}
       <IconButton
         icon={svc.paused ? AppIcons.play : AppIcons.pause}
@@ -353,9 +352,6 @@
           {:else}
             <span>{svc.session}</span>
           {/if}
-        {/if}
-        {#if svc.stage === 'preview' && svc.expiresAt > 0}
-          <span class="text-warning">{t('serviceTtl')}: {ttlLabel(svc.expiresAt)}</span>
         {/if}
       </div>
       {#if svc.message}
@@ -467,7 +463,7 @@
                   <AppIcons.database class="size-3 text-primary" />
                   <span class="text-foreground">{v.pvc}</span>
                   <span>→ {v.mountPath}</span>
-                  {#if v.readOnly}<span class="rounded bg-muted px-1">ro</span>{/if}
+                  {#if v.readOnly}<span class="rounded bg-muted px-1">{t('roBadge')}</span>{/if}
                   {#if v.subPath}<span>sub: {v.subPath}</span>{/if}
                 </div>
               {/each}

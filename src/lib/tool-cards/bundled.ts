@@ -28,15 +28,15 @@ const history: CardHandler = ({ tool, data, input }) => {
     subtitle: 'history',
     input: {
       fields: fs(
-        fin(input, 'query', 'search', 'query'),
-        fin(input, 'start', 'clock', 'start'),
-        fin(input, 'end', 'clock', 'end'),
-        fin(input, 'limit', 'list', 'limit', { mono: true }),
+        fin(input, 'query', 'search', 'tcQuery'),
+        fin(input, 'start', 'clock', 'tcStart'),
+        fin(input, 'end', 'clock', 'tcEnd'),
+        fin(input, 'limit', 'list', 'tcLimit', { mono: true }),
       ),
     },
     result: {
       fields: [
-        { icon: 'history', label: 'entries', value: String(entries.length) },
+        { icon: 'history', label: 'tcEntries', value: String(entries.length) },
       ],
       body: entries.length ? { kind: 'messages', entries } : undefined,
     },
@@ -85,15 +85,15 @@ const fileRead: CardHandler = ({ tool, data, input, output }) => {
     input: {
       fields: fs(
         fin(input, 'code', 'file', 'code', { mono: true }),
-        fin(input, 'name', 'file_code', 'name', { mono: true }),
-        fin(input, 'offset', 'list', 'offset', { mono: true }),
-        fin(input, 'limit', 'list', 'limit', { mono: true }),
+        fin(input, 'name', 'file_code', 'tcName', { mono: true }),
+        fin(input, 'offset', 'list', 'tcOffset', { mono: true }),
+        fin(input, 'limit', 'list', 'tcLimit', { mono: true }),
       ),
     },
     result: {
       fields: fs(
         range
-          ? { icon: 'list', label: 'lines', value: range, mono: true }
+          ? { icon: 'list', label: 'tcLines', value: range, mono: true }
           : null,
       ),
       body: {
@@ -115,8 +115,8 @@ const webFetch: CardHandler = ({ tool, data, input, output }) => {
     subtitle: url,
     input: {
       fields: fs(
-        fin(input, 'url', 'link', 'url', { mono: true, tone: 'muted' }),
-        fin(input, 'format', 'list', 'format', { tone: 'muted' }),
+        fin(input, 'url', 'link', 'tcUrl', { mono: true, tone: 'muted' }),
+        fin(input, 'format', 'list', 'tcFormat', { tone: 'muted' }),
       ),
     },
     result: {
@@ -124,14 +124,14 @@ const webFetch: CardHandler = ({ tool, data, input, output }) => {
         ctype
           ? {
               icon: 'file',
-              label: 'type',
+              label: 'tcType',
               value: ctype,
               mono: true,
               tone: 'muted',
             }
           : null,
         format
-          ? { icon: 'list', label: 'format', value: format, tone: 'muted' }
+          ? { icon: 'list', label: 'tcFormat', value: format, tone: 'muted' }
           : null,
       ),
       body: { kind: 'markdown', text: output },
@@ -152,9 +152,9 @@ const audioTranscribe: CardHandler = ({ tool, data, input, output }) => {
     result: {
       fields: fs(
         s(data, 'name')
-          ? { icon: 'file', label: 'name', value: s(data, 'name') }
+          ? { icon: 'file', label: 'tcName', value: s(data, 'name') }
           : null,
-        fres(data, 'model', 'server', 'model', { mono: true, tone: 'muted' }),
+        fres(data, 'model', 'server', 'tcModel', { mono: true, tone: 'muted' }),
       ),
       body: code
         ? { kind: 'audio', code, caption: output }
@@ -169,11 +169,11 @@ const tts: CardHandler = ({ tool, data, input }) => {
   const first = files[0]
   const text = pick(data, input, 'text')
   return {
-    subtitle: 'tts',
+    subtitle: 'tcTts',
     input: {
       fields: fs(
-        fin(input, 'model', 'server', 'model', { mono: true, tone: 'muted' }),
-        fin(input, 'reference', 'file', 'reference', {
+        fin(input, 'model', 'server', 'tcModel', { mono: true, tone: 'muted' }),
+        fin(input, 'reference', 'file', 'tcReference', {
           mono: true,
           tone: 'muted',
         }),
@@ -183,8 +183,8 @@ const tts: CardHandler = ({ tool, data, input }) => {
     },
     result: {
       fields: fs(
-        fres(data, 'model', 'server', 'model', { mono: true, tone: 'muted' }),
-        fres(data, 'reference', 'file', 'reference', {
+        fres(data, 'model', 'server', 'tcModel', { mono: true, tone: 'muted' }),
+        fres(data, 'reference', 'file', 'tcReference', {
           mono: true,
           tone: 'muted',
         }),
@@ -209,9 +209,9 @@ const imageRead: CardHandler = ({ tool, data, input, output }) => {
     result: {
       fields: fs(
         s(data, 'name')
-          ? { icon: 'file', label: 'name', value: s(data, 'name') }
+          ? { icon: 'file', label: 'tcName', value: s(data, 'name') }
           : null,
-        fres(data, 'model', 'server', 'model', { mono: true, tone: 'muted' }),
+        fres(data, 'model', 'server', 'tcModel', { mono: true, tone: 'muted' }),
       ),
       body: code
         ? {
@@ -236,15 +236,15 @@ const generation: CardHandler = ({ tool, data, input }) => {
     subtitle: tool,
     input: {
       fields: fs(
-        fin(input, 'prompt', 'sparkles', 'prompt'),
-        fin(input, 'source', 'file', 'source', { mono: true, tone: 'muted' }),
+        fin(input, 'prompt', 'sparkles', 'tcPrompt'),
+        fin(input, 'source', 'file', 'tcSource', { mono: true, tone: 'muted' }),
         fin(input, 'code', 'file', 'code', { mono: true, tone: 'muted' }),
       ),
     },
     result: {
       fields: fs(
-        fres(data, 'model', 'server', 'model', { mono: true, tone: 'muted' }),
-        fres(data, 'source', 'file', 'source', { mono: true, tone: 'muted' }),
+        fres(data, 'model', 'server', 'tcModel', { mono: true, tone: 'muted' }),
+        fres(data, 'source', 'file', 'tcSource', { mono: true, tone: 'muted' }),
       ),
     },
   }
@@ -259,17 +259,17 @@ const subsessionCreate: CardHandler = ({ tool, data, input }) => {
     subtitle: name || 'subsession',
     input: {
       fields: fs(
-        fin(input, 'name', 'bot', 'session', { mono: true }),
-        fin(input, 'description', 'info', 'label'),
+        fin(input, 'name', 'bot', 'tcSession', { mono: true }),
+        fin(input, 'description', 'info', 'tcLabel'),
       ),
       body: prompt ? { kind: 'text', text: prompt } : undefined,
     },
     result: {
       fields: fs(
         name
-          ? { icon: 'bot', label: 'session', value: name, mono: true }
+          ? { icon: 'bot', label: 'tcSession', value: name, mono: true }
           : null,
-        desc ? { icon: 'info', label: 'label', value: desc } : null,
+        desc ? { icon: 'info', label: 'tcLabel', value: desc } : null,
       ),
     },
   }
@@ -282,12 +282,12 @@ const mailSend: CardHandler = ({ tool, data, input }) => {
   return {
     subtitle: to || 'mail',
     input: {
-      fields: fs(fin(input, 'to', 'mail', 'to', { mono: true })),
+      fields: fs(fin(input, 'to', 'mail', 'tcTo', { mono: true })),
       body: text ? { kind: 'text', text } : undefined,
     },
     result: {
       fields: fs(
-        to ? { icon: 'mail', label: 'to', value: to, mono: true } : null,
+        to ? { icon: 'mail', label: 'tcTo', value: to, mono: true } : null,
       ),
     },
   }
@@ -302,10 +302,10 @@ const braveSearch: CardHandler = ({ tool, data, input }) => {
   const query = s(data, 'query') || pick(data, input, 'query')
   return {
     subtitle: query || 'search',
-    input: { fields: fs(fin(input, 'query', 'search', 'query')) },
+    input: { fields: fs(fin(input, 'query', 'search', 'tcQuery')) },
     result: {
       fields: [
-        { icon: 'list', label: 'results', value: String(results.length) },
+        { icon: 'list', label: 'tcResults', value: String(results.length) },
       ],
       body: results.length
         ? {
@@ -327,13 +327,13 @@ const timeWait: CardHandler = ({ tool, data, input }) => {
   return {
     subtitle: `${seconds}s`,
     input: {
-      fields: fs(fin(input, 'seconds', 'clock', 'seconds', { mono: true })),
+      fields: fs(fin(input, 'seconds', 'clock', 'tcSeconds', { mono: true })),
     },
     result: {
       fields: [
         {
           icon: 'clock',
-          label: 'waited',
+          label: 'tcWaited',
           value: `${seconds}s`,
           mono: true,
           tone: 'muted',

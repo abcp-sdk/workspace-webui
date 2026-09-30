@@ -1195,7 +1195,13 @@ export class AgentApi {
     name: string,
     tailLines = 500,
     previous = false,
-  ): Promise<{ lines: string[]; phase: string; restarts: number; message: string; available: boolean }> {
+  ): Promise<{
+    lines: string[]
+    phase: string
+    restarts: number
+    message: string
+    available: boolean
+  }> {
     const r = await this._guard(() =>
       this._c.sandboxLogs({ name, tailLines: BigInt(tailLines), previous }),
     )
@@ -1444,11 +1450,9 @@ export interface ServiceInfo {
   ports: ServicePortInfo[]
   creator: string
   session: string
-  stage: string
   podPhase: string
   restarts: number
   message: string
-  expiresAt: number
   /** Scaled to zero by PauseService (resume restores the prior count). */
   paused: boolean
   /** Deployment creation time (unix ms); the list is sorted by this desc. */
@@ -1665,11 +1669,9 @@ type PbServiceInfo = {
   }[]
   creator: string
   session: string
-  stage: string
   podPhase: string
   restarts: number
   message: string
-  expiresAt: bigint
   paused: boolean
   createdAt: bigint
   cpu: string
@@ -1741,11 +1743,9 @@ function serviceFromPb(s: PbServiceInfo): ServiceInfo {
     })),
     creator: s.creator,
     session: s.session,
-    stage: s.stage,
     podPhase: s.podPhase,
     restarts: s.restarts,
     message: s.message,
-    expiresAt: Number(s.expiresAt),
     paused: s.paused,
     createdAt: Number(s.createdAt),
     cpu: s.cpu,

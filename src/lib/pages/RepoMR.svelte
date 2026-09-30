@@ -3,7 +3,7 @@
   // read-only comment thread. Opened from the Changes sub-tab.
   import type { PageProps } from '$lib/page-props'
   import type { MRInfo } from '$lib/api'
-  import { t } from '$lib/i18n.svelte'
+  import { mrStateLabel, t } from '$lib/i18n.svelte'
   import { showErrorToast } from '$lib/toast.svelte'
   import { cn } from '$lib/utils'
   import { AppIcons } from '$lib/icons'
@@ -73,7 +73,7 @@
     <AppIcons.merge class="size-4 shrink-0 text-muted-foreground" />
     <span class="min-w-0 flex-1 truncate text-base font-semibold">#{index} {mr?.title ?? ''}</span>
     {#if mr}
-      <span class={cn('shrink-0 rounded-full px-2 py-px text-[10px]', mr.merged ? 'bg-violet-500/15 text-violet-500' : mr.state === 'open' ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground')}>{mr.merged ? t('merged') : mr.state}</span>
+      <span class={cn('shrink-0 rounded-full px-2 py-px text-[10px]', mr.merged ? 'bg-violet-500/15 text-violet-500' : mr.state === 'open' ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground')}>{mr.merged ? t('merged') : mrStateLabel(mr.state)}</span>
     {/if}
   </PageHeader>
 

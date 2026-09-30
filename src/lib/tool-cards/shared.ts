@@ -1,7 +1,30 @@
 // Shared types + small readers for the tool-card registry. The registry is
 // split by domain (repo / images / sandbox / bundled); every domain handler
 // receives a {@link CardCtx} built once from the tool call.
+
+import { t } from '../i18n.svelte'
 import type { AppPage } from '../nav'
+
+/** Localize a k8s phase (Running/Pending/…) for a card row; unknown phases
+ *  pass through unchanged. */
+export function phaseLabel(phase: string): string {
+  switch (phase) {
+    case 'Running':
+      return t('phaseRunning')
+    case 'Pending':
+      return t('phasePending')
+    case 'Progressing':
+      return t('phaseProgressing')
+    case 'Failed':
+      return t('phaseFailed')
+    case 'Bound':
+      return t('phaseBound')
+    case 'Ready':
+      return t('phaseReady')
+    default:
+      return phase
+  }
+}
 
 /** One labelled row on a card. */
 export interface CardField {

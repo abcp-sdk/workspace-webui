@@ -13,7 +13,7 @@ import {
   fres,
   fs,
   n,
-  parentOfPath,
+  phaseLabel,
   pick,
   s,
   short,
@@ -29,27 +29,32 @@ const sandboxCreate: CardHandler = ({ tool, data, input }) => {
     subtitle: name,
     input: {
       fields: fs(
-        fin(input, 'name', 'box', 'name', { mono: true }),
-        fin(input, 'worker-name', 'box', 'sandbox', { mono: true }),
+        fin(input, 'name', 'box', 'tcName', { mono: true }),
+        fin(input, 'worker-name', 'box', 'tcSandbox', { mono: true }),
         fin(input, 'image', 'box', 'image', { mono: true }),
-        fin(input, 'cpu', 'server', 'cpu', { mono: true }),
-        fin(input, 'memory', 'server', 'memory', { mono: true }),
+        fin(input, 'cpu', 'server', 'tcCpu', { mono: true }),
+        fin(input, 'memory', 'server', 'tcMemory', { mono: true }),
         input['kvm'] === true
-          ? { icon: 'server', label: 'kvm', value: 'yes', tone: 'muted' }
+          ? { icon: 'server', label: 'tcKvm', value: 'yes', tone: 'muted' }
           : null,
-        fin(input, 'gpu-count', 'server', 'gpus', { mono: true }),
+        fin(input, 'gpu-count', 'server', 'tcGpus', { mono: true }),
       ),
     },
     result: {
       fields: fs(
         fres(data, 'image', 'box', 'image', { mono: true }),
-        fres(data, 'phase', 'success', 'phase'),
-        fres(data, 'url', 'link', 'url', { mono: true, tone: 'muted' }),
-        fres(data, 'creator', 'user', 'creator', { tone: 'muted' }),
+        fres(data, 'phase', 'success', 'tcPhase'),
+        fres(data, 'url', 'link', 'tcUrl', { mono: true, tone: 'muted' }),
+        fres(data, 'creator', 'user', 'tcCreator', { tone: 'muted' }),
         n(data, 'restarts') > 0
-          ? { icon: 'history', label: 'restarts', value: String(n(data, 'restarts')), tone: 'muted' }
+          ? {
+              icon: 'history',
+              label: 'tcRestarts',
+              value: String(n(data, 'restarts')),
+              tone: 'muted',
+            }
           : null,
-        fres(data, 'message', 'error', 'reason', { tone: 'destructive' }),
+        fres(data, 'message', 'error', 'tcReason', { tone: 'destructive' }),
       ),
       actions: [{ label: name, icon: 'box', page: P.sandboxPage(name) }],
     },
@@ -74,17 +79,17 @@ const sandboxCheckout: CardHandler = ({
       fields: fs(
         fin(input, 'org', 'building', 'org', { mono: true }),
         fin(input, 'repo', 'folder', 'repo', { mono: true }),
-        fin(input, 'ref', 'branch', 'ref', { mono: true }),
-        fin(input, 'dest', 'folder', 'dest', { mono: true }),
+        fin(input, 'ref', 'branch', 'tcRef', { mono: true }),
+        fin(input, 'dest', 'folder', 'tcDest', { mono: true }),
         input['clean'] === true
-          ? { icon: 'delete', label: 'clean', value: 'yes', tone: 'muted' }
+          ? { icon: 'delete', label: 'tcClean', value: 'yes', tone: 'muted' }
           : null,
       ),
     },
     result: {
       fields: fs(
         dest
-          ? { icon: 'folder', label: 'dest', value: dest, mono: true }
+          ? { icon: 'folder', label: 'tcDest', value: dest, mono: true }
           : null,
         { icon: 'file_code', label: 'files', value: String(files) },
       ),
@@ -116,9 +121,9 @@ const sandboxPort: CardHandler = ({
       fields: fs(
         fin(input, 'org', 'building', 'org', { mono: true }),
         fin(input, 'repo', 'folder', 'repo', { mono: true }),
-        fin(input, 'path', 'file_code', 'path', { mono: true }),
-        fin(input, 'repo-path', 'file_code', 'repo-path', { mono: true }),
-        fin(input, 'message', 'commit', 'message'),
+        fin(input, 'path', 'file_code', 'tcPath', { mono: true }),
+        fin(input, 'repo-path', 'file_code', 'tcRepoPath', { mono: true }),
+        fin(input, 'message', 'commit', 'tcMessage'),
       ),
     },
     result: {
@@ -138,7 +143,7 @@ const sandboxPort: CardHandler = ({
             }
           : null,
         sha
-          ? { icon: 'commit', label: 'commit', value: short(sha), mono: true }
+          ? { icon: 'commit', label: 'tcCommit', value: short(sha), mono: true }
           : null,
       ),
       // Prefer the unified diff (green/red); fall back to the plain path list
@@ -162,7 +167,7 @@ const sandboxPort: CardHandler = ({
 }
 
 const serviceDeploy: CardHandler = ({ tool, data, input }) => {
-  if (tool !== 'service-deploy' && tool !== 'service-preview') return null
+  if (tool !== 'service-deploy') return null
   const name = s(data, 'name') || pick(data, input, 'name')
   const ports = arr<{
     name: string
@@ -177,17 +182,17 @@ const serviceDeploy: CardHandler = ({ tool, data, input }) => {
     subtitle: name || 'service',
     input: {
       fields: fs(
-        fin(input, 'name', 'server', 'name', { mono: true }),
+        fin(input, 'name', 'server', 'tcName', { mono: true }),
         fin(input, 'image', 'box', 'image', { mono: true }),
-        fin(input, 'container-port', 'server', 'port', { mono: true }),
-        fin(input, 'replicas', 'server', 'replicas', { mono: true }),
-        fin(input, 'cpu', 'server', 'cpu', { mono: true }),
-        fin(input, 'memory', 'server', 'memory', { mono: true }),
-        fin(input, 'ttl-seconds', 'clock', 'ttl', { mono: true }),
+        fin(input, 'container-port', 'server', 'tcPort', { mono: true }),
+        fin(input, 'replicas', 'server', 'tcReplicas', { mono: true }),
+        fin(input, 'cpu', 'server', 'tcCpu', { mono: true }),
+        fin(input, 'memory', 'server', 'tcMemory', { mono: true }),
+        fin(input, 'ttl-seconds', 'clock', 'tcTtl', { mono: true }),
         serviceSpecs.length
           ? {
               icon: 'server',
-              label: 'ports',
+              label: 'tcPorts',
               value: serviceSpecs.map(vstr).join(', '),
               mono: true,
               tone: 'muted',
@@ -198,14 +203,14 @@ const serviceDeploy: CardHandler = ({ tool, data, input }) => {
     result: {
       fields: fs(
         name
-          ? { icon: 'server', label: 'name', value: name, mono: true }
+          ? { icon: 'server', label: 'tcName', value: name, mono: true }
           : null,
-        fres(data, 'phase', 'success', 'phase'),
-        fres(data, 'url', 'link', 'url', { mono: true, tone: 'muted' }),
+        fres(data, 'phase', 'success', 'tcPhase'),
+        fres(data, 'url', 'link', 'tcUrl', { mono: true, tone: 'muted' }),
         n(data, 'replicas')
           ? {
               icon: 'server',
-              label: 'replicas',
+              label: 'tcReplicas',
               value: String(n(data, 'replicas')),
               tone: 'muted',
             }
@@ -227,16 +232,21 @@ const serviceLogs: CardHandler = ({ tool, data, input, output }) => {
     subtitle: name,
     input: {
       fields: fs(
-        fin(input, 'name', 'server', 'name', { mono: true }),
-        fin(input, 'tail-lines', 'list', 'tail', { mono: true }),
+        fin(input, 'name', 'server', 'tcName', { mono: true }),
+        fin(input, 'tail-lines', 'list', 'tcTail', { mono: true }),
         input['previous'] === true
-          ? { icon: 'history', label: 'previous', value: 'yes', tone: 'muted' }
+          ? {
+              icon: 'history',
+              label: 'tcPrevious',
+              value: 'yes',
+              tone: 'muted',
+            }
           : null,
       ),
     },
     result: {
       fields: [
-        { icon: 'terminal', label: 'lines', value: String(n(data, 'lines')) },
+        { icon: 'terminal', label: 'tcLines', value: String(n(data, 'lines')) },
       ],
       // The actual log text (the output carries a header line + the log lines).
       body: output ? { kind: 'terminal', text: output } : undefined,
@@ -250,7 +260,9 @@ const serviceDelete: CardHandler = ({ tool, data, input }) => {
   const name = s(data, 'name') || pick(data, input, 'name')
   return {
     subtitle: name,
-    input: { fields: fs(fin(input, 'name', 'server', 'name', { mono: true })) },
+    input: {
+      fields: fs(fin(input, 'name', 'server', 'tcName', { mono: true })),
+    },
     result: {
       fields: [
         {
@@ -293,11 +305,11 @@ const sandboxExec: CardHandler = ({ tool, data, input, output }) => {
     input: {
       // The command reads like a terminal invocation; the other args stay fields.
       fields: fs(
-        fin(input, 'worker-name', 'box', 'sandbox', { mono: true }),
-        fin(input, 'job-id', 'terminal', 'job', { mono: true }),
-        fin(input, 'offset', 'list', 'offset', { mono: true }),
-        fin(input, 'limit', 'list', 'limit', { mono: true }),
-        fin(input, 'stream', 'list', 'stream', { mono: true }),
+        fin(input, 'worker-name', 'box', 'tcSandbox', { mono: true }),
+        fin(input, 'job-id', 'terminal', 'tcJob', { mono: true }),
+        fin(input, 'offset', 'list', 'tcOffset', { mono: true }),
+        fin(input, 'limit', 'list', 'tcLimit', { mono: true }),
+        fin(input, 'stream', 'list', 'tcStream', { mono: true }),
       ),
       body: command
         ? {
@@ -311,12 +323,12 @@ const sandboxExec: CardHandler = ({ tool, data, input, output }) => {
     result: {
       fields: fs(
         jobId
-          ? { icon: 'terminal', label: 'job', value: jobId, mono: true }
+          ? { icon: 'terminal', label: 'tcJob', value: jobId, mono: true }
           : null,
         state
           ? {
               icon: state === 'running' ? 'more' : 'success',
-              label: 'state',
+              label: 'tcState',
               value: state,
               tone: state === 'running' ? 'muted' : 'success',
             }
@@ -363,7 +375,7 @@ const sandboxJobList: CardHandler = ({ tool, data, input, output }) => {
   return {
     subtitle: sandbox || 'jobs',
     input: {
-      fields: fs(fin(input, 'worker-name', 'box', 'sandbox', { mono: true })),
+      fields: fs(fin(input, 'worker-name', 'box', 'tcSandbox', { mono: true })),
     },
     result: {
       fields: [{ icon: 'terminal', label: 'jobs', value: String(count) }],
@@ -389,8 +401,8 @@ const sandboxJobCtl: CardHandler = ({ tool, data, input }) => {
     subtitle: jobId,
     input: {
       fields: fs(
-        fin(input, 'worker-name', 'box', 'sandbox', { mono: true }),
-        fin(input, 'job-id', 'terminal', 'job', { mono: true }),
+        fin(input, 'worker-name', 'box', 'tcSandbox', { mono: true }),
+        fin(input, 'job-id', 'terminal', 'tcJob', { mono: true }),
         input['close'] === true
           ? { icon: 'delete', label: 'close', value: 'yes', tone: 'muted' }
           : null,
@@ -413,16 +425,16 @@ const sandboxFileRead: CardHandler = ({ tool, data, input, output }) => {
     subtitle: path || 'read',
     input: {
       fields: fs(
-        fin(input, 'worker-name', 'box', 'sandbox', { mono: true }),
-        fin(input, 'path', 'file_code', 'path', { mono: true }),
-        fin(input, 'offset', 'list', 'offset', { mono: true }),
-        fin(input, 'limit', 'list', 'limit', { mono: true }),
+        fin(input, 'worker-name', 'box', 'tcSandbox', { mono: true }),
+        fin(input, 'path', 'file_code', 'tcPath', { mono: true }),
+        fin(input, 'offset', 'list', 'tcOffset', { mono: true }),
+        fin(input, 'limit', 'list', 'tcLimit', { mono: true }),
       ),
     },
     result: {
       fields: fs(
         range
-          ? { icon: 'list', label: 'lines', value: range, mono: true }
+          ? { icon: 'list', label: 'tcLines', value: range, mono: true }
           : null,
       ),
       // Show the READ CONTENT with its true absolute line numbers (the gutter
@@ -447,49 +459,30 @@ const sandboxFileRead: CardHandler = ({ tool, data, input, output }) => {
   }
 }
 
-const sandboxFileWrite: CardHandler = ({ tool, data, input }) => {
-  if (tool !== 'sandbox-file-write' && tool !== 'sandbox-file-edit') return null
-  const path = pick(data, input, 'path')
+const sandboxFilePatch: CardHandler = ({ tool, data, input }) => {
+  if (tool !== 'sandbox-file-patch') return null
   const sandbox = pick(data, input, 'worker-name')
+  const changed = arr<{ path: string; kind: string; lines: number }>(
+    data,
+    'changed',
+  )
   const added = n(data, 'added')
   const removed = n(data, 'removed')
-  const content = pick(data, input, 'content')
-  const start = n(input, 'start-anchor-line')
   const d = s(data, 'diff')
+  const patchText = s(input, 'patch-text')
+  const subtitle =
+    changed.length === 1
+      ? changed[0]!.path
+      : changed.length > 1
+        ? `${changed.length} files`
+        : 'patch'
   return {
-    subtitle: path || tool,
+    subtitle,
     input: {
-      fields: fs(
-        fin(input, 'worker-name', 'box', 'sandbox', { mono: true }),
-        fin(input, 'path', 'file_code', 'path', { mono: true }),
-        ...(tool === 'sandbox-file-edit'
-          ? [
-              fin(input, 'start-anchor-line', 'target', 'anchor above line', {
-                mono: true,
-              }),
-              fin(input, 'start-anchor', 'target', 'anchor above', {
-                mono: true,
-              }),
-              fin(input, 'end-anchor-line', 'target', 'anchor below line', {
-                mono: true,
-              }),
-              fin(input, 'end-anchor', 'target', 'anchor below', {
-                mono: true,
-              }),
-            ]
-          : []),
-      ),
-      // The written/inserted payload, with line numbers for an edit.
-      body: content
-        ? {
-            kind: 'code',
-            name: basename(path),
-            text: content,
-            ...(tool === 'sandbox-file-edit' &&
-            input['start-anchor-line'] !== undefined
-              ? { startLine: start + 1 }
-              : {}),
-          }
+      fields: fs(fin(input, 'worker-name', 'box', 'tcSandbox', { mono: true })),
+      // The patch language itself, shown as a code body.
+      body: patchText
+        ? { kind: 'code', name: 'patch', text: patchText }
         : undefined,
     },
     result: {
@@ -503,26 +496,17 @@ const sandboxFileWrite: CardHandler = ({ tool, data, input }) => {
               tone: diffTone(added, removed),
             }
           : null,
-        n(data, 'lines')
-          ? {
-              icon: 'list',
-              label: 'lines',
-              value: String(n(data, 'lines')),
-              tone: 'muted',
-            }
-          : null,
       ),
       body: d ? { kind: 'diff', diff: d } : undefined,
-      actions:
-        sandbox && path
-          ? [
-              {
-                label: path,
-                icon: 'folder',
-                page: P.sandboxFilesPage(sandbox, path),
-              },
-            ]
-          : [],
+      actions: sandbox
+        ? [
+            {
+              label: 'tcSandbox',
+              icon: 'folder',
+              page: P.sandboxFilesPage(sandbox, ''),
+            },
+          ]
+        : [],
     },
   }
 }
@@ -541,17 +525,17 @@ const sandboxFileLs: CardHandler = ({ tool, data, input }) => {
     subtitle: path || '/',
     input: {
       fields: fs(
-        fin(input, 'worker-name', 'box', 'sandbox', { mono: true }),
-        fin(input, 'path', 'folder', 'path', { mono: true }),
-        fin(input, 'depth', 'list', 'depth', { mono: true }),
-        fin(input, 'limit', 'list', 'limit', { mono: true }),
+        fin(input, 'worker-name', 'box', 'tcSandbox', { mono: true }),
+        fin(input, 'path', 'folder', 'tcPath', { mono: true }),
+        fin(input, 'depth', 'list', 'tcDepth', { mono: true }),
+        fin(input, 'limit', 'list', 'tcLimit', { mono: true }),
       ),
     },
     result: {
       fields: [
         {
           icon: 'folder',
-          label: 'entries',
+          label: 'tcEntries',
           value: String(entries.length || n(data, 'rows')),
         },
       ],
@@ -569,63 +553,25 @@ const sandboxFileLs: CardHandler = ({ tool, data, input }) => {
   }
 }
 
-const sandboxFileRm: CardHandler = ({ tool, data, input }) => {
-  if (tool !== 'sandbox-file-rm') return null
-  const path = pick(data, input, 'path')
-  const sandbox = pick(data, input, 'worker-name')
-  const parent = parentOfPath(path)
-  return {
-    subtitle: path || 'rm',
-    input: {
-      fields: fs(
-        fin(input, 'worker-name', 'box', 'sandbox', { mono: true }),
-        fin(input, 'path', 'file_code', 'path', { mono: true }),
-      ),
-    },
-    result: {
-      fields: fs(
-        data['deleted'] === true
-          ? {
-              icon: 'delete',
-              label: 'deleted',
-              value: path,
-              mono: true,
-              tone: 'destructive',
-            }
-          : null,
-      ),
-      actions: sandbox
-        ? [
-            {
-              label: parent || '/',
-              icon: 'folder',
-              page: P.sandboxFilesPage(sandbox, parent),
-            },
-          ]
-        : [],
-    },
-  }
-}
-
 const sandboxInfo: CardHandler = ({ tool, data, input }) => {
   if (tool !== 'sandbox-info') return null
   return {
-    subtitle: 'sandbox',
+    subtitle: 'tcSandbox',
     input: {
-      fields: fs(fin(input, 'worker-name', 'box', 'sandbox', { mono: true })),
+      fields: fs(fin(input, 'worker-name', 'box', 'tcSandbox', { mono: true })),
     },
     result: {
       fields: fs(
         s(data, 'os')
           ? {
               icon: 'server',
-              label: 'os',
+              label: 'tcOs',
               value: `${s(data, 'os')}/${s(data, 'arch')}`,
             }
           : null,
-        fres(data, 'shell', 'terminal', 'shell', { mono: true }),
+        fres(data, 'shell', 'terminal', 'tcShell', { mono: true }),
         fres(data, 'workspace', 'folder', 'workspace', { mono: true }),
-        fres(data, 'url', 'link', 'url', { mono: true, tone: 'muted' }),
+        fres(data, 'url', 'link', 'tcUrl', { mono: true, tone: 'muted' }),
       ),
     },
   }
@@ -643,10 +589,10 @@ const sandboxFileTransfer: CardHandler = ({ tool, data, input }) => {
     subtitle: path || code || tool,
     input: {
       fields: fs(
-        fin(input, 'worker-name', 'box', 'sandbox', { mono: true }),
+        fin(input, 'worker-name', 'box', 'tcSandbox', { mono: true }),
         fin(input, 'code', 'file', 'code', { mono: true }),
-        fin(input, 'path', 'file_code', 'path', { mono: true }),
-        fin(input, 'name', 'file', 'name', { mono: true }),
+        fin(input, 'path', 'file_code', 'tcPath', { mono: true }),
+        fin(input, 'name', 'file', 'tcName', { mono: true }),
       ),
     },
     result: {
@@ -673,7 +619,6 @@ const serviceList: CardHandler = ({ tool, data }) => {
     image: string
     url: string
     session: string
-    stage: string
     replicas: number
     ready_replicas: number
     publicUrl: string
@@ -689,14 +634,13 @@ const serviceList: CardHandler = ({ tool, data }) => {
         ? {
             kind: 'list',
             rows: services.map(s => {
-              const stage = s.stage === 'preview' ? 'preview' : 'release'
               const reps =
                 s.replicas != null
                   ? ` · ${s.ready_replicas ?? 0}/${s.replicas}`
                   : ''
               return {
                 label: s.name,
-                sub: `${stage} · ${s.phase}${reps}${s.publicUrl ? ` · ${s.publicUrl}` : s.url ? ` · ${s.url}` : ''}`,
+                sub: `${phaseLabel(s.phase)}${reps}${s.publicUrl ? ` · ${s.publicUrl}` : s.url ? ` · ${s.url}` : ''}`,
                 icon: 'server',
                 tone: s.phase === 'Running' ? 'success' : 'muted',
                 link: P.servicePage(s.name),
@@ -732,9 +676,14 @@ const sandboxList: CardHandler = ({ tool, data }) => {
             kind: 'list',
             rows: sandboxes.map(s => ({
               label: s.name,
-              sub: `${s.phase}${s.image ? ` · ${s.image}` : ''}${s.message ? ` · ${s.message}` : s.restarts ? ` · restarts=${s.restarts}` : ''}`,
+              sub: `${phaseLabel(s.phase)}${s.image ? ` · ${s.image}` : ''}${s.message ? ` · ${s.message}` : s.restarts ? ` · restarts=${s.restarts}` : ''}`,
               icon: 'box',
-              tone: s.phase === 'Running' ? 'success' : s.message ? 'destructive' : 'muted',
+              tone:
+                s.phase === 'Running'
+                  ? 'success'
+                  : s.message
+                    ? 'destructive'
+                    : 'muted',
               link: P.sandboxPage(s.name),
             })),
           }
@@ -751,21 +700,23 @@ const sandboxLogs: CardHandler = ({ tool, data, input, output }) => {
     subtitle: name ? `${name} · logs` : 'logs',
     input: {
       fields: fs(
-        fin(input, 'worker-name', 'box', 'sandbox', { mono: true }),
+        fin(input, 'worker-name', 'box', 'tcSandbox', { mono: true }),
         input['previous'] === true
-          ? { icon: 'clock', label: 'previous', value: 'yes', tone: 'muted' }
+          ? { icon: 'clock', label: 'tcPrevious', value: 'yes', tone: 'muted' }
           : null,
       ),
     },
     result: {
       fields: fs(
-        fres(data, 'restarts', 'history', 'restarts', { tone: 'muted' }),
-        fres(data, 'message', 'error', 'reason', { tone: 'destructive' }),
+        fres(data, 'restarts', 'history', 'tcRestarts', { tone: 'muted' }),
+        fres(data, 'message', 'error', 'tcReason', { tone: 'destructive' }),
         lines > 0
-          ? { icon: 'file_code', label: 'lines', value: String(lines) }
+          ? { icon: 'file_code', label: 'tcLines', value: String(lines) }
           : null,
       ),
-      body: output ? { kind: 'code', name: `${name}.log`, text: output } : undefined,
+      body: output
+        ? { kind: 'code', name: `${name}.log`, text: output }
+        : undefined,
     },
   }
 }
@@ -776,7 +727,7 @@ const sandboxDelete: CardHandler = ({ tool, data, input }) => {
   return {
     subtitle: name,
     input: {
-      fields: fs(fin(input, 'worker-name', 'box', 'sandbox', { mono: true })),
+      fields: fs(fin(input, 'worker-name', 'box', 'tcSandbox', { mono: true })),
     },
     result: {
       fields: fs(
@@ -801,22 +752,22 @@ const pvcCreate: CardHandler = ({ tool, data, input }) => {
     subtitle: name || 'pvc',
     input: {
       fields: fs(
-        fin(input, 'name', 'server', 'name', { mono: true }),
-        fin(input, 'size', 'list', 'size', { mono: true }),
-        fin(input, 'storage-class', 'server', 'class', { mono: true }),
+        fin(input, 'name', 'server', 'tcName', { mono: true }),
+        fin(input, 'size', 'list', 'tcSize', { mono: true }),
+        fin(input, 'storage-class', 'server', 'tcClass', { mono: true }),
       ),
     },
     result: {
       fields: fs(
         name
-          ? { icon: 'server', label: 'name', value: name, mono: true }
+          ? { icon: 'server', label: 'tcName', value: name, mono: true }
           : null,
-        fres(data, 'size', 'list', 'size', { mono: true }),
-        fres(data, 'storage_class', 'server', 'class', {
+        fres(data, 'size', 'list', 'tcSize', { mono: true }),
+        fres(data, 'storage_class', 'server', 'tcClass', {
           mono: true,
           tone: 'muted',
         }),
-        fres(data, 'phase', 'success', 'phase'),
+        fres(data, 'phase', 'success', 'tcPhase'),
       ),
     },
   }
@@ -847,7 +798,7 @@ const pvcList: CardHandler = ({ tool, data }) => {
             kind: 'list',
             rows: pvcs.map(p => ({
               label: p.name,
-              sub: `${p.phase} · ${p.size}${p.storage_class ? ` · class=${p.storage_class}` : ''}${(p.mounted_by ?? []).length ? ` · mounted-by=${(p.mounted_by ?? []).join(',')}` : ''}`,
+              sub: `${phaseLabel(p.phase)} · ${p.size}${p.storage_class ? ` · class=${p.storage_class}` : ''}${(p.mounted_by ?? []).length ? ` · mounted-by=${(p.mounted_by ?? []).join(',')}` : ''}`,
               icon: 'server',
               tone:
                 p.phase === 'Bound' ? ('success' as const) : ('muted' as const),
@@ -864,7 +815,7 @@ const pvcDelete: CardHandler = ({ tool, data, input }) => {
   return {
     subtitle: name,
     input: {
-      fields: fs(fin(input, 'name', 'server', 'name', { mono: true })),
+      fields: fs(fin(input, 'name', 'server', 'tcName', { mono: true })),
     },
     result: {
       fields: fs(
@@ -894,9 +845,8 @@ export const sandboxHandlers: CardHandler[] = [
   sandboxJobList,
   sandboxJobCtl,
   sandboxFileRead,
-  sandboxFileWrite,
+  sandboxFilePatch,
   sandboxFileLs,
-  sandboxFileRm,
   sandboxInfo,
   sandboxFileTransfer,
   sandboxDelete,

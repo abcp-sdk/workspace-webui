@@ -13,6 +13,13 @@
   import CodeSurface from './CodeSurface.svelte'
   import MediaAttachment from './MediaAttachment.svelte'
   import { openViewer } from '$lib/fileviewer.svelte'
+  import { t } from '$lib/i18n.svelte'
+
+  /** Localize a card label: a `tc*`/existing i18n key resolves; a literal
+   *  (a dynamic value like a path) passes through unchanged. */
+  function lbl(key: string): string {
+    return t(key)
+  }
 
   let {
     section,
@@ -56,13 +63,13 @@
         onclick={() => store?.openCodePage(f.link!)}
       >
         <Icon class="size-[13px] shrink-0 text-primary" />
-        <span class="shrink-0 text-muted-foreground">{f.label}</span>
+        <span class="shrink-0 text-muted-foreground">{lbl(f.label)}</span>
         <span class={cn('min-w-0 flex-1 truncate text-right', f.mono && 'font-mono', toneClass(f.tone))}>{f.value}</span>
       </button>
     {:else}
       <div class="flex min-w-0 items-center gap-1.5 px-1 py-0.5 text-micro" title={f.value}>
         <Icon class="size-[13px] shrink-0 text-primary" />
-        <span class="shrink-0 text-muted-foreground">{f.label}</span>
+        <span class="shrink-0 text-muted-foreground">{lbl(f.label)}</span>
         <span class={cn('min-w-0 flex-1 truncate text-right', f.mono && 'font-mono', toneClass(f.tone))}>{f.value}</span>
       </div>
     {/if}
@@ -192,8 +199,8 @@
         <pre class="max-h-72 min-w-0 overflow-auto p-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-green-200">{b.text || ' '}</pre>
         {#if b.state || b.exitCode !== undefined}
           <div class="border-t border-white/10 px-2 py-1 font-mono text-[10px]">
-            {#if b.state === 'running'}<span class="text-warning">running</span>
-            {:else if b.exitCode !== undefined}<span class={b.exitCode === 0 ? 'text-success' : 'text-destructive'}>exit {b.exitCode}</span>
+            {#if b.state === 'running'}<span class="text-warning">{t('tcRunning')}</span>
+            {:else if b.exitCode !== undefined}<span class={b.exitCode === 0 ? 'text-success' : 'text-destructive'}>{t('tcExit')} {b.exitCode}</span>
             {:else}<span class="text-white/40">{b.state}</span>{/if}
           </div>
         {/if}
@@ -206,8 +213,8 @@
         </div>
         {#if b.workdir || b.timeout}
           <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5 border-t border-white/10 px-2 py-1 font-mono text-[10px] text-white/40">
-            {#if b.workdir}<span>cwd: <span class="text-white/70">{b.workdir}</span></span>{/if}
-            {#if b.timeout}<span>timeout: <span class="text-white/70">{b.timeout}s</span></span>{/if}
+            {#if b.workdir}<span>{t('tcCwd')}: <span class="text-white/70">{b.workdir}</span></span>{/if}
+            {#if b.timeout}<span>{t('tcTimeout')}: <span class="text-white/70">{b.timeout}s</span></span>{/if}
           </div>
         {/if}
       </div>

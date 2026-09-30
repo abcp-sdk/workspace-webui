@@ -41,10 +41,10 @@
   ] as const)
 
   // Agent language is an explicit zh/en (no "follow UI language" mode).
-  const agentLocaleOptions = [
-    ['zh', '中文'],
-    ['en', 'English'],
-  ] as const satisfies ReadonlyArray<readonly ['zh' | 'en', string]>
+  const agentLocaleOptions = $derived([
+    ['zh', t('langZh')],
+    ['en', t('langEn')],
+  ] as const satisfies ReadonlyArray<readonly ['zh' | 'en', string]>)
 
   function themeLabel(m: string): string {
     return themeOptions.find(([v]) => v === m)?.[1] ?? t('followSystem')
@@ -216,7 +216,7 @@
   <Dialog bind:open={pickLocaleOpen} title={t('language')}>
     {#snippet children()}
       <div class="flex flex-col">
-        {#each [['system', t('followSystem')], ['zh', '中文'], ['en', 'English']] as [code, label] (code)}
+        {#each [['system', t('followSystem')], ['zh', t('langZh')], ['en', t('langEn')]] as [code, label] (code)}
           <button
             type="button"
             class="flex w-full items-center gap-3 rounded-sm px-3 py-2.5 text-left text-body hover:bg-muted"

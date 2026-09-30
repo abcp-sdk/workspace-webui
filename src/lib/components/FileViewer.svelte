@@ -164,8 +164,8 @@
         <button
           type="button"
           class="absolute right-2 z-10 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
-          title="Next"
-          aria-label="Next"
+          title={t('next')}
+          aria-label={t('next')}
           onclick={viewerNext}
         >
           <AppIcons.chevron_right class="size-5" />

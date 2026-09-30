@@ -70,7 +70,7 @@
               <span class="block truncate text-micro text-muted-foreground">{p.id}</span>
             </span>
             {#if p.isSystem}
-              <span class="rounded-full bg-muted px-1.5 py-px text-[10px] text-muted-foreground">system</span>
+              <span class="rounded-full bg-muted px-1.5 py-px text-[10px] text-muted-foreground">{t('systemPreset')}</span>
             {/if}
             <span class="text-micro text-muted-foreground">{p.tools.length} {t('tools')}</span>
             {#if expanded.has(p.id)}<AppIcons.chevron_up class="size-4 text-muted-foreground" />{:else}<AppIcons.chevron_down class="size-4 text-muted-foreground" />{/if}

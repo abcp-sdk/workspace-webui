@@ -1,13 +1,8 @@
-// Image / OCI cards: build an image, build a preview, import an OCI image,
-// and list the catalog.
+// Image / OCI cards: build an image, import an OCI image, and list the catalog.
 import { arr, type CardCtx, type CardHandler, fin, fs, s } from './shared'
 
 const repoBuildImage: CardHandler = ({ tool, data, input, output }) => {
-  if (
-    tool !== 'repo-build-image' &&
-    tool !== 'repo-build-preview' &&
-    tool !== 'oci-import'
-  ) {
+  if (tool !== 'repo-build-image' && tool !== 'oci-import') {
     return null
   }
   const imageRef = s(data, 'image_ref')
@@ -19,12 +14,12 @@ const repoBuildImage: CardHandler = ({ tool, data, input, output }) => {
       fields: fs(
         fin(input, 'org', 'building', 'org', { mono: true }),
         fin(input, 'image', 'box', 'image', { mono: true }),
-        fin(input, 'name', 'box', 'name', { mono: true }),
-        fin(input, 'tag', 'tag', 'tag', { mono: true }),
-        fin(input, 'source', 'link', 'source', { mono: true }),
-        fin(input, 'dockerfile', 'file_code', 'dockerfile', { mono: true }),
-        fin(input, 'context', 'folder', 'context', { mono: true }),
-        fin(input, 'tag-suffix', 'tag', 'suffix', { mono: true }),
+        fin(input, 'name', 'box', 'tcName', { mono: true }),
+        fin(input, 'tag', 'tag', 'tcTag', { mono: true }),
+        fin(input, 'source', 'link', 'tcSource', { mono: true }),
+        fin(input, 'dockerfile', 'file_code', 'tcDockerfile', { mono: true }),
+        fin(input, 'context', 'folder', 'tcContext', { mono: true }),
+        fin(input, 'tag-suffix', 'tag', 'tcSuffix', { mono: true }),
       ),
     },
     result: {
@@ -33,12 +28,18 @@ const repoBuildImage: CardHandler = ({ tool, data, input, output }) => {
           ? { icon: 'box', label: 'image', value: imageRef, mono: true }
           : null,
         tag
-          ? { icon: 'tag', label: 'tag', value: tag, mono: true, tone: 'muted' }
+          ? {
+              icon: 'tag',
+              label: 'tcTag',
+              value: tag,
+              mono: true,
+              tone: 'muted',
+            }
           : null,
         source
           ? {
               icon: 'link',
-              label: 'source',
+              label: 'tcSource',
               value: source,
               mono: true,
               tone: 'muted',
@@ -60,15 +61,17 @@ const listOciImages: CardHandler = ({ tool, data, input }) => {
     ref?: string
   }>(data, 'images')
   return {
-    subtitle: 'oci',
+    subtitle: 'tcOci',
     input: {
       fields: fs(
-        fin(input, 'owner', 'building', 'owner', { mono: true }),
-        fin(input, 'name', 'box', 'name', { mono: true }),
+        fin(input, 'owner', 'building', 'tcOwner', { mono: true }),
+        fin(input, 'name', 'box', 'tcName', { mono: true }),
       ),
     },
     result: {
-      fields: [{ icon: 'box', label: 'images', value: String(images.length) }],
+      fields: [
+        { icon: 'box', label: 'tcImages', value: String(images.length) },
+      ],
       body: images.length ? { kind: 'images', images } : undefined,
     },
   }

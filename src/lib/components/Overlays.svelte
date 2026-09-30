@@ -6,6 +6,7 @@
   import { Input } from '$lib/components/ui/input'
   import { Textarea } from '$lib/components/ui/textarea'
   import { actionSheet as actionSheetStore, overlays, resolveConfirm, resolveDialog, resolveSheet } from '$lib/overlays.svelte'
+  import { t } from '$lib/i18n.svelte'
   import { cn } from '$lib/utils'
 
   let promptValue = $state('')
@@ -38,12 +39,12 @@
       type="button"
       class="rounded-md px-3 py-1.5 text-sm hover:bg-muted"
       onclick={() => resolveDialog(null)}
-    >{overlays.dialog?.cancelLabel ?? 'Cancel'}</button>
+    >{overlays.dialog?.cancelLabel || t('cancel')}</button>
     <button
       type="button"
       class="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/80"
       onclick={() => resolveDialog(promptValue.trim())}
-    >{overlays.dialog?.confirmLabel ?? 'OK'}</button>
+    >{overlays.dialog?.confirmLabel || t('confirm')}</button>
   {/snippet}
 </Dialog>
 
@@ -52,8 +53,8 @@
   open={confirmOpen}
   title={overlays.confirm?.title ?? ''}
   body={overlays.confirm?.body ?? ''}
-  confirmLabel={overlays.confirm?.confirmLabel ?? 'OK'}
-  cancelLabel={overlays.confirm?.cancelLabel ?? 'Cancel'}
+  confirmLabel={overlays.confirm?.confirmLabel || t('confirm')}
+  cancelLabel={overlays.confirm?.cancelLabel || t('cancel')}
   destructive={overlays.confirm?.destructive ?? false}
   onConfirm={() => resolveConfirm(true)}
   onCancel={() => resolveConfirm(false)}

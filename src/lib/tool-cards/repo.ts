@@ -41,20 +41,20 @@ const repoFileRead: CardHandler = ({
     subtitle: at,
     input: {
       fields: fs(
-        fin(input, 'path', 'file_code', 'path', { mono: true }),
-        fin(input, 'offset', 'list', 'offset', { mono: true }),
-        fin(input, 'limit', 'list', 'limit', { mono: true }),
+        fin(input, 'path', 'file_code', 'tcPath', { mono: true }),
+        fin(input, 'offset', 'list', 'tcOffset', { mono: true }),
+        fin(input, 'limit', 'list', 'tcLimit', { mono: true }),
       ),
     },
     result: {
       fields: fs(
         range
-          ? { icon: 'list', label: 'lines', value: range, mono: true }
+          ? { icon: 'list', label: 'tcLines', value: range, mono: true }
           : null,
         sha
           ? {
               icon: 'commit',
-              label: 'blob',
+              label: 'tcBlob',
               value: short(sha),
               mono: true,
               tone: 'muted',
@@ -98,11 +98,11 @@ const repoFileList: CardHandler = ({
   return {
     subtitle: at,
     input: {
-      fields: fs(fin(input, 'path', 'file_code', 'path', { mono: true })),
+      fields: fs(fin(input, 'path', 'file_code', 'tcPath', { mono: true })),
     },
     result: {
       fields: [
-        { icon: 'list', label: 'entries', value: String(entries.length) },
+        { icon: 'list', label: 'tcEntries', value: String(entries.length) },
       ],
       body: entries.length ? { kind: 'entries', entries } : undefined,
       actions: [
@@ -133,8 +133,8 @@ const repoLog: CardHandler = ({
     subtitle: path ? `${at} : ${path}` : at,
     input: {
       fields: fs(
-        fin(input, 'path', 'file_code', 'path', { mono: true }),
-        fin(input, 'limit', 'list', 'limit', { mono: true }),
+        fin(input, 'path', 'file_code', 'tcPath', { mono: true }),
+        fin(input, 'limit', 'list', 'tcLimit', { mono: true }),
       ),
     },
     result: {
@@ -174,12 +174,12 @@ const repoShow: CardHandler = ({
   const diff = s(data, 'diff')
   return {
     subtitle: at,
-    input: { fields: fs(fin(input, 'sha', 'commit', 'sha', { mono: true })) },
+    input: { fields: fs(fin(input, 'sha', 'commit', 'tcSha', { mono: true })) },
     result: {
       fields: fs(
         {
           icon: 'commit',
-          label: 'commit',
+          label: 'tcCommit',
           value: short(sha),
           mono: true,
         } as CardField,
@@ -187,7 +187,7 @@ const repoShow: CardHandler = ({
           ? [
               {
                 icon: 'user',
-                label: 'author',
+                label: 'tcAuthor',
                 value: s(c, 'author'),
               } as CardField,
             ]
@@ -196,7 +196,7 @@ const repoShow: CardHandler = ({
           ? [
               {
                 icon: 'clock',
-                label: 'date',
+                label: 'tcDate',
                 value: s(c, 'date'),
                 mono: true,
                 tone: 'muted',
@@ -241,8 +241,8 @@ const repoDiff: CardHandler = ({ tool, data, input, org, repo }) => {
     subtitle: `${org}/${repo}`,
     input: {
       fields: fs(
-        fin(input, 'base', 'diff', 'base', { mono: true }),
-        fin(input, 'head', 'diff', 'head', { mono: true }),
+        fin(input, 'base', 'diff', 'tcBase', { mono: true }),
+        fin(input, 'head', 'diff', 'tcHead', { mono: true }),
       ),
     },
     result: {
@@ -300,27 +300,27 @@ const repoFileWrite: CardHandler = ({
         : 'delete'
   const content = pick(data, input, 'content')
   const inputFields = fs(
-    fin(input, 'path', 'file_code', 'path', { mono: true }),
+    fin(input, 'path', 'file_code', 'tcPath', { mono: true }),
     ...(tool === 'repo-file-edit'
       ? [
-          fin(input, 'start-anchor-line', 'target', 'anchor above line', {
+          fin(input, 'start-anchor-line', 'target', 'tcAnchorAboveLine', {
             mono: true,
           }),
-          fin(input, 'start-anchor', 'target', 'anchor above', {
+          fin(input, 'start-anchor', 'target', 'tcAnchorAbove', {
             mono: true,
           }),
-          fin(input, 'end-anchor-line', 'target', 'anchor below line', {
+          fin(input, 'end-anchor-line', 'target', 'tcAnchorBelowLine', {
             mono: true,
           }),
-          fin(input, 'end-anchor', 'target', 'anchor below', {
+          fin(input, 'end-anchor', 'target', 'tcAnchorBelow', {
             mono: true,
           }),
         ]
       : []),
-    fin(input, 'message', 'commit', 'message'),
+    fin(input, 'message', 'commit', 'tcMessage'),
   )
   const resultFields = fs(
-    { icon: 'commit', label: 'commit', value: short(sha), mono: true },
+    { icon: 'commit', label: 'tcCommit', value: short(sha), mono: true },
     added || removed
       ? {
           icon: 'diff',
@@ -396,12 +396,12 @@ const repoCommit: CardHandler = ({
   const fanned = n(data, 'fanned')
   return {
     subtitle: at,
-    input: { fields: fs(fin(input, 'message', 'commit', 'message')) },
+    input: { fields: fs(fin(input, 'message', 'commit', 'tcMessage')) },
     result: {
       fields: fs(
         {
           icon: 'commit',
-          label: 'commit',
+          label: 'tcCommit',
           value: short(sha),
           mono: true,
         } as CardField,
@@ -443,14 +443,14 @@ const repoFileRestore: CardHandler = ({
     subtitle: at,
     input: {
       fields: fs(
-        fin(input, 'path', 'file_code', 'path', { mono: true }),
-        fin(input, 'from', 'history', 'from', { mono: true }),
+        fin(input, 'path', 'file_code', 'tcPath', { mono: true }),
+        fin(input, 'from', 'history', 'tcFrom', { mono: true }),
       ),
     },
     result: {
       fields: fs(
         binary
-          ? { icon: 'binary', label: 'binary', value: 'yes', tone: 'muted' }
+          ? { icon: 'binary', label: 'binaryFile', value: 'yes', tone: 'muted' }
           : null,
       ),
       actions: sha
@@ -487,7 +487,7 @@ const repoBranchSync: CardHandler = ({
       fields: [
         {
           icon: clean ? 'success' : 'error',
-          label: 'status',
+          label: 'tcStatus',
           value: clean ? 'clean' : `${conflicts.length} conflicts`,
           tone: clean ? 'success' : 'destructive',
         },
@@ -556,7 +556,7 @@ const repoBranchCreate: CardHandler = ({
     input: {
       fields: fs(
         fin(input, 'name', 'folder', 'branch', { mono: true }),
-        fin(input, 'from', 'history', 'from', { mono: true }),
+        fin(input, 'from', 'history', 'tcFrom', { mono: true }),
       ),
     },
     result: {
@@ -579,8 +579,8 @@ const repoTagCreate: CardHandler = ({ tool, data, input, org, repo, at }) => {
     subtitle: at,
     input: {
       fields: fs(
-        fin(input, 'name', 'tag', 'tag', { mono: true }),
-        fin(input, 'target', 'history', 'target', { mono: true }),
+        fin(input, 'name', 'tag', 'tcTag', { mono: true }),
+        fin(input, 'target', 'history', 'tcTarget', { mono: true }),
       ),
     },
     result: {
@@ -617,14 +617,14 @@ const repoMr: CardHandler = ({ tool, data, input, org, repo, index }) => {
     input: {
       fields: fs(
         indexArg
-          ? { icon: 'merge', label: 'mr', value: `#${indexArg}`, mono: true }
+          ? { icon: 'merge', label: 'tcMr', value: `#${indexArg}`, mono: true }
           : null,
-        title ? { icon: 'info', label: 'title', value: title } : null,
+        title ? { icon: 'info', label: 'tcTitle', value: title } : null,
         ...(head && base
           ? [
               {
                 icon: 'diff',
-                label: 'range',
+                label: 'tcRange',
                 value: `${head} → ${base}`,
                 mono: true,
               } as CardField,
@@ -636,12 +636,12 @@ const repoMr: CardHandler = ({ tool, data, input, org, repo, index }) => {
     result: {
       fields: fs(
         indexRes
-          ? { icon: 'merge', label: 'mr', value: `#${indexRes}`, mono: true }
+          ? { icon: 'merge', label: 'tcMr', value: `#${indexRes}`, mono: true }
           : null,
         url
           ? {
               icon: 'link',
-              label: 'url',
+              label: 'tcUrl',
               value: url,
               mono: true,
               tone: 'muted',
@@ -667,9 +667,9 @@ const repoMrList: CardHandler = ({ tool, data, input, org, repo }) => {
   }>(data, 'pulls')
   return {
     subtitle: `${org}/${repo}`,
-    input: { fields: fs(fin(input, 'state', 'list', 'state')) },
+    input: { fields: fs(fin(input, 'state', 'list', 'tcState')) },
     result: {
-      fields: [{ icon: 'merge', label: 'open', value: String(pulls.length) }],
+      fields: [{ icon: 'merge', label: 'tcOpen', value: String(pulls.length) }],
       body: pulls.length ? { kind: 'pulls', pulls, org, repo } : undefined,
     },
   }
@@ -683,16 +683,16 @@ const repoExplore: CardHandler = ({ tool, data, input, org }) => {
     fields: fs(
       fin(input, 'org', 'building', 'org', { mono: true }),
       fin(input, 'repo', 'folder', 'repo', { mono: true }),
-      fin(input, 'keyword', 'search', 'keyword'),
+      fin(input, 'keyword', 'search', 'tcKeyword'),
     ),
   }
   if (orgs.length) {
     return {
-      subtitle: 'orgs',
+      subtitle: 'tcOrgs',
       input: inputSection,
       result: {
         fields: [
-          { icon: 'building', label: 'orgs', value: String(orgs.length) },
+          { icon: 'building', label: 'tcOrgs', value: String(orgs.length) },
         ],
         body: {
           kind: 'list',
@@ -708,7 +708,7 @@ const repoExplore: CardHandler = ({ tool, data, input, org }) => {
       input: inputSection,
       result: {
         fields: [
-          { icon: 'folder', label: 'repos', value: String(list.length) },
+          { icon: 'folder', label: 'tcRepos', value: String(list.length) },
         ],
         body: {
           kind: 'list',
@@ -742,10 +742,10 @@ const repoImport: CardHandler = ({ tool, data, input, org, repo }) => {
     input: {
       fields: fs(
         fin(input, 'org', 'building', 'org', { mono: true }),
-        fin(input, 'url', 'link', 'url', { mono: true }),
+        fin(input, 'url', 'link', 'tcUrl', { mono: true }),
         fin(input, 'repo', 'folder', 'repo', { mono: true }),
-        fin(input, 'ref', 'branch', 'ref', { mono: true }),
-        fin(input, 'auth-user', 'user', 'auth-user', { tone: 'muted' }),
+        fin(input, 'ref', 'branch', 'tcRef', { mono: true }),
+        fin(input, 'auth-user', 'user', 'tcAuthUser', { tone: 'muted' }),
       ),
     },
     result: {
@@ -777,24 +777,24 @@ const repoSetPushMirror: CardHandler = ({ tool, data, input, at }) => {
     subtitle: at || 'push mirror',
     input: {
       fields: fs(
-        fin(input, 'remote-url', 'link', 'url', { mono: true }),
-        fin(input, 'interval', 'clock', 'interval', { mono: true }),
-        fin(input, 'branch-filter', 'branch', 'filter', { mono: true }),
-        fin(input, 'auth-user', 'user', 'auth-user', { tone: 'muted' }),
+        fin(input, 'remote-url', 'link', 'tcUrl', { mono: true }),
+        fin(input, 'interval', 'clock', 'tcInterval', { mono: true }),
+        fin(input, 'branch-filter', 'branch', 'tcFilter', { mono: true }),
+        fin(input, 'auth-user', 'user', 'tcAuthUser', { tone: 'muted' }),
         input['sync-on-commit'] === true
-          ? { icon: 'commit', label: 'on-commit', value: 'yes', tone: 'muted' }
+          ? { icon: 'commit', label: 'tcOnCommit', value: 'yes', tone: 'muted' }
           : null,
       ),
     },
     result: {
       fields: fs(
         name
-          ? { icon: 'branch', label: 'remote', value: name, mono: true }
+          ? { icon: 'branch', label: 'tcRemote', value: name, mono: true }
           : null,
         interval
           ? {
               icon: 'clock',
-              label: 'interval',
+              label: 'tcInterval',
               value: interval,
               mono: true,
               tone: 'muted',
@@ -802,7 +802,7 @@ const repoSetPushMirror: CardHandler = ({ tool, data, input, at }) => {
           : null,
         {
           icon: 'commit',
-          label: 'on-commit',
+          label: 'tcOnCommit',
           value: onCommit ? 'yes' : 'no',
           tone: 'muted',
         },
@@ -819,7 +819,7 @@ const repoListPushMirrors: CardHandler = ({ tool, data, at }) => {
     input: { fields: [] },
     result: {
       fields: [
-        { icon: 'branch', label: 'mirrors', value: String(mirrors.length) },
+        { icon: 'branch', label: 'tcMirrors', value: String(mirrors.length) },
       ],
       body: mirrors.length
         ? {
@@ -844,7 +844,9 @@ const repoDeletePushMirror: CardHandler = ({ tool, input, at }) => {
   return {
     subtitle: at || 'push mirror',
     input: {
-      fields: fs(fin(input, 'remote-name', 'branch', 'remote', { mono: true })),
+      fields: fs(
+        fin(input, 'remote-name', 'branch', 'tcRemote', { mono: true }),
+      ),
     },
     result: { fields: [] },
   }
@@ -864,7 +866,7 @@ const repoRemove: CardHandler = ({ tool, input, org, repo }) => {
       fields: [
         {
           icon: 'delete',
-          label: 'removed',
+          label: 'tcRemoved',
           value: `${org}/${repo}`,
           mono: true,
           tone: 'destructive',
@@ -938,7 +940,7 @@ const repoMailSend: CardHandler = ({ tool, data, input, org, repo }) => {
     result: {
       fields: fs(
         session
-          ? { icon: 'mail', label: 'to', value: session, mono: true }
+          ? { icon: 'mail', label: 'tcTo', value: session, mono: true }
           : null,
       ),
     },

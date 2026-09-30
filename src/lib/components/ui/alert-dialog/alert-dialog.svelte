@@ -3,13 +3,14 @@
   import { AlertDialog as AlertDialogPrimitive } from 'bits-ui'
   import type { Snippet } from 'svelte'
   import { cn } from '$lib/utils'
+  import { t } from '$lib/i18n.svelte'
 
   let {
     open = $bindable(false),
     title = '',
     body = '',
-    confirmLabel = 'OK',
-    cancelLabel = 'Cancel',
+    confirmLabel = t('confirm'),
+    cancelLabel = t('cancel'),
     destructive = false,
     onConfirm,
     onCancel,

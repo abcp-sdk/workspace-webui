@@ -5,7 +5,7 @@
   // Releases / Changes (MRs). Everything is GET-only.
   import type { BranchInfo, CommitInfo, MRInfo, ReleaseInfo, TagInfo, TreeEntry } from '$lib/api'
   import type { PageProps } from '$lib/page-props'
-  import { t } from '$lib/i18n.svelte'
+  import { mrStateLabel, t } from '$lib/i18n.svelte'
   import { showErrorToast } from '$lib/toast.svelte'
   import { formatBytes } from '$lib/media'
   import { cn } from '$lib/utils'
@@ -406,7 +406,7 @@
                 {#if m.additions || m.deletions}<span class="ml-1 font-mono text-success">+{m.additions}</span> <span class="font-mono text-destructive">-{m.deletions}</span>{/if}
               </span>
             </span>
-            <span class={cn('shrink-0 rounded-full px-2 py-px text-[10px]', m.merged ? 'bg-violet-500/15 text-violet-500' : m.state === 'open' ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground')}>{m.merged ? t('merged') : m.state}</span>
+            <span class={cn('shrink-0 rounded-full px-2 py-px text-[10px]', m.merged ? 'bg-violet-500/15 text-violet-500' : m.state === 'open' ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground')}>{m.merged ? t('merged') : mrStateLabel(m.state)}</span>
           </ListRow>
         {/each}
       {/if}

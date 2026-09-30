@@ -59,8 +59,8 @@
         <Select
           bind:value={locale}
           items={[
-            { value: 'zh', label: '中文' },
-            { value: 'en', label: 'English' },
+            { value: 'zh', label: t('langZh') },
+            { value: 'en', label: t('langEn') },
           ]}
         />
       </label>

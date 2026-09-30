@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
+import { setLocale, t } from './i18n.svelte'
 import { bareToolName, cardFor } from './tool-cards'
+
+// Labels are i18n KEYS; resolve them to English for readable assertions.
+setLocale('en')
+const labels = (fields: ReadonlyArray<{ label: string }>) =>
+  fields.map(f => t(f.label).toLowerCase())
+const hasLabel = <T extends { label: string }>(
+  fields: ReadonlyArray<T>,
+  name: string,
+) => fields.find(f => t(f.label).toLowerCase() === name.toLowerCase())
 
 describe('bareToolName', () => {
   it('strips one extension qualifier', () => {
@@ -29,13 +39,9 @@ describe('cardFor', () => {
     )!
     expect(c.subtitle).toBe('acme/web @ main')
     // INPUT: the call's arguments.
-    expect(c.input.fields.map(f => f.label)).toEqual([
-      'path',
-      'offset',
-      'limit',
-    ])
+    expect(labels(c.input.fields)).toEqual(['path', 'offset', 'limit'])
     // RESULT: line range + blob sha + the read content with its line numbers.
-    expect(c.result.fields.map(f => f.label)).toEqual(['lines', 'blob'])
+    expect(labels(c.result.fields)).toEqual(['lines', 'blob'])
     expect(c.result.fields[0]!.value).toBe('L1–L40 / 100')
     expect(c.result.body).toMatchObject({
       kind: 'code',
@@ -96,16 +102,14 @@ describe('cardFor', () => {
       text: 'new',
       startLine: 1,
     })
-    expect(c.input.fields.map(f => f.label)).toEqual([
+    expect(labels(c.input.fields)).toEqual([
       'path',
       'anchor above line',
       'anchor below line',
       'anchor below',
     ])
     // The diff/changes belong to the RESULT.
-    expect(c.result.fields.find(f => f.label === 'changes')!.value).toBe(
-      '+3 −1',
-    )
+    expect(hasLabel(c.result.fields, 'changes')!.value).toBe('+3 −1')
     expect(c.result.body).toEqual({ kind: 'diff', diff: '@@ -1 +1 @@' })
     expect(c.result.actions!.map(a => a.page.kind)).toEqual([
       'repo_commit',
@@ -125,10 +129,8 @@ describe('cardFor', () => {
       },
       { base: 'main', head: 'feat' },
     )!
-    expect(c.input.fields.map(f => f.label)).toEqual(['base', 'head'])
-    expect(c.result.fields.find(f => f.label === 'changes')!.value).toBe(
-      '+2 −5',
-    )
+    expect(labels(c.input.fields)).toEqual(['base', 'head'])
+    expect(hasLabel(c.result.fields, 'changes')!.value).toBe('+2 −5')
     expect(c.result.body!.kind).toBe('files')
     expect(c.result.actions![0]!.page).toMatchObject({
       kind: 'repo_compare',
@@ -144,7 +146,7 @@ describe('cardFor', () => {
       { path: 'f.ts' },
     )!
     expect(c.subtitle).toBe('a/b @ main : f.ts')
-    expect(c.input.fields.map(f => f.label)).toEqual(['path'])
+    expect(labels(c.input.fields)).toEqual(['path'])
     expect(c.result.actions![0]!.page.kind).toBe('repo_history')
   })
 
@@ -154,9 +156,9 @@ describe('cardFor', () => {
       { org: 'a', repo: 'b', index: 7, head: 'x', base: 'main' },
       { title: 'T', head: 'x', base: 'main' },
     )!
-    expect(c.input.fields.map(f => f.label)).toEqual(['title', 'range'])
+    expect(labels(c.input.fields)).toEqual(['title', 'range'])
     // The NEW MR number comes back in the result.
-    expect(c.result.fields.map(f => f.label)).toEqual(['mr'])
+    expect(labels(c.result.fields)).toEqual(['mr'])
     expect(c.result.fields[0]!.value).toBe('#7')
     expect(c.result.actions![0]!.page).toMatchObject({
       kind: 'repo_mr',
@@ -185,7 +187,7 @@ describe('cardFor', () => {
       { image: 'img:1', name: 'db', replicas: 2 },
     )!
     expect(c.subtitle).toBe('db')
-    expect(c.input.fields.map(f => f.label)).toContain('image')
+    expect(labels(c.input.fields)).toContain('image')
     expect(c.result.body!.kind).toBe('ports')
     expect(c.result.actions![0]!.page).toMatchObject({
       kind: 'service_detail',
@@ -199,7 +201,7 @@ describe('cardFor', () => {
       { name: 'sb', phase: 'Running', url: 'http://sb:48080' },
       { name: 'sb', image: 'base:1' },
     )!
-    expect(c.input.fields.map(f => f.label)).toEqual(['name', 'image'])
+    expect(labels(c.input.fields)).toEqual(['name', 'image'])
     expect(c.result.actions![0]!.page).toMatchObject({
       kind: 'sandbox_detail',
       name: 'sb',
@@ -220,7 +222,7 @@ describe('cardFor', () => {
     )!
     expect(c.subtitle).toBe('sb')
     // The command is a terminal-style body, not a field.
-    expect(c.input.fields.map(f => f.label)).toEqual(['sandbox'])
+    expect(labels(c.input.fields)).toEqual(['sandbox'])
     expect(c.input.body).toEqual({
       kind: 'command',
       command: 'ls -la',
@@ -252,7 +254,7 @@ describe('cardFor', () => {
       { 'worker-name': 'sb', path: 'src/a.ts' },
       '1  const x = 1\n2  export {}',
     )!
-    expect(c.input.fields.map(f => f.label)).toEqual(['sandbox', 'path'])
+    expect(labels(c.input.fields)).toEqual(['sandbox', 'path'])
     expect(c.result.body).toMatchObject({
       kind: 'code',
       name: 'a.ts',
@@ -290,56 +292,43 @@ describe('cardFor', () => {
     )
   })
 
-  it('sandbox-file-edit: numbered content in INPUT, diff in RESULT', () => {
+  it('sandbox-file-patch: patch text in INPUT, diff in RESULT', () => {
+    const patch = '*** Begin Patch\n*** Add File: a\n+z\n*** End Patch'
     const c = cardFor(
-      'sandbox-file-edit',
-      { path: 'a', added: 1, removed: 1, diff: '@@ x @@' },
+      'sandbox-file-patch',
       {
-        'worker-name': 'sb',
-        path: 'a',
-        'start-anchor-line': 2,
-        'end-anchor-line': 3,
-        'start-anchor': '1',
-        'end-anchor': '4',
-        content: 'z',
+        files: 1,
+        added: 1,
+        removed: 0,
+        diff: '@@ x @@',
+        changed: [{ path: 'a', kind: 'add', lines: 1 }],
       },
+      { 'worker-name': 'sb', 'patch-text': patch },
       '',
     )!
-    expect(c.input.body).toEqual({
-      kind: 'code',
-      name: 'a',
-      text: 'z',
-      startLine: 3,
-    })
+    expect(c.subtitle).toBe('a')
+    expect(c.input.body).toEqual({ kind: 'code', name: 'patch', text: patch })
     expect(c.result.body).toEqual({ kind: 'diff', diff: '@@ x @@' })
+    expect(c.result.fields[0]!.label).toBe('changes')
   })
 
-  it('sandbox-file-edit: renders the anchor lines when present', () => {
+  it('sandbox-file-patch: multi-file subtitle', () => {
     const c = cardFor(
-      'sandbox-file-edit',
-      { path: 'a', added: 1, removed: 1, diff: '@@ x @@' },
+      'sandbox-file-patch',
       {
-        'worker-name': 'sb',
-        path: 'a',
-        'start-anchor-line': 3,
-        'end-anchor-line': 4,
-        'start-anchor': 'L3',
-        'end-anchor': 'L4',
-        content: 'z',
+        files: 2,
+        added: 2,
+        removed: 1,
+        diff: '@@ x @@',
+        changed: [
+          { path: 'a', kind: 'add', lines: 1 },
+          { path: 'b', kind: 'update', lines: 1 },
+        ],
       },
+      { 'worker-name': 'sb', 'patch-text': 'p' },
       '',
     )!
-    expect(c.input.fields.map(f => f.label)).toEqual([
-      'sandbox',
-      'path',
-      'anchor above line',
-      'anchor above',
-      'anchor below line',
-      'anchor below',
-    ])
-    expect(c.input.fields.find(f => f.label === 'anchor above')!.value).toBe(
-      'L3',
-    )
+    expect(c.subtitle).toBe('2 files')
   })
 
   it('sandbox-file-ls renders a tree body', () => {
@@ -355,23 +344,6 @@ describe('cardFor', () => {
       { 'worker-name': 'sb', path: '.' },
     )!
     expect(c.result.body!.kind).toBe('tree')
-  })
-
-  it('sandbox-file-rm: path in INPUT, deleted in RESULT', () => {
-    const c = cardFor(
-      'sandbox-file-rm',
-      { path: 'a', deleted: true },
-      { 'worker-name': 'sb', path: 'a' },
-    )!
-    expect(c.input.fields.map(f => f.label)).toEqual(['sandbox', 'path'])
-    expect(c.result.fields[0]!.label).toBe('deleted')
-    expect(c.result.fields[0]!.tone).toBe('destructive')
-    // The file is gone: the action links to its PARENT directory.
-    expect(c.result.actions![0]!.page).toMatchObject({
-      kind: 'sandbox_files',
-      name: 'sb',
-      path: '',
-    })
   })
 
   it('sandbox-file-read links into the sandbox file browser at the file', () => {
@@ -395,7 +367,7 @@ describe('cardFor', () => {
       { query: 'x' },
     )!
     expect(c.result.body!.kind).toBe('messages')
-    expect(c.input.fields.map(f => f.label)).toEqual(['query'])
+    expect(labels(c.input.fields)).toEqual(['query'])
   })
 
   it('service-list renders a clickable list body', () => {
@@ -569,7 +541,7 @@ describe('cardFor', () => {
       { files: [{ code: 'c0de', name: 'a.txt', mime: 'text/plain', size: 4 }] },
       { 'worker-name': 'sb', path: 'dir/a.txt' },
     )!
-    const codeField = c.result.fields.find(f => f.label === 'code')
+    const codeField = hasLabel(c.result.fields, 'code')
     expect(codeField?.value).toBe('c0de')
   })
 
@@ -592,7 +564,7 @@ describe('cardFor', () => {
       { 'worker-name': 'sb', path: 'app/src/a.txt', 'repo-path': 'src/a.txt' },
     )!
     expect(c.result.body).toMatchObject({ kind: 'diff', diff })
-    expect(c.result.fields.map(f => f.label)).toContain('changes')
+    expect(labels(c.result.fields)).toContain('changes')
   })
 
   it('sandbox-job-list renders a clickable LIST of jobs (not a terminal)', () => {
@@ -674,7 +646,7 @@ describe('cardFor', () => {
       },
       { name: 'data', size: '1Gi' },
     )!
-    expect(created.result.fields.map(f => f.label)).toEqual([
+    expect(labels(created.result.fields)).toEqual([
       'name',
       'size',
       'class',
@@ -739,10 +711,8 @@ describe('cardFor', () => {
       },
     )!
     expect(c.subtitle).toBe('helm · web')
-    expect(c.result.fields.find(f => f.label === 'release')!.value).toBe('web')
-    expect(c.result.fields.find(f => f.label === 'revision')!.value).toBe(
-      'rev2',
-    )
+    expect(hasLabel(c.result.fields, 'Release')!.value).toBe('web')
+    expect(hasLabel(c.result.fields, 'Revision')!.value).toBe('rev2')
     expect(c.result.body).toEqual({
       kind: 'list',
       rows: [{ label: 'Deployment/web', icon: 'container' }],
@@ -786,9 +756,7 @@ describe('cardFor', () => {
       { release: 'web' },
     )!
     expect(c.subtitle).toBe('promote · web')
-    expect(c.result.fields.find(f => f.label === 'active slot')!.value).toBe(
-      'green',
-    )
+    expect(hasLabel(c.result.fields, 'active slot')!.value).toBe('green')
     expect(c.result.actions![0].page.kind).toBe('service_detail')
   })
 
@@ -799,7 +767,7 @@ describe('cardFor', () => {
       { release: 'web' },
     )!
     expect(c.subtitle).toBe('uninstall · web')
-    expect(c.result.fields.find(f => f.label === 'deleted')).toMatchObject({
+    expect(hasLabel(c.result.fields, 'deleted')).toMatchObject({
       value: 'web',
       tone: 'destructive',
     })

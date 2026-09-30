@@ -66,8 +66,8 @@ export function promptDialog(opts: {
       body: opts.body,
       initial: opts.initial ?? '',
       placeholder: opts.placeholder ?? '',
-      confirmLabel: opts.confirmLabel ?? 'OK',
-      cancelLabel: opts.cancelLabel ?? 'Cancel',
+      confirmLabel: opts.confirmLabel ?? '',
+      cancelLabel: opts.cancelLabel ?? '',
       multiline: opts.multiline ?? false,
       resolve,
     }
@@ -87,8 +87,8 @@ export function confirmDialog(opts: {
       id: ++seq,
       title: opts.title,
       body: opts.body ?? '',
-      confirmLabel: opts.confirmLabel ?? 'OK',
-      cancelLabel: opts.cancelLabel ?? 'Cancel',
+      confirmLabel: opts.confirmLabel ?? '',
+      cancelLabel: opts.cancelLabel ?? '',
       destructive: opts.destructive ?? false,
       resolve,
     }
