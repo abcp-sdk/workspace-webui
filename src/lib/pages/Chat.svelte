@@ -8,7 +8,7 @@
   import { MessagesController } from '$lib/messages.svelte'
   import { untrack } from 'svelte'
   import { roleOfSession, isBranchRole, roleIcon, roleLabelKey, roleTone } from '$lib/roles'
-  import { t } from '$lib/i18n.svelte'
+  import { t, turnReasonLabel } from '$lib/i18n.svelte'
   import { confirmDialog, promptDialog } from '$lib/dialogs'
   import { showErrorToast, showToast } from '$lib/toast.svelte'
   import { Prefs } from '$lib/prefs'
@@ -752,6 +752,20 @@
         ></span>
         {#if ctxLabel}
           <span class="text-micro text-muted-foreground tabular-nums">{ctxLabel}</span>
+        {/if}
+        <!-- Stop reason: only when idle after a NON-clean finish. A user
+             interrupt vs an environmental (lease-lost) stop are distinguished
+             so a stuck session's cause is visible. -->
+        {#if ctrl.runtimeStatus !== 'busy' && session?.lastTurnReason && session.lastTurnReason !== 'stop'}
+          <span
+            class={cn(
+              'shrink-0 rounded-full px-1.5 py-px text-[9px] leading-4',
+              session.lastTurnReason === 'locklost'
+                ? 'bg-destructive/15 text-destructive'
+                : 'bg-muted text-muted-foreground',
+            )}
+            title={t('lastTurnReasonTitle', { reason: turnReasonLabel(session.lastTurnReason) })}
+          >{turnReasonLabel(session.lastTurnReason)}</span>
         {/if}
       </div>
       <button

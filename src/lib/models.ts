@@ -75,6 +75,12 @@ export interface Session {
    *  (including mid-retry), 'idle' otherwise, 'unknown' when the lease could
    *  not be read. Empty on a reply that did not read the lease. */
   status?: 'busy' | 'idle' | 'unknown'
+  /** Why the LAST turn ended: 'stop' (model finished), 'interrupted' (user
+   *  stopped), or 'locklost' (the run lost its lease — an environmental stop).
+   *  Empty when no turn has finished. */
+  lastTurnReason?: string
+  /** RFC3339 timestamp of that turn's end. */
+  lastTurnAt?: string
 }
 
 export function sessionName(s: Session): string {

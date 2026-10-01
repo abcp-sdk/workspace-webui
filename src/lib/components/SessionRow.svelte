@@ -165,10 +165,16 @@
           aria-label={t('running')}
         ></span>
       {:else if session.status === 'idle'}
+        <!-- A locklost last turn is an environmental stop that may need a
+             nudge: flag it amber instead of the plain idle gray so a stuck
+             session is visible in the list. -->
         <span
-          class="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-muted-foreground ring-2 ring-background"
-          title={t('idle')}
-          aria-label={t('idle')}
+          class={cn(
+            'absolute -top-0.5 -right-0.5 size-2.5 rounded-full ring-2 ring-background',
+            session.lastTurnReason === 'locklost' ? 'bg-warning' : 'bg-muted-foreground',
+          )}
+          title={session.lastTurnReason === 'locklost' ? t('turnLocklost') : t('idle')}
+          aria-label={session.lastTurnReason === 'locklost' ? t('turnLocklost') : t('idle')}
         ></span>
       {:else if session.status === 'unknown'}
         <span

@@ -89,6 +89,8 @@ export function sessionFromPb(
     unreadCount: s.unreadCount,
     lastMessageAt: s.lastMessageAt,
     lastMessagePreview: s.lastMessagePreview,
+    ...(s.lastTurnReason !== '' ? { lastTurnReason: s.lastTurnReason } : {}),
+    ...(s.lastTurnAt !== '' ? { lastTurnAt: s.lastTurnAt } : {}),
     messageSeq: s.messageSeq,
     group: s.group,
     // 'unknown' (a transient read error) is surfaced so the row shows a

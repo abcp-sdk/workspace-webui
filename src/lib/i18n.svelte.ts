@@ -195,6 +195,10 @@ const en = {
   registering: `Registering...`,
   idle: `idle`,
   statusUnknown: `status unknown`,
+  turnStopped: `stopped`,
+  turnInterrupted: `interrupted`,
+  turnLocklost: `interrupted (fault)`,
+  lastTurnReasonTitle: `last turn ended: {reason}`,
   releaseToSend: `Release to send`,
   requiredConfig: `required config`,
   retry: `Retry`,
@@ -728,6 +732,10 @@ const zh = {
   registering: `注册中…`,
   idle: `空闲`,
   statusUnknown: `状态未知`,
+  turnStopped: `已停止`,
+  turnInterrupted: `已中断`,
+  turnLocklost: `已中断（故障）`,
+  lastTurnReasonTitle: `上次回合结束原因：{reason}`,
   releaseToSend: `松开发送`,
   requiredConfig: `必需配置`,
   retry: `重试`,
@@ -1078,6 +1086,14 @@ export function setLocale(l: Locale) {
 }
 export function getLocale(): Locale {
   return current
+}
+
+/** Localize a session's last-turn reason (`stop`/`interrupted`/`locklost`). */
+export function turnReasonLabel(reason: string): string {
+  if (reason === 'interrupted') return t('turnInterrupted')
+  if (reason === 'locklost') return t('turnLocklost')
+  if (reason === 'stop') return t('turnStopped')
+  return reason
 }
 
 /** Localize a change-request state (`open`/`closed`/`merged`). */
