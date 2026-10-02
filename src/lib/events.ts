@@ -8,6 +8,12 @@ export interface StreamEvent {
   eid: string
   /** Turn id this event belongs to, when present. */
   runId: string
+  /**
+   * JetStream stream sequence of this event (0 when the server omitted it).
+   * The client echoes the newest one back as `sinceSeq` on reconnect so the
+   * server resumes the ordered consumer with an O(1) seek.
+   */
+  seq: number
 }
 
 export function makeStreamEvent(
@@ -15,8 +21,9 @@ export function makeStreamEvent(
   params?: Record<string, unknown> | null,
   eid = '',
   runId = '',
+  seq = 0,
 ): StreamEvent {
-  return { event, params: params ?? {}, eid, runId }
+  return { event, params: params ?? {}, eid, runId, seq }
 }
 
 /** One frame of the watchSessions list stream. */

@@ -13,8 +13,6 @@ import type { StreamEvent } from './events'
 export interface StreamHandlers {
   /** Id of the session the user currently has open ('' when none). */
   getSessionId(): string
-  /** Anchor to replay from (the newest server message id we hold). */
-  getSince(): string
   /** Is a turn believed to be running (drives the watchdog + probes)? */
   isSending(): boolean
   /** A deduped, run-boundary-handled stream event. */
@@ -61,6 +59,8 @@ export class SessionStream {
   private seenEids = new Set<string>()
   private activeRunId: string | null = null
   private awaitingRun = false
+  /** Newest JetStream stream sequence seen on this session's event stream. */
+  private lastSeq = 0
 
   private idleProbeTimer: ReturnType<typeof setInterval> | null = null
   private watchdogTimer: ReturnType<typeof setInterval> | null = null
@@ -82,7 +82,11 @@ export class SessionStream {
     this.streamAbort?.abort()
     const ac = new AbortController()
     this.streamAbort = ac
+    // A switch to a DIFFERENT session must not resume from the previous
+    // session's sequence; a reconnect of the SAME session must.
+    const sameSession = this.subSid === sid
     this.subSid = sid
+    if (!sameSession) this.lastSeq = 0
     this.reconnectAttempt = 0
     this.lastActivity = Date.now()
     this.idleProbeTimer && clearInterval(this.idleProbeTimer)
@@ -96,7 +100,7 @@ export class SessionStream {
       try {
         for await (const ev of this.api.streamEvents(
           sid,
-          this.h.getSince(),
+          this.lastSeq,
           ac.signal,
         )) {
           if (ac.signal.aborted) return
@@ -133,6 +137,9 @@ export class SessionStream {
 
   private handleEvent(ev: StreamEvent) {
     this.lastActivity = Date.now()
+    // Advance the resume anchor to this event's stream sequence, so a later
+    // reconnect (or the watchdog) resumes AFTER it.
+    if (ev.seq > this.lastSeq) this.lastSeq = ev.seq
     // A live event proves the connection is healthy again.
     this.h.onConnected()
     // Dedup across the subscribe/replay overlap.

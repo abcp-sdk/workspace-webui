@@ -382,14 +382,16 @@ export class AgentApi {
 
   async *streamEvents(
     sessionId: string,
-    since = '',
+    sinceSeq = 0,
     signal?: AbortSignal,
   ): AsyncGenerator<StreamEvent> {
     // The signal lets the controller tear down a HALF-OPEN stream (a socket
     // that never errors but stops delivering) and reconnect from the anchor.
+    // Resume is by STREAM SEQUENCE: pass the newest `seq` we have seen and the
+    // server resumes AFTER it (O(1) by_start_sequence). 0 = live-from-now.
     const opts = signal ? { signal } : undefined
     for await (const e of this._c.watchSession(
-      { id: sessionId, since },
+      { id: sessionId, sinceSeq: BigInt(sinceSeq) },
       opts,
     )) {
       const params = (e.params ?? {}) as Record<string, unknown>
@@ -399,6 +401,7 @@ export class AgentApi {
         params,
         e.eid,
         typeof runId === 'string' ? runId : '',
+        Number(e.seq ?? 0n),
       )
     }
   }

@@ -117,7 +117,7 @@ class FakeServer {
       }),
       streamEvents: async function* (
         _sid: string,
-        _since = '',
+        _sinceSeq = 0,
         signal?: AbortSignal,
       ) {
         yield* self.chan.run(signal)
