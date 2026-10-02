@@ -109,16 +109,42 @@
     {:else if b.kind === 'files'}
       <div class="max-h-72 min-w-0 overflow-auto rounded-sm border border-border/40">
         {#each b.files as f (f.path)}
-          <button
-            type="button"
-            class="flex w-full min-w-0 items-center gap-1.5 border-b border-border/30 px-1.5 py-0.5 text-left text-micro last:border-b-0 hover:bg-muted"
-            onclick={() => store?.openCodePage({ kind: 'repo_blob', key: `blob:${b.org}/${b.repo}@${b.ref}:${f.path}`, org: b.org, repo: b.repo, ref: b.ref, path: f.path })}
-          >
-            <span class="shrink-0 text-[10px] text-muted-foreground">{f.status}</span>
-            <span class="min-w-0 flex-1 truncate font-mono">{f.path}</span>
-            <span class="shrink-0 font-mono text-success">+{f.additions}</span>
-            <span class="shrink-0 font-mono text-destructive">-{f.deletions}</span>
-          </button>
+          {#if store && b.org && b.repo && b.ref}
+            <button
+              type="button"
+              class="flex w-full min-w-0 items-center gap-1.5 border-b border-border/30 px-1.5 py-0.5 text-left text-micro last:border-b-0 hover:bg-muted"
+              onclick={() => store?.openCodePage({ kind: 'repo_blob', key: `blob:${b.org}/${b.repo}@${b.ref}:${f.path}`, org: b.org!, repo: b.repo!, ref: b.ref!, path: f.path })}
+            >
+              <span class="shrink-0 text-[10px] text-muted-foreground">{f.status}</span>
+              <span class="min-w-0 flex-1 truncate font-mono">{f.path}</span>
+              <span class="shrink-0 font-mono text-success">+{f.additions}</span>
+              <span class="shrink-0 font-mono text-destructive">-{f.deletions}</span>
+            </button>
+          {:else}
+            <div class="flex min-w-0 items-center gap-1.5 border-b border-border/30 px-1.5 py-0.5 text-micro last:border-b-0">
+              <span class="shrink-0 text-[10px] text-muted-foreground">{f.status}</span>
+              <span class="min-w-0 flex-1 truncate font-mono">{f.path}</span>
+              <span class="shrink-0 font-mono text-success">+{f.additions}</span>
+              <span class="shrink-0 font-mono text-destructive">-{f.deletions}</span>
+            </div>
+          {/if}
+        {/each}
+      </div>
+    {:else if b.kind === 'patch'}
+      <div class="max-h-72 min-w-0 overflow-auto rounded-sm border border-border/40">
+        {#each b.files as f, i (i)}
+          <details class="border-b border-border/30 last:border-b-0" open={b.files.length === 1}>
+            <summary class="flex w-full min-w-0 cursor-pointer items-center gap-1.5 px-1.5 py-1 text-micro hover:bg-muted">
+              <AppIcons.file_code class="size-3.5 shrink-0 text-muted-foreground" />
+              <span class="min-w-0 flex-1 truncate font-mono">{f.path}</span>
+              <span class="shrink-0 text-[10px] text-muted-foreground">{f.status}</span>
+              <span class="shrink-0 font-mono text-success">+{f.additions}</span>
+              <span class="shrink-0 font-mono text-destructive">-{f.deletions}</span>
+            </summary>
+            {#if f.diff}
+              <div class="min-w-0 overflow-auto bg-card"><DiffView diff={f.diff} name={f.path} /></div>
+            {/if}
+          </details>
         {/each}
       </div>
     {:else if b.kind === 'paths'}

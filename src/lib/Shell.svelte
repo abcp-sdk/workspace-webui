@@ -31,6 +31,7 @@
   import SandboxJob from './pages/SandboxJob.svelte'
   import SandboxFiles from './pages/SandboxFiles.svelte'
   import ServiceDetail from './pages/ServiceDetail.svelte'
+  import ReleaseDetail from './pages/ReleaseDetail.svelte'
 
   let {
     store,
@@ -85,7 +86,8 @@
         page.kind === 'sandbox_detail' ||
         page.kind === 'sandbox_job' ||
         page.kind === 'sandbox_files' ||
-        page.kind === 'service_detail'
+        page.kind === 'service_detail' ||
+        page.kind === 'release_detail'
           ? page.name
           : undefined,
       jobId: page.kind === 'sandbox_job' ? page.jobId : undefined,
@@ -148,6 +150,8 @@
         return SandboxFiles as Component<PageProps>
       case 'service_detail':
         return ServiceDetail as Component<PageProps>
+      case 'release_detail':
+        return ReleaseDetail as Component<PageProps>
     }
   }
 

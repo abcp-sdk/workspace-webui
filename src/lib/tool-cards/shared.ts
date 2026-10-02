@@ -76,9 +76,24 @@ export type CardBody =
         additions: number
         deletions: number
       }>
-      org: string
-      repo: string
-      ref: string
+      // Present only for a repo-relative diff; a sandbox patch has no
+      // org/repo/ref, so its rows render as plain (non-clickable) entries.
+      org?: string
+      repo?: string
+      ref?: string
+    }
+  // A multi-file patch: one foldable section per file, each rendered with
+  // DiffView. Used by sandbox-file-patch, whose diff has no `diff --git`
+  // headers (so a single DiffView would otherwise merge every file into one).
+  | {
+      kind: 'patch'
+      files: Array<{
+        path: string
+        status: string
+        additions: number
+        deletions: number
+        diff: string
+      }>
     }
   | { kind: 'paths'; paths: string[] }
   | {
@@ -316,6 +331,59 @@ export function fs(...xs: Array<CardField | null>): CardField[] {
 export function bareToolName(tool: string): string {
   const m = /^[A-Za-z0-9_-]+\.([a-z0-9][a-z0-9-]*)$/.exec(tool)
   return m ? m[1]! : tool
+}
+
+/** One file's slice of a concatenated unified diff. */
+export interface SplitDiff {
+  path: string
+  diff: string
+  additions: number
+  deletions: number
+}
+
+/**
+ * Split a concatenated unified diff into one entry per file.
+ *
+ * The producer (`sandbox-file-patch`) concatenates each file's diff with NO
+ * `diff --git` separator — every file starts at a `--- a/<path>` header
+ * immediately followed by `+++ b/<path>`. A file boundary is therefore a
+ * `--- ` line whose NEXT line is a `+++ ` line (this also avoids mistaking a
+ * deleted line whose content starts with `-- ` for a header).
+ */
+export function splitMultiDiff(raw: string): SplitDiff[] {
+  const lines = raw.split('\n')
+  const out: SplitDiff[] = []
+  let start = -1
+  let path = ''
+  const flush = (end: number) => {
+    if (start < 0) return
+    const body = lines.slice(start, end).join('\n').replace(/\n+$/, '')
+    if (body === '') return
+    let additions = 0
+    let deletions = 0
+    for (let i = start + 1; i < end; i++) {
+      const l = lines[i]!
+      if (l.startsWith('+++') || l.startsWith('---')) continue
+      if (l.startsWith('+')) additions++
+      else if (l.startsWith('-')) deletions++
+    }
+    out.push({ path, diff: body, additions, deletions })
+  }
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i]!
+    if (!l.startsWith('--- ')) continue
+    const next = lines[i + 1] ?? ''
+    // Only a `--- ` directly followed by `+++ ` is a real file header.
+    if (!next.startsWith('+++ ')) continue
+    flush(i)
+    start = i
+    path = l
+      .slice(4)
+      .trim()
+      .replace(/^[ab]\//, '')
+  }
+  flush(lines.length)
+  return out
 }
 
 /**

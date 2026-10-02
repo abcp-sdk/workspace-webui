@@ -340,13 +340,25 @@
         <EmptyState>{t('noHelmReleases')}</EmptyState>
       {:else}
         {#each releases as r (r.name)}
-          <ListRow divided>
+          <ListRow divided onclick={() => store.navigate({ kind: 'release_detail', key: `helm:${r.name}`, name: r.name })}>
             <span class="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"><AppIcons.pkg class="size-4" /></span>
             <span class="min-w-0 flex-1">
               <span class="block wrap-anywhere text-meta font-semibold">{r.name} <span class="text-[10px] font-normal text-muted-foreground">rev{r.revision}</span></span>
               <span class="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
                 <span>{r.chartPath || '.'}@{r.ref || 'HEAD'}</span>
-                {#if r.session}<span>{r.session}</span>{/if}
+                {#if r.chartVersion}<span>{t('tcChart')} {r.chartVersion}</span>{/if}
+                {#if r.appVersion}<span>app {r.appVersion}</span>{/if}
+                {#if r.objects.length}<span>{r.objects.length} {t('releaseObjects')}</span>{/if}
+                {#if r.namespace}<span class="font-mono">{r.namespace}</span>{/if}
+                {#if r.creator}<span>{r.creator}</span>{/if}
+                {#if r.updatedAt}<span>{relTime(r.updatedAt)}</span>{/if}
+                {#if r.session}
+                  {#if store.sessionById(r.session)}
+                    <button type="button" class="min-w-0 break-all text-left text-primary hover:underline" onclick={e => { e.stopPropagation(); openSession(r.session) }}>{r.session}</button>
+                  {:else}
+                    <span class="min-w-0 break-all">{r.session}</span>
+                  {/if}
+                {/if}
               </span>
               {#if r.slots.length > 0}
                 <span class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px]">
@@ -357,8 +369,8 @@
                     </span>
                   {/each}
                   <span class="ml-auto flex items-center gap-1">
-                    <button type="button" class="rounded border border-border px-2 py-0.5 hover:bg-muted" onclick={() => void promoteRelease(r.name)}>{t('servicePromote')}</button>
-                    <button type="button" class="rounded border border-border px-2 py-0.5 hover:bg-muted" onclick={() => void rollbackRelease(r.name)}>{t('serviceRollback')}</button>
+                    <button type="button" class="rounded border border-border px-2 py-0.5 hover:bg-muted" onclick={e => { e.stopPropagation(); void promoteRelease(r.name) }}>{t('servicePromote')}</button>
+                    <button type="button" class="rounded border border-border px-2 py-0.5 hover:bg-muted" onclick={e => { e.stopPropagation(); void rollbackRelease(r.name) }}>{t('serviceRollback')}</button>
                   </span>
                 </span>
               {/if}

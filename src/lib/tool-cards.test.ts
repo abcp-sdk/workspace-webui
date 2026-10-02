@@ -308,8 +308,16 @@ describe('cardFor', () => {
     )!
     expect(c.subtitle).toBe('a')
     expect(c.input.body).toEqual({ kind: 'code', name: 'patch', text: patch })
-    expect(c.result.body).toEqual({ kind: 'diff', diff: '@@ x @@' })
-    expect(c.result.fields[0]!.label).toBe('changes')
+    // A bare `@@` (no `--- ` header) cannot be split, so the per-file `changed`
+    // list supplies the rows.
+    expect(c.result.body).toEqual({
+      kind: 'patch',
+      files: [
+        { path: 'a', status: 'add', additions: 0, deletions: 0, diff: '' },
+      ],
+    })
+    expect(labels(c.result.fields)).toEqual(['files', 'changes'])
+    expect(hasLabel(c.result.fields, 'files')!.value).toBe('1')
   })
 
   it('sandbox-file-patch: multi-file subtitle', () => {
@@ -329,6 +337,56 @@ describe('cardFor', () => {
       '',
     )!
     expect(c.subtitle).toBe('2 files')
+  })
+
+  it('sandbox-file-patch: renders EVERY changed file and splits the diff per file', () => {
+    // The producer concatenates each file's diff with no `diff --git` marker,
+    // so the card must split on the bare `--- a/<path>` headers.
+    const diff = [
+      '--- a/a.txt',
+      '+++ b/a.txt',
+      '@@ -1 +1 @@',
+      '-old',
+      '+new',
+      '',
+      '--- a/b.txt',
+      '+++ b/b.txt',
+      '@@ -1,2 +1,2 @@',
+      ' keep',
+      '-gone',
+      '+kept',
+    ].join('\n')
+    const c = cardFor(
+      'sandbox-file-patch',
+      {
+        files: 2,
+        added: 2,
+        removed: 2,
+        diff,
+        changed: [
+          { path: 'a.txt', kind: 'update', lines: 1 },
+          { path: 'b.txt', kind: 'update', lines: 2 },
+        ],
+      },
+      { 'worker-name': 'sb', 'patch-text': 'p' },
+      '',
+    )!
+    const body = c.result.body as {
+      kind: string
+      files: Array<{
+        path: string
+        additions: number
+        deletions: number
+        diff: string
+      }>
+    }
+    expect(body.kind).toBe('patch')
+    expect(body.files.map(f => f.path)).toEqual(['a.txt', 'b.txt'])
+    expect(body.files[0]).toMatchObject({ additions: 1, deletions: 1 })
+    expect(body.files[1]).toMatchObject({ additions: 1, deletions: 1 })
+    expect(body.files[0]!.diff).toContain('--- a/a.txt')
+    expect(body.files[1]!.diff).toContain('--- a/b.txt')
+    expect(hasLabel(c.result.fields, 'files')!.value).toBe('2')
   })
 
   it('sandbox-file-ls renders a tree body', () => {

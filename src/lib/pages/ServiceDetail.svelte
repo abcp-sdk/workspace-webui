@@ -3,7 +3,7 @@
   // via WatchServiceLogs (k8s pod log through the gateway); `previous` reads
   // the crashed container instance (CrashLoopBackOff diagnosis).
   import type { PageProps } from '$lib/page-props'
-  import type { ServiceInfo, ServiceProbe } from '$lib/api'
+  import type { HelmRelease, ServiceInfo, ServiceProbe } from '$lib/api'
   import { t } from '$lib/i18n.svelte'
   import { showErrorToast, showToast } from '$lib/toast.svelte'
   import { confirmDialog } from '$lib/dialogs'
@@ -19,6 +19,9 @@
   let { store, name, showBack = false }: PageProps & { name: string } = $props()
 
   let svc = $state<ServiceInfo | null>(null)
+  // The Helm release that owns this service (matched by name — a blue-green
+  // release's router Service is named exactly like the release), when any.
+  let helmRelease = $state<HelmRelease | null>(null)
   // Overview (meta + logs) vs the editable manifest.
   let view = $state<'overview' | 'yaml'>('overview')
   let lines = $state<string[]>([])
@@ -44,6 +47,10 @@
     const key = `service:${name}`
     try {
       svc = await store.dataLoad(key, () => store.api.getService(name))
+      const rels = await store
+        .dataLoad('helm-list', () => store.api.helmList())
+        .catch(() => [] as HelmRelease[])
+      helmRelease = rels.find(r => r.name === name) ?? null
     } catch (e) {
       showErrorToast(String(e))
     }
@@ -352,6 +359,15 @@
           {:else}
             <span>{svc.session}</span>
           {/if}
+        {/if}
+        {#if helmRelease}
+          <button
+            type="button"
+            class="flex items-center gap-1 text-primary hover:underline"
+            onclick={() => store.navigate({ kind: 'release_detail', key: `helm:${helmRelease!.name}`, name: helmRelease!.name })}
+          >
+            <AppIcons.pkg class="size-3" />{t('releaseDeployedBy')} {helmRelease.name} · rev{helmRelease.revision}
+          </button>
         {/if}
       </div>
       {#if svc.message}

@@ -17,6 +17,7 @@ import {
   pick,
   s,
   short,
+  splitMultiDiff,
   stripLineNumbers,
   vstr,
 } from './shared'
@@ -476,6 +477,26 @@ const sandboxFilePatch: CardHandler = ({ tool, data, input }) => {
       : changed.length > 1
         ? `${changed.length} files`
         : 'patch'
+  // One foldable DiffView per file. The producer concatenates each file's diff
+  // with NO `diff --git` separator, so split it ourselves; fall back to the
+  // per-file `changed` list when the diff is empty (e.g. a delete-only patch).
+  const parts = d ? splitMultiDiff(d) : []
+  const patchFiles =
+    parts.length > 0
+      ? parts.map((p, i) => ({
+          path: p.path || changed[i]?.path || '',
+          status: changed[i]?.kind ?? 'update',
+          additions: p.additions,
+          deletions: p.deletions,
+          diff: p.diff,
+        }))
+      : changed.map(c => ({
+          path: c.path,
+          status: c.kind,
+          additions: 0,
+          deletions: 0,
+          diff: '',
+        }))
   return {
     subtitle,
     input: {
@@ -487,6 +508,14 @@ const sandboxFilePatch: CardHandler = ({ tool, data, input }) => {
     },
     result: {
       fields: fs(
+        changed.length
+          ? {
+              icon: 'file_code',
+              label: 'files',
+              value: String(changed.length),
+              tone: 'muted',
+            }
+          : null,
         added || removed
           ? {
               icon: 'diff',
@@ -497,7 +526,9 @@ const sandboxFilePatch: CardHandler = ({ tool, data, input }) => {
             }
           : null,
       ),
-      body: d ? { kind: 'diff', diff: d } : undefined,
+      body: patchFiles.length
+        ? { kind: 'patch', files: patchFiles }
+        : undefined,
       actions: sandbox
         ? [
             {
