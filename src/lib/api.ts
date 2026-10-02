@@ -1554,6 +1554,12 @@ export interface HelmRelease {
   router: string
   activeSlot: string
   slots: HelmSlot[]
+  /** Chart.yaml `version` of the chart at the current revision. */
+  chartVersion: string
+  /** Chart.yaml `appVersion` (may be empty). */
+  appVersion: string
+  /** Objects the CURRENT revision deployed, as "Kind/name". */
+  objects: string[]
 }
 
 export interface HelmSlot {
@@ -1586,6 +1592,9 @@ type PbHelmReleaseInfo = {
   slot?: string
   router?: string
   activeSlot?: string
+  chartVersion?: string
+  appVersion?: string
+  objects?: string[]
   slots?: {
     slot: string
     release: string
@@ -1608,6 +1617,9 @@ function helmReleaseFromPb(r: PbHelmReleaseInfo): HelmRelease {
     slot: r.slot ?? '',
     router: r.router ?? '',
     activeSlot: r.activeSlot ?? '',
+    chartVersion: r.chartVersion ?? '',
+    appVersion: r.appVersion ?? '',
+    objects: [...(r.objects ?? [])],
     slots: (r.slots ?? []).map(sl => ({
       slot: sl.slot,
       release: sl.release,

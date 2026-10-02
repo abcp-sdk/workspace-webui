@@ -110,6 +110,8 @@ export type AppPage =
   // directory (browse it) or a file (open it directly); '' = workspace root.
   | { kind: 'sandbox_files'; key: string; name: string; path: string }
   | { kind: 'service_detail'; key: string; name: string }
+  // One Helm release: meta + revisions (objects/values per revision).
+  | { kind: 'release_detail'; key: string; name: string }
 
 export function rootPageFor(lane: SiderTab): AppPage {
   switch (lane) {
@@ -153,6 +155,7 @@ export function laneOf(page: AppPage): SiderTab {
     case 'sandbox_job':
     case 'sandbox_files':
     case 'service_detail':
+    case 'release_detail':
       return 'service'
   }
 }
@@ -246,6 +249,7 @@ export function parentOf(page: AppPage): AppPage | null {
       return repoHistory(page.org, page.repo, page.ref, page.path)
     case 'sandbox_detail':
     case 'service_detail':
+    case 'release_detail':
       return { kind: 'service_root', key: 'service_root' }
     case 'sandbox_job':
     case 'sandbox_files':
