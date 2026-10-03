@@ -58,6 +58,7 @@ export class MessagesController {
     this.sync = new MessageSync(api, getSessionId, local, this.store)
     this.stream = new SessionStream(api, {
       getSessionId: () => this.getSessionId(),
+      getSinceMsg: () => this.sync.syncedTipId,
       isSending: () => this.store.sending,
       onEvent: ev => this.handleEvent(ev),
       onRunBoundary: () => this.clearStreaming(),

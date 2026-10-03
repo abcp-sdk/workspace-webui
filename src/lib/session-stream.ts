@@ -10,9 +10,40 @@
 import type { AgentApi } from './api'
 import type { StreamEvent } from './events'
 
+/**
+ * Per-session stream-sequence persistence. A page refresh loses the in-memory
+ * `lastSeq`, so without this a reconnect sends `sinceSeq=0` (live-from-now) and
+ * drops the in-progress turn. sessionStorage is per-tab and survives a reload;
+ * a stale value is harmless (the server clamps/seek to it).
+ */
+const SEQ_PREFIX = 'ws.session.seq.'
+function loadSeq(sid: string): number {
+  try {
+    const v = globalThis.sessionStorage?.getItem(SEQ_PREFIX + sid)
+    const n = v === null || v === undefined ? 0 : Number.parseInt(v, 10)
+    return Number.isFinite(n) && n > 0 ? n : 0
+  } catch {
+    return 0
+  }
+}
+function saveSeq(sid: string, seq: number): void {
+  try {
+    globalThis.sessionStorage?.setItem(SEQ_PREFIX + sid, String(seq))
+  } catch {
+    /* storage unavailable (SSR / private mode): resume stays in-memory only */
+  }
+}
+
 export interface StreamHandlers {
   /** Id of the session the user currently has open ('' when none). */
   getSessionId(): string
+  /**
+   * Persistent fallback resume anchor: the newest server MESSAGE id the client
+   * holds (MessageSync's synced tip). Sent as `sinceMsg` ONLY when the in-memory
+   * stream sequence is unavailable (a page refresh) so the server replays the
+   * in-progress turn from that message's timestamp.
+   */
+  getSinceMsg(): string
   /** Is a turn believed to be running (drives the watchdog + probes)? */
   isSending(): boolean
   /** A deduped, run-boundary-handled stream event. */
@@ -59,7 +90,11 @@ export class SessionStream {
   private seenEids = new Set<string>()
   private activeRunId: string | null = null
   private awaitingRun = false
-  /** Newest JetStream stream sequence seen on this session's event stream. */
+  /**
+   * Newest JetStream stream sequence seen on this session's event stream.
+   * Persisted to sessionStorage (keyed by sid) so a PAGE REFRESH can resume
+   * with an O(1) by_start_sequence seek instead of live-from-now.
+   */
   private lastSeq = 0
 
   private idleProbeTimer: ReturnType<typeof setInterval> | null = null
@@ -83,10 +118,12 @@ export class SessionStream {
     const ac = new AbortController()
     this.streamAbort = ac
     // A switch to a DIFFERENT session must not resume from the previous
-    // session's sequence; a reconnect of the SAME session must.
+    // session's sequence; a reconnect of the SAME session must. On a fresh
+    // connect to a session, seed `lastSeq` from sessionStorage so a PAGE
+    // REFRESH (which resets this in-memory field) still resumes by sequence.
     const sameSession = this.subSid === sid
     this.subSid = sid
-    if (!sameSession) this.lastSeq = 0
+    if (!sameSession) this.lastSeq = loadSeq(sid)
     this.reconnectAttempt = 0
     this.lastActivity = Date.now()
     this.idleProbeTimer && clearInterval(this.idleProbeTimer)
@@ -96,12 +133,17 @@ export class SessionStream {
     this.activeRunId = null
     this.awaitingRun = true
     this.lastStreamEventAt = Date.now()
+    // With no persisted sequence (a refresh before any event this session),
+    // fall back to the newest message id we hold; the server replays from its
+    // timestamp. `sinceSeq > 0` makes the server ignore it.
+    const sinceMsg = this.lastSeq > 0 ? '' : this.h.getSinceMsg()
     void (async () => {
       try {
         for await (const ev of this.api.streamEvents(
           sid,
           this.lastSeq,
           ac.signal,
+          sinceMsg,
         )) {
           if (ac.signal.aborted) return
           this.lastStreamEventAt = Date.now()
@@ -138,8 +180,12 @@ export class SessionStream {
   private handleEvent(ev: StreamEvent) {
     this.lastActivity = Date.now()
     // Advance the resume anchor to this event's stream sequence, so a later
-    // reconnect (or the watchdog) resumes AFTER it.
-    if (ev.seq > this.lastSeq) this.lastSeq = ev.seq
+    // reconnect (or the watchdog) resumes AFTER it. Persist it so a page
+    // refresh can resume too.
+    if (ev.seq > this.lastSeq) {
+      this.lastSeq = ev.seq
+      if (this.subSid !== null) saveSeq(this.subSid, ev.seq)
+    }
     // A live event proves the connection is healthy again.
     this.h.onConnected()
     // Dedup across the subscribe/replay overlap.
