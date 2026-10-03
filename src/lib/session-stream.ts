@@ -10,38 +10,29 @@
 import type { AgentApi } from './api'
 import type { StreamEvent } from './events'
 
-/**
- * Per-session stream-sequence persistence. A page refresh loses the in-memory
- * `lastSeq`, so without this a reconnect sends `sinceSeq=0` (live-from-now) and
- * drops the in-progress turn. sessionStorage is per-tab and survives a reload;
- * a stale value is harmless (the server clamps/seek to it).
- */
-const SEQ_PREFIX = 'ws.session.seq.'
-function loadSeq(sid: string): number {
-  try {
-    const v = globalThis.sessionStorage?.getItem(SEQ_PREFIX + sid)
-    const n = v === null || v === undefined ? 0 : Number.parseInt(v, 10)
-    return Number.isFinite(n) && n > 0 ? n : 0
-  } catch {
-    return 0
-  }
-}
-function saveSeq(sid: string, seq: number): void {
-  try {
-    globalThis.sessionStorage?.setItem(SEQ_PREFIX + sid, String(seq))
-  } catch {
-    /* storage unavailable (SSR / private mode): resume stays in-memory only */
-  }
-}
+// The stream-sequence anchor is IN-MEMORY ONLY (a per-instance field, `lastSeq`).
+// It is deliberately NOT persisted across a page refresh:
+//
+//   The server's `WatchSession` resumes by `sinceSeq` STRICTLY AFTER that seq
+//   (`startSeq = sinceSeq + 1`) and, for a non-zero seq, does NOT replay the
+//   turn that is still RUNNING (no time-based replay, `since_msg` ignored). A
+//   refresh rebuilds the JS process with no local in-progress state, so
+//   resuming "after the last seq" would skip the running step's early
+//   structural events (reasoning-start/delta, tool-input-*) — all of which
+//   precede that seq — and the in-progress bubble could not be rebuilt.
+//
+// So a refresh starts at `sinceSeq=0` and replays from the newest message id
+// (`since_msg`); only a SAME-PAGE reconnect (same instance, seq still in memory)
+// resumes by sequence, which keeps the hot path O(1) `by_start_sequence`.
 
 export interface StreamHandlers {
   /** Id of the session the user currently has open ('' when none). */
   getSessionId(): string
   /**
-   * Persistent fallback resume anchor: the newest server MESSAGE id the client
-   * holds (MessageSync's synced tip). Sent as `sinceMsg` ONLY when the in-memory
-   * stream sequence is unavailable (a page refresh) so the server replays the
-   * in-progress turn from that message's timestamp.
+   * The newest server MESSAGE id the client holds (MessageSync's synced tip),
+   * used as the `sinceMsg` anchor. It is sent ONLY on a page-refresh first
+   * connect (no in-memory sequence), so the server replays the in-progress turn
+   * from that message's timestamp.
    */
   getSinceMsg(): string
   /** Is a turn believed to be running (drives the watchdog + probes)? */
@@ -91,9 +82,10 @@ export class SessionStream {
   private activeRunId: string | null = null
   private awaitingRun = false
   /**
-   * Newest JetStream stream sequence seen on this session's event stream.
-   * Persisted to sessionStorage (keyed by sid) so a PAGE REFRESH can resume
-   * with an O(1) by_start_sequence seek instead of live-from-now.
+   * Newest JetStream stream sequence seen on this session's event stream, for
+   * THIS page instance only. Reset to 0 when the connected session changes (and,
+   * naturally, on a page refresh — a fresh instance). It is the O(1) reconnect
+   * anchor for a same-page reconnect; a refresh instead replays via `since_msg`.
    */
   private lastSeq = 0
 
@@ -118,12 +110,12 @@ export class SessionStream {
     const ac = new AbortController()
     this.streamAbort = ac
     // A switch to a DIFFERENT session must not resume from the previous
-    // session's sequence; a reconnect of the SAME session must. On a fresh
-    // connect to a session, seed `lastSeq` from sessionStorage so a PAGE
-    // REFRESH (which resets this in-memory field) still resumes by sequence.
+    // session's sequence; a reconnect of the SAME session must. A page refresh
+    // is a fresh instance with `subSid === null` and `lastSeq === 0`, so it
+    // takes the `since_msg` replay path below (see the header comment).
     const sameSession = this.subSid === sid
     this.subSid = sid
-    if (!sameSession) this.lastSeq = loadSeq(sid)
+    if (!sameSession) this.lastSeq = 0
     this.reconnectAttempt = 0
     this.lastActivity = Date.now()
     this.idleProbeTimer && clearInterval(this.idleProbeTimer)
@@ -133,9 +125,10 @@ export class SessionStream {
     this.activeRunId = null
     this.awaitingRun = true
     this.lastStreamEventAt = Date.now()
-    // With no persisted sequence (a refresh before any event this session),
-    // fall back to the newest message id we hold; the server replays from its
-    // timestamp. `sinceSeq > 0` makes the server ignore it.
+    // `sinceMsg` is sent ONLY on a page-refresh first connect (`lastSeq === 0`),
+    // so the server replays the in-progress turn from that message's timestamp.
+    // A same-page reconnect (`lastSeq > 0`) resumes by sequence instead, and the
+    // server would ignore `sinceMsg` anyway.
     const sinceMsg = this.lastSeq > 0 ? '' : this.h.getSinceMsg()
     void (async () => {
       try {
@@ -179,13 +172,9 @@ export class SessionStream {
 
   private handleEvent(ev: StreamEvent) {
     this.lastActivity = Date.now()
-    // Advance the resume anchor to this event's stream sequence, so a later
-    // reconnect (or the watchdog) resumes AFTER it. Persist it so a page
-    // refresh can resume too.
-    if (ev.seq > this.lastSeq) {
-      this.lastSeq = ev.seq
-      if (this.subSid !== null) saveSeq(this.subSid, ev.seq)
-    }
+    // Advance the in-memory resume anchor to this event's stream sequence, so a
+    // later same-page reconnect (or the watchdog) resumes AFTER it (O(1)).
+    if (ev.seq > this.lastSeq) this.lastSeq = ev.seq
     // A live event proves the connection is healthy again.
     this.h.onConnected()
     // Dedup across the subscribe/replay overlap.

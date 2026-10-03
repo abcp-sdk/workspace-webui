@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { AgentApi } from './api'
 import { makeStreamEvent, type StreamEvent } from './events'
 import { SessionStream, type StreamHandlers } from './session-stream'
@@ -63,13 +63,8 @@ function handlers(over: Partial<StreamHandlers> = {}): StreamHandlers {
 
 const flush = () => new Promise(r => setTimeout(r, 0))
 
-describe('SessionStream refresh resume', () => {
-  beforeEach(() => {
-    sessionStorage.clear()
-    vi.useRealTimers()
-  })
-
-  it('a FRESH connect with no persisted seq sends sinceSeq=0 and the sinceMsg fallback', async () => {
+describe('SessionStream resume anchor', () => {
+  it('a FRESH connect (page load) sends sinceSeq=0 and the sinceMsg tip', async () => {
     const { api, calls } = stubApi()
     const s = new SessionStream(api, handlers({ getSinceMsg: () => 'msg-42' }))
     s.connect('s1')
@@ -78,40 +73,57 @@ describe('SessionStream refresh resume', () => {
     s.dispose()
   })
 
-  it('persists the newest event seq and RESUMES from it after a page refresh', async () => {
-    const { api, calls, push } = stubApi()
-    const s1 = new SessionStream(api, handlers())
+  it('a page refresh does NOT resume from a previous instance seq (regression)', async () => {
+    // Instance 1: a live event advances the in-memory sequence to 1234.
+    const a = stubApi()
+    const s1 = new SessionStream(a.api, handlers())
     s1.connect('s1')
     await flush()
-    // A live event advances + persists the sequence.
-    push(makeStreamEvent('text-delta', {}, 'e1', 'r1', 1234))
+    a.push(makeStreamEvent('text-delta', {}, 'e1', 'r1', 1234))
     await flush()
-    expect(sessionStorage.getItem('ws.session.seq.s1')).toBe('1234')
     s1.dispose()
 
-    // A NEW SessionStream (simulating a page refresh) resumes from the stored
-    // seq, so it does NOT fall back to sinceMsg.
-    const { api: api2, calls: calls2 } = stubApi()
+    // Instance 2 is a PAGE REFRESH (a brand-new SessionStream). It must NOT
+    // resume from 1234 — the server would then skip the running turn's earlier
+    // structural events. It replays from the tip message instead.
+    const b = stubApi()
     const s2 = new SessionStream(
-      api2,
+      b.api,
       handlers({ getSinceMsg: () => 'msg-42' }),
     )
     s2.connect('s1')
     await flush()
-    expect(calls2[0]).toEqual({ sinceSeq: 1234, sinceMsg: '' })
+    expect(b.calls[0]).toEqual({ sinceSeq: 0, sinceMsg: 'msg-42' })
     s2.dispose()
   })
 
-  it('a DIFFERENT session does not inherit the previous session seq', async () => {
+  it('a SAME-PAGE reconnect resumes by sequence (O(1)) and drops sinceMsg', async () => {
     const { api, calls, push } = stubApi()
-    const s = new SessionStream(api, handlers({ getSessionId: () => 's2' }))
+    const s = new SessionStream(api, handlers({ getSinceMsg: () => 'msg-42' }))
+    s.connect('s1')
+    await flush()
+    push(makeStreamEvent('text-delta', {}, 'e1', 'r1', 1234))
+    await flush()
+    // The SAME instance reconnects: resume AFTER 1234, no sinceMsg.
+    s.connect('s1')
+    await flush()
+    expect(calls[calls.length - 1]).toEqual({ sinceSeq: 1234, sinceMsg: '' })
+    s.dispose()
+  })
+
+  it('switching to a DIFFERENT session resets the seq and uses the tip fallback', async () => {
+    const { api, calls, push } = stubApi()
+    const s = new SessionStream(
+      api,
+      handlers({ getSessionId: () => 's2', getSinceMsg: () => 'msg-9' }),
+    )
     s.connect('s1')
     await flush()
     push(makeStreamEvent('text-delta', {}, 'e1', 'r1', 999))
     await flush()
     s.connect('s2')
     await flush()
-    expect(calls[calls.length - 1]).toEqual({ sinceSeq: 0, sinceMsg: '' })
+    expect(calls[calls.length - 1]).toEqual({ sinceSeq: 0, sinceMsg: 'msg-9' })
     s.dispose()
   })
 })

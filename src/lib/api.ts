@@ -388,12 +388,12 @@ export class AgentApi {
   ): AsyncGenerator<StreamEvent> {
     // The signal lets the controller tear down a HALF-OPEN stream (a socket
     // that never errors but stops delivering) and reconnect from the anchor.
-    // Resume is by STREAM SEQUENCE: pass the newest `seq` we have seen and the
-    // server resumes AFTER it (O(1) by_start_sequence). 0 = live-from-now.
-    // A PAGE REFRESH loses the in-memory seq, so it also passes a persistent
-    // message-id anchor (`sinceMsg`); the server then replays from that
-    // message's timestamp so an in-progress turn still resumes. `sinceSeq` wins
-    // when both are set.
+    // Resume is by STREAM SEQUENCE for a SAME-PAGE reconnect: pass the newest
+    // `seq` we have seen and the server resumes AFTER it (O(1) by_start_sequence).
+    // A PAGE REFRESH has no in-memory seq (sinceSeq=0) and instead passes a
+    // message-id anchor (`sinceMsg`); the server then replays from that message's
+    // timestamp so an in-progress turn still resumes. `sinceSeq` wins when both
+    // are set (and a non-zero sinceSeq skips the running turn entirely).
     const opts = signal ? { signal } : undefined
     for await (const e of this._c.watchSession(
       { id: sessionId, sinceSeq: BigInt(sinceSeq), sinceMsg },
