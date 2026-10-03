@@ -107,7 +107,7 @@
       return
     }
     const prev = untrack(() => ctrl)
-    const c = new MessagesController(store.api, () => id, store.local)
+    const c = new MessagesController(store.api, () => id)
     ctrl = c
     prev?.dispose()
     c.init()

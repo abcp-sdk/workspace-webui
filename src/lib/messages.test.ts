@@ -163,7 +163,7 @@ const rigs: Array<{ ctrl: MessagesController }> = []
 
 function boot(): { ctrl: MessagesController; server: FakeServer } {
   const server = new FakeServer()
-  const ctrl = new MessagesController(server.api(), () => SID, null)
+  const ctrl = new MessagesController(server.api(), () => SID)
   rigs.push({ ctrl })
   ctrl.init()
   return { ctrl, server }
@@ -172,7 +172,7 @@ function boot(): { ctrl: MessagesController; server: FakeServer } {
 /** Boot a controller over an EXISTING fake server (simulates a page reload:
  *  a brand-new controller instance sharing the same server state). */
 function bootWith(server: FakeServer): MessagesController {
-  const ctrl = new MessagesController(server.api(), () => SID, null)
+  const ctrl = new MessagesController(server.api(), () => SID)
   rigs.push({ ctrl })
   ctrl.init()
   return ctrl

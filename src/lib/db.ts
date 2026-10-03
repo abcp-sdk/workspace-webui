@@ -1,42 +1,21 @@
 // LocalStore — the web port of flutter's Drift mirror (local_db.dart +
-// local_store.dart). The actual sqlite engine lives in a Worker (db-worker.ts)
-// because the OPFS sync-access-handle VFS cannot run on the main thread; this
-// module is the async proxy the app talks to.
+// local_store.dart), MINUS the message mirror. Only the session list, drafts
+// and read watermarks are persisted locally. The actual sqlite engine lives in a
+// Worker (db-worker.ts) because the OPFS sync-access-handle VFS cannot run on the
+// main thread; this module is the async proxy the app talks to.
 //
 // One sqlite file per CONNECTION SCOPE (gateway + token): a different
 // user/tenant must never read another's sessions, drafts or unread watermarks.
 // When the worker cannot install the OPFS pool (e.g. a second tab already holds
 // it), the worker opens an in-memory DB instead, so the app still works
 // network-only.
-import type {
-  ChatDraft,
-  ChatMessage,
-  Message,
-  Session,
-  UploadedFile,
-} from './models'
+import type { ChatDraft, Session, UploadedFile } from './models'
 
 export interface LocalStore {
   readonly persistent: boolean
   upsertSessions(sessions: Session[]): Promise<void>
   loadSessions(): Promise<Session[]>
   removeSession(id: string): Promise<void>
-  loadMessages(sessionId: string): Promise<ChatMessage[]>
-  serverTipId(sessionId: string): Promise<string>
-  oldestCachedId(sessionId: string): Promise<string>
-  hasMore(sessionId: string): Promise<boolean>
-  applyServerMessages(
-    sessionId: string,
-    msgs: Message[],
-    opts: { replace: boolean; tipId: string; hasMore: boolean },
-  ): Promise<void>
-  persistMessages(
-    sessionId: string,
-    msgs: ChatMessage[],
-    tipId: string,
-    hasMore: boolean,
-  ): Promise<void>
-  clearMessages(sessionId: string): Promise<void>
   saveDraft(
     sessionId: string,
     text: string,
@@ -111,32 +90,6 @@ class WorkerLocalStore implements LocalStore {
   loadSessions = () => this.call('loadSessions', []) as Promise<Session[]>
   removeSession = (id: string) =>
     this.call('removeSession', [id]).then(() => {}) as Promise<void>
-  loadMessages = (sid: string) =>
-    this.call('loadMessages', [sid]) as Promise<ChatMessage[]>
-  serverTipId = (sid: string) =>
-    this.call('serverTipId', [sid]) as Promise<string>
-  oldestCachedId = (sid: string) =>
-    this.call('oldestCachedId', [sid]) as Promise<string>
-  hasMore = (sid: string) => this.call('hasMore', [sid]) as Promise<boolean>
-  applyServerMessages = (
-    sid: string,
-    msgs: Message[],
-    opts: { replace: boolean; tipId: string; hasMore: boolean },
-  ) =>
-    this.call('applyServerMessages', [sid, msgs, opts]).then(
-      () => {},
-    ) as Promise<void>
-  persistMessages = (
-    sid: string,
-    msgs: ChatMessage[],
-    tipId: string,
-    hasMore: boolean,
-  ) =>
-    this.call('persistMessages', [sid, msgs, tipId, hasMore]).then(
-      () => {},
-    ) as Promise<void>
-  clearMessages = (sid: string) =>
-    this.call('clearMessages', [sid]).then(() => {}) as Promise<void>
   saveDraft = (sid: string, text: string, atts: UploadedFile[]) =>
     this.call('saveDraft', [sid, text, atts]).then(() => {}) as Promise<void>
   loadDrafts = () =>
