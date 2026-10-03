@@ -1,81 +1,41 @@
-// MessageSync — everything that reconciles the reactive store with the
-// authoritative server chain: local-first hydrate, incremental sync (tip
-// anchor), full baseline, paged fetch and the post-turn reconcile. It owns the
-// sync anchors (tip/oldest) and the local-store mirror; it knows nothing about
-// the live stream (MessagesController owns that and calls in here).
+// MessageSync — reconciles the reactive store with the authoritative server
+// chain: incremental sync (tip anchor), full baseline, paged fetch and the
+// post-turn reconcile. It owns the in-memory sync anchors (tip/oldest) and knows
+// nothing about the live stream (MessagesController owns that and calls in here).
+//
+// There is NO local message mirror: switching sessions always needs the network
+// (the controller rebuilds + init()s per session, so a baseline fetch is
+// unavoidable), so a mirror would only save the first frame while adding a
+// second source of truth (hydrate + cache-consistency checks + a per-page
+// DELETE+reinsert). The window lives purely in memory.
 import type { AgentApi } from './api'
-import type { LocalStore } from './db'
 import { mapMessagesToChat } from './message-mapping'
 import type { MessageStore } from './message-store.svelte'
 
 export class MessageSync {
   /** Newest server message id we hold — the stream anchor and delta cursor. */
   syncedTipId = ''
-  /** Oldest cached message id, to validate the local mirror before trusting it. */
+  /** Oldest non-local message id in the current in-memory window. */
   syncedOldestId = ''
 
   constructor(
     private api: AgentApi,
     private getSessionId: () => string,
-    private local: LocalStore | null,
     private store: MessageStore,
   ) {}
 
-  /**
-   * Persist the in-memory window as the local mirror, UNLESS the reader has
-   * scrolled away from the tail (`hasNewer`): the mirror then keeps the last
-   * tail-following snapshot, so reopening the session shows the newest history
-   * (IM behaviour) rather than a stale mid-history window.
-   */
-  private async persistWindow(sid: string): Promise<void> {
-    const l = this.local
-    if (!l || this.store.hasNewer) return
-    await l.persistMessages(
-      sid,
-      this.store.messages,
-      this.syncedTipId,
-      this.store.hasMore,
-    )
-    this.syncedOldestId = await l.oldestCachedId(sid)
-  }
-
-  /** Seed the store from the local mirror (best-effort; network-only on miss). */
-  async hydrate(sid: string): Promise<void> {
-    const l = this.local
-    if (!l) return
-    try {
-      const cached = await l.loadMessages(sid)
-      // Only trust a stored anchor when we actually hold cached messages.
-      this.syncedTipId = cached.length ? await l.serverTipId(sid) : ''
-      this.syncedOldestId = cached.length ? await l.oldestCachedId(sid) : ''
-      if (cached.length) {
-        this.store.messages = [...cached, ...this.store.inFlightLocal()]
-        this.store.renumber()
-        // Restore the server's "older history exists" flag so IM scroll-up
-        // works immediately, before the first network sync lands.
-        this.store.hasMore = await l.hasMore(sid)
-        // Seed the durable todo list from the cached window (a fresh hydrate
-        // is at the tail, so its newest todo-write is authoritative).
-        this.store.refreshTodosFromWindow()
-        this.store.notify()
-      }
-    } catch {
-      /* cache unreadable — fall through network-only */
-    }
+  /** Recompute the in-memory oldest anchor from the current window. */
+  private trackOldest(): void {
+    const oldest = this.store.messages.find(m => !m.isLocal)
+    this.syncedOldestId = oldest?.id ?? ''
   }
 
   /** Incremental when we hold an anchor, else a baseline fetch. */
   async sync(sid: string): Promise<void> {
-    const l = this.local
     this.store.loading = this.store.messages.length === 0
     this.store.notify()
     try {
-      const cacheConsistent =
-        this.store.messages.length === 0 ||
-        (this.syncedTipId !== '' &&
-          this.syncedOldestId !== '' &&
-          (await l?.oldestCachedId(sid)) === this.syncedOldestId)
-      if (l && this.syncedTipId && cacheConsistent) {
+      if (this.syncedTipId) {
         const r = await this.api.messagesAfter(sid, this.syncedTipId)
         if (r.resync) {
           await this.baseline(sid)
@@ -95,13 +55,13 @@ export class MessageSync {
           // in the anchor but trimmed off the visible window. A tail-follower
           // keeps the newest and drops the oldest instead.
           this.store.trimHistory(!this.store.hasNewer)
-          await this.persistWindow(sid)
+          this.trackOldest()
         }
       } else {
         await this.baseline(sid)
       }
     } catch {
-      /* offline: keep whatever the local cache showed */
+      /* offline: keep whatever the window already shows */
     }
     this.store.loading = false
     this.store.notify()
@@ -123,18 +83,10 @@ export class MessageSync {
       this.store.hasNewer = false
       // The window is tail-consistent: its newest todo-write is authoritative.
       this.store.refreshTodosFromWindow()
-      const l = this.local
-      if (l) {
-        this.syncedTipId = chat.length ? chat[chat.length - 1]!.id : ''
-        await l.applyServerMessages(sid, msgs, {
-          replace: true,
-          tipId: this.syncedTipId,
-          hasMore: more,
-        })
-        this.syncedOldestId = await l.oldestCachedId(sid)
-      }
+      this.syncedTipId = chat.length ? chat[chat.length - 1]!.id : ''
+      this.trackOldest()
     } catch {
-      /* keep the existing cache */
+      /* keep the existing window */
     }
   }
 
@@ -170,25 +122,17 @@ export class MessageSync {
         this.store.hasMore = more
         this.store.hasNewer = false
       }
+      this.trackOldest()
     } catch {
       /* keep current view */
     }
     this.store.loading = false
     this.store.notify()
-    if (this.local) {
-      try {
-        await this.persistWindow(this.getSessionId())
-      } catch {
-        /* ignore */
-      }
-    }
   }
 
   /** After a turn completes (or a message-added nudge), pull the server delta
-   *  and adopt real ids. Works without a local store: the merge is in-memory
-   *  and persistence is simply skipped. */
+   *  and adopt real ids. */
   async reconcile(): Promise<void> {
-    const l = this.local
     const sid = this.getSessionId()
     try {
       if (!this.syncedTipId) {
@@ -205,9 +149,7 @@ export class MessageSync {
       this.syncedTipId = r.tipId
       this.store.trimHistory(!this.store.hasNewer)
       this.store.notify()
-      if (l) {
-        await this.persistWindow(sid)
-      }
+      this.trackOldest()
     } catch {
       /* offline reconcile retry on next turn */
     }

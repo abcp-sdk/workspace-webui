@@ -1,11 +1,11 @@
 // MessagesController — the web port of flutter/lib/messages.dart (Svelte 5
-// runes). Local-first boot (sqlite mirror) → incremental sync (tip anchor) →
+// runes). Network boot (baseline fetch) → incremental sync (tip anchor) →
 // one long-lived watchSession stream per active session with exponential
 // backoff reconnect, eid dedup and run boundaries.
 //
 // Responsibilities are split:
 //   - MessageStore  (message-store.svelte.ts)  reactive list + mutations
-//   - MessageSync   (message-sync.ts)          local mirror + server delta
+//   - MessageSync   (message-sync.ts)          server baseline/delta + anchors
 //   - applyStreamEvent (message-events.ts)     pure event → store router
 //   - SessionStream (session-stream.ts)        transport + reconnect/watchdog
 //   - this class    wiring, the mailbox, and the public actions
@@ -14,7 +14,6 @@
 // unchanged.
 import type { AgentApi } from './api'
 import { connection } from './connection.svelte'
-import type { LocalStore } from './db'
 import type { StreamEvent } from './events'
 import { t } from './i18n.svelte'
 import { applyStreamEvent } from './message-events'
@@ -48,14 +47,10 @@ export class MessagesController {
   // (Send failed / Model error), so the body is the raw error message.
   private sendFailedMsg = (e: unknown): string => String(e)
 
-  constructor(
-    api: AgentApi,
-    getSessionId: () => string,
-    local: LocalStore | null,
-  ) {
+  constructor(api: AgentApi, getSessionId: () => string) {
     this.api = api
     this.getSessionId = getSessionId
-    this.sync = new MessageSync(api, getSessionId, local, this.store)
+    this.sync = new MessageSync(api, getSessionId, this.store)
     this.stream = new SessionStream(api, {
       getSessionId: () => this.getSessionId(),
       getSinceMsg: () => this.sync.syncedTipId,
@@ -133,7 +128,6 @@ export class MessagesController {
   }
 
   private async boot(sid: string) {
-    await this.sync.hydrate(sid)
     await this.sync.sync(sid)
     await this.recover()
     this.stream.connect(sid)

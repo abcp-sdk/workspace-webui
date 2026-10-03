@@ -1,26 +1,15 @@
 // LocalStore — the web port of flutter's Drift mirror (local_db.dart +
-// local_store.dart) over the OFFICIAL sqlite3 WASM build. Schema and semantics
-// are identical to the Flutter app (schemaVersion 3 layout).
+// local_store.dart) over the OFFICIAL sqlite3 WASM build, MINUS the message
+// mirror. Only the per-session metadata that is genuinely local lives here:
+// the session list, drafts and read watermarks. The message CHAIN is never
+// mirrored (see message-sync.ts for why).
 //
 // This module is the ENGINE and runs inside the db-worker (see db-worker.ts):
 // the OPFS sync-access-handle VFS must not be used on the main thread, so the
 // main thread only talks to a `LocalStore` through the async proxy in db.ts.
 import type { Database, SqlValue } from '@sqlite.org/sqlite-wasm'
-import {
-  chatPartFromJson,
-  fileFromJson,
-  fileToJson,
-  messagePartToJson,
-  partToJson,
-} from './local-codecs'
-import { HISTORY_CAP } from './message-order'
-import type {
-  ChatDraft,
-  ChatMessage,
-  Message,
-  Session,
-  UploadedFile,
-} from './models'
+import { fileFromJson, fileToJson } from './local-codecs'
+import type { ChatDraft, Session, UploadedFile } from './models'
 
 // ---- the store ----
 
@@ -66,24 +55,6 @@ export class LocalStore {
         updated_at TEXT NOT NULL DEFAULT '',
         last_synced_at INTEGER NOT NULL DEFAULT 0
       );
-      CREATE TABLE IF NOT EXISTS local_messages (
-        session_id TEXT NOT NULL,
-        id TEXT NOT NULL,
-        role TEXT NOT NULL,
-        prev_id TEXT NOT NULL DEFAULT '',
-        source TEXT NOT NULL DEFAULT '',
-        created_at TEXT NOT NULL DEFAULT '',
-        order_key INTEGER NOT NULL,
-        status TEXT NOT NULL DEFAULT 'complete',
-        parts_json TEXT NOT NULL DEFAULT '[]',
-        PRIMARY KEY (session_id, id)
-      );
-      CREATE TABLE IF NOT EXISTS local_sync_state (
-        session_id TEXT PRIMARY KEY,
-        oldest_id TEXT NOT NULL DEFAULT '',
-        has_more INTEGER NOT NULL DEFAULT 1,
-        tip_id TEXT NOT NULL DEFAULT ''
-      );
       CREATE TABLE IF NOT EXISTS local_drafts (
         session_id TEXT PRIMARY KEY,
         draft_text TEXT NOT NULL DEFAULT '',
@@ -104,21 +75,10 @@ export class LocalStore {
     } catch {
       /* column already present */
     }
-    // v4 → v5: local_messages gains the message ORIGIN `source` column. The
-    // write paths left it out, so any cached rows predate it — and because the
-    // incremental sync trusts its tip anchor, those rows would keep rendering
-    // with an empty source (a session hand-off shown as the reader's own
-    // prompt). Adding the column SUCCEEDS only once; use that as the signal to
-    // drop the message cache so the next boot refetches with source intact.
-    try {
-      this.db.exec(
-        "ALTER TABLE local_messages ADD COLUMN source TEXT NOT NULL DEFAULT ''",
-      )
-      this.run('DELETE FROM local_messages', [])
-      this.run('DELETE FROM local_sync_state', [])
-    } catch {
-      /* column already present */
-    }
+    // The message mirror is gone: drop any legacy tables a previous version
+    // created, so an upgraded install does not keep stale rows around.
+    this.run('DROP TABLE IF EXISTS local_messages', [])
+    this.run('DROP TABLE IF EXISTS local_sync_state', [])
   }
 
   // ---- sessions ----
@@ -195,193 +155,7 @@ export class LocalStore {
   }
 
   async removeSession(id: string): Promise<void> {
-    this.db.exec('BEGIN')
-    try {
-      this.run('DELETE FROM local_messages WHERE session_id = ?', [id])
-      this.run('DELETE FROM local_sync_state WHERE session_id = ?', [id])
-      this.run('DELETE FROM local_sessions WHERE id = ?', [id])
-      this.db.exec('COMMIT')
-    } catch (e) {
-      this.db.exec('ROLLBACK')
-      throw e
-    }
-  }
-
-  // ---- messages ----
-
-  private chatFromRow(r: Record<string, SqlValue>): ChatMessage {
-    const parts = JSON.parse(String(r['parts_json'] || '[]')) as Record<
-      string,
-      unknown
-    >[]
-    return {
-      id: String(r['id']),
-      role: String(r['role']),
-      status: (String(r['status']) || 'complete') as ChatMessage['status'],
-      createdAt: String(r['created_at']),
-      prevId: String(r['prev_id']),
-      source: String(r['source'] ?? ''),
-      seq: Number(r['order_key']),
-      isLocal: false,
-      parts: parts.map(chatPartFromJson),
-    }
-  }
-
-  async loadMessages(sessionId: string): Promise<ChatMessage[]> {
-    // Newest CAP rows only: read DESC (so the LIMIT keeps the newest) then
-    // reverse to ascending order. An unbounded SELECT * grew with the session
-    // and made every chat switch re-hydrate + re-render the whole chain.
-    const rows = this.all(
-      `SELECT * FROM local_messages WHERE session_id = ?
-         ORDER BY order_key DESC LIMIT ?`,
-      [sessionId, HISTORY_CAP],
-    )
-    rows.reverse()
-    return rows.map(r => this.chatFromRow(r))
-  }
-
-  async serverTipId(sessionId: string): Promise<string> {
-    const r = this.all(
-      'SELECT tip_id FROM local_sync_state WHERE session_id = ?',
-      [sessionId],
-    )
-    return r.length ? String(r[0]['tip_id']) : ''
-  }
-
-  async oldestCachedId(sessionId: string): Promise<string> {
-    const r = this.all(
-      'SELECT id FROM local_messages WHERE session_id = ? ORDER BY order_key ASC LIMIT 1',
-      [sessionId],
-    )
-    return r.length ? String(r[0]!['id']) : ''
-  }
-
-  /** Whether older history exists on the SERVER (drives IM scroll-up). Stored
-   *  with the mirror so a cached hydrate can offer "load earlier" immediately. */
-  async hasMore(sessionId: string): Promise<boolean> {
-    const r = this.all(
-      'SELECT has_more FROM local_sync_state WHERE session_id = ?',
-      [sessionId],
-    )
-    return r.length ? Number(r[0]!['has_more']) === 1 : false
-  }
-
-  /** Upsert server messages (baseline or delta) with a stable local order. */
-  async applyServerMessages(
-    sessionId: string,
-    msgs: Message[],
-    opts: { replace: boolean; tipId: string; hasMore: boolean },
-  ): Promise<void> {
-    const { replace, tipId, hasMore } = opts
-    this.db.exec('BEGIN')
-    try {
-      if (replace) {
-        this.run('DELETE FROM local_messages WHERE session_id = ?', [sessionId])
-      }
-      const maxRow = this.all(
-        'SELECT MAX(order_key) AS k FROM local_messages WHERE session_id = ?',
-        [sessionId],
-      )
-      let order = (maxRow.length ? Number(maxRow[0]!['k'] ?? 0) : 0) + 1
-      for (const m of msgs) {
-        this.run(
-          `INSERT INTO local_messages (session_id, id, role, prev_id, source, created_at, order_key, status, parts_json)
-           VALUES (?,?,?,?,?,?,?,?,?)
-           ON CONFLICT(session_id, id) DO UPDATE SET role=excluded.role,
-             prev_id=excluded.prev_id, source=excluded.source,
-             created_at=excluded.created_at,
-             status=excluded.status, parts_json=excluded.parts_json`,
-          [
-            sessionId,
-            m.id,
-            m.role,
-            m.prevId,
-            m.source ?? '',
-            m.createdAt ?? '',
-            order++,
-            'complete',
-            JSON.stringify(m.parts.map(messagePartToJson)),
-          ],
-        )
-      }
-      await this.upsertSyncState(sessionId, tipId, hasMore)
-      this.db.exec('COMMIT')
-    } catch (e) {
-      this.db.exec('ROLLBACK')
-      throw e
-    }
-  }
-
-  /** Persist the in-memory conversation as the authoritative cache. */
-  async persistMessages(
-    sessionId: string,
-    msgs: ChatMessage[],
-    tipId: string,
-    hasMore: boolean,
-  ): Promise<void> {
-    // Only the newest HISTORY_CAP history rows are kept (local-only rows are
-    // never persisted). Ordering is preserved within the retained window.
-    const history = msgs.filter(m => !m.isLocal)
-    const keep = history.slice(-HISTORY_CAP)
-    this.db.exec('BEGIN')
-    try {
-      this.run('DELETE FROM local_messages WHERE session_id = ?', [sessionId])
-      let order = 0
-      for (const m of keep) {
-        this.run(
-          `INSERT OR REPLACE INTO local_messages
-             (session_id, id, role, prev_id, source, created_at, order_key, status, parts_json)
-           VALUES (?,?,?,?,?,?,?,?,?)`,
-          [
-            sessionId,
-            m.id,
-            m.role,
-            m.prevId,
-            m.source ?? '',
-            m.createdAt,
-            order++,
-            m.status,
-            JSON.stringify(m.parts.map(partToJson)),
-          ],
-        )
-      }
-      await this.upsertSyncState(sessionId, tipId, hasMore)
-      this.db.exec('COMMIT')
-    } catch (e) {
-      this.db.exec('ROLLBACK')
-      throw e
-    }
-  }
-
-  private async upsertSyncState(
-    sessionId: string,
-    tipId: string,
-    hasMore: boolean,
-  ): Promise<void> {
-    const oldest = this.all(
-      'SELECT id FROM local_messages WHERE session_id = ? ORDER BY order_key ASC LIMIT 1',
-      [sessionId],
-    )
-    const oldestId = oldest.length ? String(oldest[0]!['id']) : ''
-    this.run(
-      `INSERT INTO local_sync_state (session_id, oldest_id, has_more, tip_id)
-       VALUES (?,?,?,?)
-       ON CONFLICT(session_id) DO UPDATE SET oldest_id=excluded.oldest_id,
-         has_more=excluded.has_more, tip_id=excluded.tip_id`,
-      [sessionId, oldestId, hasMore ? 1 : 0, tipId],
-    )
-  }
-
-  async clearMessages(sessionId: string): Promise<void> {
-    this.db.exec('BEGIN')
-    try {
-      this.run('DELETE FROM local_messages WHERE session_id = ?', [sessionId])
-      this.run('DELETE FROM local_sync_state WHERE session_id = ?', [sessionId])
-      this.db.exec('COMMIT')
-    } catch (e) {
-      this.db.exec('ROLLBACK')
-      throw e
-    }
+    this.run('DELETE FROM local_sessions WHERE id = ?', [id])
   }
 
   // ---- drafts ----
