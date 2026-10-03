@@ -44,20 +44,12 @@ export default defineConfig({
         // per-asset precache cap above Workbox's 2MiB default so the PWA is
         // offline-complete (otherwise the fonts are silently dropped).
         maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
-        // WASM + the OPFS proxy worker must not be cached too aggressively:
-        // stale-while-revalidate everything, precache the app shell.
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2,ttf}'],
+        // Precache the app shell INCLUDING the sqlite3 wasm engine (the
+        // db-worker instantiates it on boot) so the local store is usable
+        // offline from the first launch. `wasm` must be listed explicitly —
+        // otherwise it is only in the HTTP cache, not the SW.
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2,ttf,wasm}'],
         navigateFallback: 'index.html',
-        runtimeCaching: [
-          {
-            urlPattern: /sqlite3\.wasm$|opfs-async-proxy/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'sqlite-wasm',
-              expiration: { maxEntries: 4 },
-            },
-          },
-        ],
       },
     }),
   ],
