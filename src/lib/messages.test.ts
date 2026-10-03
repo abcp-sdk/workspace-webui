@@ -57,6 +57,8 @@ class Chan {
 class FakeServer {
   readonly chain: Message[] = []
   readonly chan = new Chan()
+  /** Every `streamEvents` connect: the resume anchor the client sent. */
+  readonly connects: Array<{ seq: number; msg: string }> = []
   private promptErr: Error | null = null
   private mailboxEntries: MailboxEntry[] = []
   private status = 'idle'
@@ -117,9 +119,11 @@ class FakeServer {
       }),
       streamEvents: async function* (
         _sid: string,
-        _sinceSeq = 0,
+        sinceSeq = 0,
         signal?: AbortSignal,
+        sinceMsg = '',
       ) {
+        self.connects.push({ seq: Number(sinceSeq), msg: sinceMsg })
         yield* self.chan.run(signal)
       },
     } as unknown as AgentApi
@@ -164,6 +168,23 @@ function boot(): { ctrl: MessagesController; server: FakeServer } {
   ctrl.init()
   return { ctrl, server }
 }
+
+/** Boot a controller over an EXISTING fake server (simulates a page reload:
+ *  a brand-new controller instance sharing the same server state). */
+function bootWith(server: FakeServer): MessagesController {
+  const ctrl = new MessagesController(server.api(), () => SID, null)
+  rigs.push({ ctrl })
+  ctrl.init()
+  return ctrl
+}
+
+/** A stream event carrying an explicit JetStream sequence. */
+const evSeq = (
+  seq: number,
+  event: string,
+  params: Record<string, unknown> = {},
+  runId = 'r1',
+): StreamEvent => makeStreamEvent(event, params, `e${eid++}`, runId, seq)
 
 afterEach(() => {
   for (const r of rigs) r.ctrl.dispose()
@@ -728,5 +749,103 @@ describe('MessagesController (server-driven state machine)', () => {
     expect(a1?.prevId).toBe('cm1')
     // Stale deltas from before the retry are dropped.
     expect(a1?.parts).toHaveLength(0)
+  })
+
+  it('a page refresh reconnects with sinceSeq=0 (replays the running turn) — on EVERY refresh', async () => {
+    const { ctrl, server } = boot()
+    await flush()
+
+    // A turn is running and a user message is already persisted. The running
+    // step's structural events are live-only (not yet in the chain).
+    server.persist(
+      serverMsg('u1', 'user', '', [{ id: 'p0', type: 'text', text: 'hi' }]),
+    )
+    server.chan.push(evSeq(1, 'status', { type: 'busy' }))
+    server.chan.push(
+      evSeq(2, 'message-added', {
+        message_id: 'u1',
+        prev_id: '',
+        role: 'user',
+        streaming: false,
+      }),
+    )
+    await flush()
+    // First connect (fresh instance): seq=0.
+    expect(server.connects[0]!.seq).toBe(0)
+
+    // The server's `since_seq` for every refresh connect must be 0 so the server
+    // replays the in-progress turn (a non-zero seq would skip its earlier
+    // structural events — the second-refresh regression). The `since_msg` tip is
+    // supplied by the handler and is asserted in session-stream.test.ts.
+
+    // --- Refresh #1: a NEW controller instance over the same server state ---
+    ctrl.dispose()
+    const ctrl2 = bootWith(server)
+    await flush()
+    expect(server.connects[1]!.seq).toBe(0)
+
+    // The in-progress step replays (structural events arrive and rebuild the
+    // streaming bubble).
+    server.chan.push(
+      evSeq(5, 'message-added', {
+        message_id: 'a1',
+        prev_id: 'u1',
+        role: 'assistant',
+        streaming: true,
+      }),
+    )
+    server.chan.push(
+      evSeq(6, 'reasoning-delta', {
+        id: 'r0',
+        text: 'think',
+        message_id: 'a1',
+      }),
+    )
+    await flush(3)
+    expect(ctrl2.messages.find(m => m.id === 'a1')?.parts).toHaveLength(1)
+
+    // --- Refresh #2 (the regression): must ALSO replay, not skip by sequence ---
+    ctrl2.dispose()
+    const ctrl3 = bootWith(server)
+    await flush()
+    // The old bug seeded the persisted seq here (>0) and blanked `since_msg`,
+    // so the server resumed strictly AFTER it and never replayed the running
+    // turn. A refresh is a new instance → seq must be 0.
+    expect(server.connects[2]!.seq).toBe(0)
+    server.chan.push(
+      evSeq(5, 'message-added', {
+        message_id: 'a1',
+        prev_id: 'u1',
+        role: 'assistant',
+        streaming: true,
+      }),
+    )
+    server.chan.push(
+      evSeq(6, 'reasoning-delta', {
+        id: 'r0',
+        text: 'think',
+        message_id: 'a1',
+      }),
+    )
+    await flush(3)
+    expect(ctrl3.messages.find(m => m.id === 'a1')?.parts).toHaveLength(1)
+  })
+
+  it('same-page reconnect resumes by sequence (O(1))', async () => {
+    const { server } = boot()
+    await flush()
+    server.persist(
+      serverMsg('u1', 'user', '', [{ id: 'p0', type: 'text', text: 'hi' }]),
+    )
+    server.chan.push(evSeq(7, 'status', { type: 'busy' }))
+    await flush()
+
+    // Drop + reopen the SAME instance's stream: the reconnect must carry the
+    // newest seq (7), so the server resumes AFTER it (O(1)).
+    server.chan.close()
+    await flush(3)
+    server.chan.reopen()
+    await new Promise(r => setTimeout(r, 1200))
+    expect(server.connects[server.connects.length - 1]!.seq).toBe(7)
   })
 })
