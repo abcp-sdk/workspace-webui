@@ -1253,6 +1253,43 @@ export class AgentApi {
       }
     }
   }
+
+  /** Poll a background image build (from `repo-build-image`). `sinceOffset` is
+   *  the previous response's `logOffset`; the returned `log` is the output
+   *  produced since then. */
+  async getBuildStatus(
+    buildId: string,
+    sinceOffset = 0,
+  ): Promise<{
+    buildId: string
+    state: string
+    imageRef: string
+    log: string
+    logOffset: number
+  }> {
+    const r = await this._guard(() =>
+      this._c.getBuildStatus({ buildId, sinceOffset: BigInt(sinceOffset) }),
+    )
+    return {
+      buildId: r.buildId,
+      state: r.state,
+      imageRef: r.imageRef,
+      log: r.log,
+      logOffset: Number(r.logOffset),
+    }
+  }
+
+  /** List the background image builds this gateway has started (newest first). */
+  async listBuilds(): Promise<BuildInfo[]> {
+    const r = await this._guard(() => this._c.listBuilds({}))
+    return (r.builds ?? []).map(b => ({
+      buildId: b.buildId,
+      image: b.image,
+      state: b.state,
+      imageRef: b.imageRef,
+      createdAt: Number(b.createdAt),
+    }))
+  }
 }
 
 export function emptySession(id: string): Session {
@@ -1389,6 +1426,15 @@ export interface ReleaseInfo {
   htmlUrl: string
   assets: ReleaseAsset[]
 }
+/** One background image build (from `repo-build-image`). */
+export interface BuildInfo {
+  buildId: string
+  image: string
+  state: string
+  imageRef: string
+  createdAt: number
+}
+
 export interface SandboxInfo {
   name: string
   image: string

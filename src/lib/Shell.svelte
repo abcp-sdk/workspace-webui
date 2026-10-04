@@ -29,6 +29,7 @@
   import ServiceRoot from './pages/ServiceRoot.svelte'
   import SandboxDetail from './pages/SandboxDetail.svelte'
   import SandboxJob from './pages/SandboxJob.svelte'
+  import Build from './pages/Build.svelte'
   import SandboxFiles from './pages/SandboxFiles.svelte'
   import ServiceDetail from './pages/ServiceDetail.svelte'
   import ReleaseDetail from './pages/ReleaseDetail.svelte'
@@ -91,6 +92,8 @@
           ? page.name
           : undefined,
       jobId: page.kind === 'sandbox_job' ? page.jobId : undefined,
+      buildId: page.kind === 'build' ? page.buildId : undefined,
+      image: page.kind === 'build' ? page.image : undefined,
       org: 'org' in page ? page.org : undefined,
       repo: 'repo' in page ? page.repo : undefined,
       ref: 'ref' in page ? page.ref : undefined,
@@ -146,6 +149,8 @@
         return SandboxDetail as Component<PageProps>
       case 'sandbox_job':
         return SandboxJob as Component<PageProps>
+      case 'build':
+        return Build as Component<PageProps>
       case 'sandbox_files':
         return SandboxFiles as Component<PageProps>
       case 'service_detail':

@@ -99,6 +99,10 @@ export function sandboxPage(name: string): AppPage {
 export function sandboxJobPage(name: string, jobId: string): AppPage {
   return { kind: 'sandbox_job', key: `job:${name}:${jobId}`, name, jobId }
 }
+/** Open a live image-build page (repo-build-image / repo-build-status). */
+export function buildPage(buildId: string, image?: string): AppPage {
+  return { kind: 'build', key: `build:${buildId}`, buildId, image }
+}
 /** Open the sandbox file browser at `path` (a dir to browse, or a file to
  *  view); '' = the workspace root. */
 export function sandboxFilesPage(name: string, path: string): AppPage {
