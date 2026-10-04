@@ -1,0 +1,8 @@
+# Never ship local build/dep trees into the build context: `COPY . ./` runs
+# AFTER `npm ci`, so a host `node_modules` (possibly another arch) would
+# overwrite the freshly installed one, and a stale `dist` is pointless (the
+# image rebuilds it in the `build` stage anyway).
+node_modules
+dist
+.git
+.gitignore
