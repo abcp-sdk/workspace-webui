@@ -56,9 +56,8 @@ export interface Session {
   maxTurns?: number
   systemPrompt?: string
   locale?: string
-  inputTokens?: number
-  outputTokens?: number
-  totalTokens?: number
+  /** SINGLE-STEP token counters (the cumulative 7/8/9 were removed in proto #4;
+   *  a "total" is lastInputTokens + lastOutputTokens). */
   lastInputTokens?: number
   lastOutputTokens?: number
   createdAt: string
