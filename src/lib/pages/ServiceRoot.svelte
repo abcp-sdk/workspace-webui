@@ -9,6 +9,7 @@
   import { confirmDialog } from '$lib/dialogs'
   import { cn } from '$lib/utils'
   import { AppIcons } from '$lib/icons'
+  import { sandboxWorkerUrl } from '$lib/sandbox-url'
   import PageHeader from '$lib/components/layout/PageHeader.svelte'
   import TabBar from '$lib/components/layout/TabBar.svelte'
   import TabItem from '$lib/components/layout/TabItem.svelte'
@@ -308,6 +309,19 @@
                 </span>
               {:else}
                 <span class="block wrap-anywhere text-[10px] text-muted-foreground">{s.creator} · {relTime(s.createdAt)}</span>
+              {/if}
+              {#if sandboxWorkerUrl(s)}
+                <span class="mt-0.5 flex min-w-0 items-center gap-1 text-[10px]">
+                  <a
+                    href={sandboxWorkerUrl(s)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="min-w-0 break-all text-primary hover:underline"
+                    title={sandboxWorkerUrl(s)}
+                    onclick={e => e.stopPropagation()}
+                  >{sandboxWorkerUrl(s)}</a>
+                  <button type="button" class="shrink-0 rounded p-0.5 hover:bg-muted" title={t('copy')} onclick={e => { e.stopPropagation(); copyUrl(sandboxWorkerUrl(s)) }}><AppIcons.copy class="size-3" /></button>
+                </span>
               {/if}
             </span>
             <span class={cn('shrink-0 rounded-full px-2 py-px text-[10px]', phaseTone(s.phase))}>{phaseLabel(s.phase)}</span>
