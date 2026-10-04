@@ -3,7 +3,7 @@
   // Read + a NARROW action set: delete (sandbox/service) and pause/resume
   // (service only). No deploy / build / exec from this surface.
   import type { PageProps } from '$lib/page-props'
-  import type { HelmRelease, PVCInfo, SandboxInfo, ServiceInfo } from '$lib/api'
+  import type { BuildInfo, HelmRelease, PVCInfo, SandboxInfo, ServiceInfo } from '$lib/api'
   import { t } from '$lib/i18n.svelte'
   import { showErrorToast, showToast } from '$lib/toast.svelte'
   import { confirmDialog } from '$lib/dialogs'
@@ -18,12 +18,21 @@
 
   let { store }: PageProps = $props()
 
-  let tab = $state<'sandboxes' | 'services' | 'pvcs' | 'releases'>('sandboxes')
+  let tab = $state<'sandboxes' | 'services' | 'pvcs' | 'releases' | 'builds'>('sandboxes')
   let sandboxes = $state<SandboxInfo[]>([])
   let services = $state<ServiceInfo[]>([])
   let pvcs = $state<PVCInfo[]>([])
   let releases = $state<HelmRelease[]>([])
+  let builds = $state<BuildInfo[]>([])
   let loading = $state(true)
+
+  async function refreshBuilds() {
+    try {
+      builds = await store.api.listBuilds()
+    } catch {
+      /* the list is best-effort */
+    }
+  }
 
   // LIVE: WatchWorkspace pushes a full frame on connect and on every change, so
   // there is no polling. A one-shot `listX()` seed paints instantly from cache
@@ -106,6 +115,7 @@
     tab = next
     try {
       if (next === 'releases') releases = await store.api.helmList()
+      else if (next === 'builds') await refreshBuilds()
       else if (next === 'pvcs') pvcs = await store.api.listPVCs()
       else if (next === 'services') services = await store.api.listServices()
       else if (next === 'sandboxes') sandboxes = await store.api.listSandboxes()
@@ -134,6 +144,15 @@
     void seed()
     connect()
     return () => abort?.abort()
+  })
+
+  // Poll the build list while the Builds tab is open (builds are process-local,
+  // not covered by WatchWorkspace).
+  $effect(() => {
+    if (tab !== 'builds') return
+    void refreshBuilds()
+    const timer = setInterval(() => void refreshBuilds(), 2000)
+    return () => clearInterval(timer)
   })
 
   function copyUrl(u: string) {
@@ -231,6 +250,7 @@
   const tabDefs = [
     { id: 'sandboxes' as const, key: 'sandboxes', icon: AppIcons.box },
     { id: 'services' as const, key: 'services', icon: AppIcons.server },
+    { id: 'builds' as const, key: 'builds', icon: AppIcons.building },
     { id: 'pvcs' as const, key: 'pvcs', icon: AppIcons.database },
     { id: 'releases' as const, key: 'helmReleases', icon: AppIcons.pkg },
   ]
@@ -306,6 +326,21 @@
       {:else}
         {#each services as sv (sv.name)}
           {@render serviceRow(sv)}
+        {/each}
+      {/if}
+    {:else if tab === 'builds'}
+      {#if builds.length === 0}
+        <EmptyState>{t('noBuilds')}</EmptyState>
+      {:else}
+        {#each builds as b (b.buildId)}
+          <ListRow divided onclick={() => store.navigate({ kind: 'build', key: `build:${b.buildId}`, buildId: b.buildId, image: b.image })}>
+            <span class={cn('flex size-8 shrink-0 items-center justify-center rounded-full', b.state === 'done' ? 'bg-success/15 text-success' : b.state === 'failed' ? 'bg-destructive/15 text-destructive' : 'bg-warning/15 text-warning')}><AppIcons.building class="size-4" /></span>
+            <span class="min-w-0 flex-1">
+              <span class="block wrap-anywhere text-meta font-semibold">{b.image}</span>
+              <span class="block break-all whitespace-pre-wrap text-[10px] text-muted-foreground">{b.imageRef || b.buildId}</span>
+            </span>
+            <span class={cn('shrink-0 rounded-full px-2 py-px text-[10px]', b.state === 'done' ? 'bg-success/15 text-success' : b.state === 'failed' ? 'bg-destructive/15 text-destructive' : 'bg-warning/15 text-warning')}>{b.state}</span>
+          </ListRow>
         {/each}
       {/if}
     {:else if tab === 'pvcs'}

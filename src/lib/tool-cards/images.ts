@@ -1,5 +1,6 @@
 // Image / OCI cards: build an image, import an OCI image, and list the catalog.
 import { arr, type CardCtx, type CardHandler, fin, fs, s } from './shared'
+import { buildPage } from '../tool-pages'
 
 const repoBuildImage: CardHandler = ({ tool, data, input, output }) => {
   if (tool !== 'repo-build-image' && tool !== 'oci-import') {
@@ -8,6 +9,8 @@ const repoBuildImage: CardHandler = ({ tool, data, input, output }) => {
   const imageRef = s(data, 'image_ref')
   const tag = s(data, 'tag')
   const source = s(data, 'source')
+  const buildId = s(data, 'build_id')
+  const image = s(data, 'image') || s(input, 'image')
   return {
     subtitle: 'image',
     input: {
@@ -49,6 +52,33 @@ const repoBuildImage: CardHandler = ({ tool, data, input, output }) => {
       // The build / import LOG (the output carries a header line + the log).
       body: output ? { kind: 'terminal', text: output } : undefined,
     },
+    actions: buildId
+      ? [{ label: 'viewBuildLog', icon: 'building', page: buildPage(buildId, image) }]
+      : undefined,
+  }
+}
+
+// repo-build-status — poll a background build; link to the live Build page.
+const repoBuildStatus: CardHandler = ({ tool, data, input, output }) => {
+  if (tool !== 'repo-build-status') return null
+  const buildId = s(data, 'build_id') || s(input, 'build-id')
+  const state = s(data, 'state')
+  const imageRef = s(data, 'image_ref')
+  return {
+    subtitle: 'image',
+    input: {
+      fields: fs(fin(input, 'build-id', 'building', 'buildId', { mono: true })),
+    },
+    result: {
+      fields: fs(
+        state ? { icon: 'building', label: 'tcState', value: state } : null,
+        imageRef ? { icon: 'box', label: 'image', value: imageRef, mono: true } : null,
+      ),
+      body: output ? { kind: 'terminal', text: output } : undefined,
+    },
+    actions: buildId
+      ? [{ label: 'viewBuildLog', icon: 'building', page: buildPage(buildId, imageRef) }]
+      : undefined,
   }
 }
 
@@ -78,6 +108,6 @@ const listOciImages: CardHandler = ({ tool, data, input }) => {
 }
 
 /** Image / OCI handlers, in match order. */
-export const imageHandlers: CardHandler[] = [repoBuildImage, listOciImages]
+export const imageHandlers: CardHandler[] = [repoBuildImage, repoBuildStatus, listOciImages]
 
 export type { CardCtx }

@@ -106,6 +106,8 @@ export type AppPage =
   | { kind: 'service_root'; key: 'service_root' }
   | { kind: 'sandbox_detail'; key: string; name: string }
   | { kind: 'sandbox_job'; key: string; name: string; jobId: string }
+  // One image build (repo-build-image): live log via GetBuildStatus polling.
+  | { kind: 'build'; key: string; buildId: string; image?: string }
   // Read-only file browser over the sandbox filesystem. `path` may be a
   // directory (browse it) or a file (open it directly); '' = workspace root.
   | { kind: 'sandbox_files'; key: string; name: string; path: string }
@@ -156,6 +158,8 @@ export function laneOf(page: AppPage): SiderTab {
     case 'sandbox_files':
     case 'service_detail':
     case 'release_detail':
+      return 'service'
+    case 'build':
       return 'service'
   }
 }
@@ -258,6 +262,8 @@ export function parentOf(page: AppPage): AppPage | null {
         key: `sbx:${page.name}`,
         name: page.name,
       }
+    case 'build':
+      return { kind: 'service_root', key: 'service_root' }
   }
 }
 
