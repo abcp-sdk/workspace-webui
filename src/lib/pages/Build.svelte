@@ -18,7 +18,7 @@
   }: PageProps & { buildId: string; image?: string } = $props()
 
   let log = $state('')
-  let state = $state('running')
+  let buildState = $state('running')
   let imageRef = $state('')
   let error = $state('')
   let watching = $state(true)
@@ -29,7 +29,7 @@
     const id = buildId
     if (!id) return
     log = ''
-    state = 'running'
+    buildState = 'running'
     imageRef = ''
     error = ''
     offset = 0
@@ -42,7 +42,7 @@
         if (stopped) return
         if (r.log) log += r.log
         offset = r.logOffset
-        state = r.state
+        buildState = r.state
         imageRef = r.imageRef || imageRef
         if (r.state === 'done' || r.state === 'failed') {
           stopped = true
@@ -52,7 +52,7 @@
         stopped = true
         watching = false
         error = String(e)
-        state = 'failed'
+        buildState = 'failed'
       }
     }
     const timer = setInterval(poll, 1200)
@@ -74,7 +74,7 @@
     {#if watching}
       <span class="flex shrink-0 items-center gap-1 text-[10px] text-warning"><span class="size-2 animate-pulse rounded-full bg-warning"></span>{t('live')}</span>
     {:else}
-      <span class={cn('shrink-0 text-[10px]', state === 'done' ? 'text-success' : 'text-destructive')}>{state}</span>
+      <span class={cn('shrink-0 text-[10px]', buildState === 'done' ? 'text-success' : 'text-destructive')}>{buildState}</span>
     {/if}
   </PageHeader>
 

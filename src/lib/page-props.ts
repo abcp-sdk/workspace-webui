@@ -24,6 +24,9 @@ export interface PageProps {
   name?: string
   /** Service tab job drill-in param (job id). */
   jobId?: string
+  /** Image-build page drill-in params (build id + its image label). */
+  buildId?: string
+  image?: string
   /** Code tab drill-in params (repo detail / blob / history / commit). */
   org?: string
   repo?: string

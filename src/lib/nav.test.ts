@@ -128,6 +128,7 @@ describe('parentOf / ancestry (the forest)', () => {
       { kind: 'sandbox_files', key: 'k', name: 'sb', path: '' },
       { kind: 'service_detail', key: 'k', name: 'sv' },
       { kind: 'release_detail', key: 'k', name: 'rel' },
+      { kind: 'build', key: 'k', buildId: 'b1', image: 'o/i:t' },
     ]
     for (const leaf of samples) {
       const path = ancestry(leaf)
