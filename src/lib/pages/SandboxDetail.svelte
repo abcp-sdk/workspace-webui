@@ -148,6 +148,18 @@
     }
   }
 
+  // Copy the sandbox's worker bearer token to the clipboard (resolved on
+  // demand; the caller must own the sandbox).
+  async function copyToken() {
+    try {
+      const { token } = await store.api.resolveSandbox(name)
+      await navigator.clipboard.writeText(token)
+      showToast(t('copied'))
+    } catch (e) {
+      showErrorToast(String(e))
+    }
+  }
+
   function stateTone(s: string): string {
     if (s === 'running') return 'bg-warning/15 text-warning'
     if (s === 'done') return 'bg-success/15 text-success'
@@ -171,6 +183,7 @@
     <span class="min-w-0 flex-1 wrap-anywhere text-base font-semibold">{name}</span>
     {#if sandbox}<span class="shrink-0 rounded-full bg-muted px-2 py-px text-[10px] leading-4 text-muted-foreground">{sandbox.phase}</span>{/if}
     <IconButton icon={AppIcons.delete} label={t('deleteSandboxTitle')} variant="destructive" onclick={() => void deleteSandbox()} />
+    <IconButton icon={AppIcons.key} label={t('copyToken')} onclick={() => void copyToken()} />
   </PageHeader>
 
   {#if sandbox}

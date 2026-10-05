@@ -1010,6 +1010,13 @@ export class AgentApi {
     await this._guard(() => this._c.deleteSandbox({ name }))
   }
 
+  /** Resolve a sandbox's worker connect address + bearer token (the caller must
+   *  own it). Used by the detail page to show/copy the token. */
+  async resolveSandbox(name: string): Promise<{ url: string; token: string }> {
+    const r = await this._guard(() => this._c.resolveSandbox({ name }))
+    return { url: r.url, token: r.token }
+  }
+
   async listSandboxJobs(name: string): Promise<SandboxJob[]> {
     const r = await this._guard(() => this._c.listSandboxJobs({ name }))
     return (r.jobs ?? []).map(j => ({
